@@ -62,6 +62,7 @@ func Setup() http.Handler {
 		apiv1.POST("/recordings/:channelName/:filename/cut", v1.CutRecording)
 		apiv1.GET("/recording", v1.IsRecording)
 		apiv1.GET("/recordings/latest/:limit", v1.GetLatestRecordings)
+		apiv1.GET("/recordings/random/:limit", v1.GetRandomRecordings)
 		apiv1.GET("/recordings", v1.GetRecordings)
 		apiv1.GET("/recordings/bookmarks", v1.GetBookmarks)
 		apiv1.POST("/recordings/:channelName/:filename/preview", v1.GeneratePreview)

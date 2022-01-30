@@ -49,6 +49,24 @@ func FindLatest(limit int) ([]*Recording, error) {
 		Select("*").
 		Joins("left join channels on recordings.channel_name = channels.channel_name").
 		Order("recordings.created_at DESC").
+		Limit(limit).
+		Scan(&recordings).Error
+
+	if err != nil {
+		return nil, err
+	}
+
+	return recordings, nil
+}
+
+func FindRandom(limit int) ([]*Recording, error) {
+	var recordings []*Recording
+
+	err := Db.Model(Recording{}).
+		Select("*").
+		Joins("left join channels on recordings.channel_name = channels.channel_name").
+		Order("RANDOM()").
+		Limit(limit).
 		Scan(&recordings).Error
 
 	if err != nil {

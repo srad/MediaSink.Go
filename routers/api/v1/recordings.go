@@ -154,6 +154,25 @@ func GetLatestRecordings(c *gin.Context) {
 	appG.Response(http.StatusOK, recordings)
 }
 
+func GetRandomRecordings(c *gin.Context) {
+	appG := app.Gin{C: c}
+
+	limit, err := strconv.Atoi(c.Param("limit"))
+	if err != nil {
+		appG.Response(http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	recordings, err := models.FindRandom(limit)
+
+	if err != nil {
+		appG.Response(http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	appG.Response(http.StatusOK, recordings)
+}
+
 func PauseRecording(c *gin.Context) {
 	appG := app.Gin{C: c}
 
