@@ -68,9 +68,3 @@ cd ffmpeg
 
 make
 sudo make install
-
-# Define the port of the REST server
-# Allow port to API and save the rule
-sudo iptables -A INPUT -p tcp --dport 3000 -j ACCEPT
-sudo apt-get install iptables-persistent -y
-sudo netfilter-persistent save
