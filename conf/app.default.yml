@@ -1,0 +1,13 @@
+db:
+  filename: 'streamsink.sqlite3'
+dirs:
+  recordings: ''
+  recordingsfolder: ''
+  data: '.previews'
+  public: ''
+  scripts: ''
+sys:
+  network: ''
+  disk: ''
+default:
+  importurl: ''
