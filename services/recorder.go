@@ -14,6 +14,7 @@ var (
 
 const (
 	sleepBetweenRequests = 1 * time.Second
+	sleepBetweenRounds   = 60 * time.Second
 )
 
 type ChannelObserver struct {
@@ -28,7 +29,7 @@ func iterate() {
 		case <-quit:
 			log.Println("Stopping iteration")
 			return
-		case <-time.After(60 * time.Second):
+		case <-time.After(sleepBetweenRounds):
 			checkStreams()
 			log.Println("Sleep")
 			break

@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	recordingMinMinutes = 1
+	recordingMinMinutes = 15
 	frameWidth          = "480"
 	frameName           = "live.jpg"
 )
@@ -265,6 +265,7 @@ func (channel *Channel) RecordingMinutes() float64 {
 func (channel *Channel) RemoveData() {
 	delete(recorded, channel.ChannelName)
 	delete(info, channel.ChannelName)
+	isOnline[channel.ChannelName] = false
 }
 
 // Capture Starts and also waits for the stream to end or being killed

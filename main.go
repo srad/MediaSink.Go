@@ -36,8 +36,8 @@ func main() {
 
 	conf.Read()
 	models.Init()
-	services.ImportRecordings()
-	services.FixOrphanedRecordings()
+	go services.ImportRecordings()
+	go services.FixOrphanedRecordings()
 	go workers.JobWorker()
 
 	gin.SetMode("release")

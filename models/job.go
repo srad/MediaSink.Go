@@ -17,17 +17,20 @@ const (
 )
 
 type Job struct {
-	Recording   Recording `json:"-" gorm:"foreignKey:ChannelName,Filename;References:ChannelName,Filename;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
-	JobId       uint      `json:"jobId" gorm:"primaryKey;AUTO_INCREMENT"`
-	Channel     Channel   `json:"-" gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE;foreignKey:ChannelName"`
-	ChannelName string    `json:"channelName" gorm:"not null;default:null"`
-	Filename    string    `json:"filename" gorm:"not null;default:null"`
-	Filepath    string    `json:"pathRelative" gorm:"not null;default:null"`
-	Status      string    `json:"status" gorm:"not null;default:null;index:idx_status"`
-	Active      bool      `json:"active" gorm:"not null;default:false"`
-	CreatedAt   time.Time `json:"createdAt" gorm:"not null;default:null;index:idx_create_at"`
-	Info        *string   `json:"info" gorm:"default:null"`
-	Args        *string   `json:"args" gorm:"default:null"`
+	Recording Recording `json:"-" gorm:"foreignKey:ChannelName,Filename;References:ChannelName,Filename;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
+	JobId     uint      `json:"jobId" gorm:"primaryKey;AUTO_INCREMENT"`
+	Channel   Channel   `json:"-" gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE;foreignKey:ChannelName"`
+
+	// Unique entry, this is the actual primary key
+	ChannelName string `json:"channelName" gorm:"not null;default:null;index:unique_entry,unique"`
+	Filename    string `json:"filename" gorm:"not null;default:null;index:unique_entry,unique"`
+	Status      string `json:"status" gorm:"not null;default:null;index:idx_status;index:unique_entry,unique"`
+
+	Filepath  string    `json:"pathRelative" gorm:"not null;default:null"`
+	Active    bool      `json:"active" gorm:"not null;default:false"`
+	CreatedAt time.Time `json:"createdAt" gorm:"not null;default:null;index:idx_create_at"`
+	Info      *string   `json:"info" gorm:"default:null"`
+	Args      *string   `json:"args" gorm:"default:null"`
 }
 
 func EnqueueRecordingJob(channelName, filename, filepath string) (*Job, error) {
