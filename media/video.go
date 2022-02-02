@@ -157,6 +157,17 @@ func calcFps(output string) (float64, error) {
 	return fps, nil
 }
 
+func ExtractFirstFrame(input, height, output string) error {
+	err := utils.ExecSync("ffmpeg", "-y", "-hide_banner", "-loglevel", "error", "-i", input, "-r", "1", "-vf", "scale="+height+":-1", "-q:v", "2", "-frames:v", "1", output)
+
+	if err != nil {
+		log.Printf("[Recorder] Error extracting frame: %v", err.Error())
+		return nil
+	}
+
+	return nil
+}
+
 // This requires an entire video passthrough
 func GetFrameCount(filepath string) (uint64, error) {
 	cmd := exec.Command("ffprobe", "-v", "error", "-show_entries", "stream=nb_read_packets", "-of", "csv=p=0", "-select_streams", "v:0", "-count_packets", filepath)

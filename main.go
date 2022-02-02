@@ -20,9 +20,9 @@ import (
 )
 
 func cleanup() {
-	fmt.Println("cleanup ...")
+	log.Println("cleanup ...")
 	services.StopAll()
-	fmt.Println("cleanup complete")
+	log.Println("cleanup complete")
 }
 
 func main() {
@@ -43,7 +43,6 @@ func main() {
 	gin.SetMode("release")
 	endPoint := fmt.Sprintf(":%d", 3000)
 	setupFolders()
-	services.Init()
 	services.Resume()
 
 	log.Printf("[info] start http server listening %s", endPoint)
@@ -69,7 +68,7 @@ func main() {
 }
 
 func setupFolders() {
-	channels, err := models.GetChannels()
+	channels, err := models.ChannelList()
 	if err != nil {
 		fmt.Println(err)
 		return

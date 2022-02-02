@@ -1,6 +1,7 @@
 package models
 
 import (
+	"log"
 	"time"
 
 	"github.com/srad/streamsink/conf"
@@ -41,6 +42,16 @@ func EnqueueCuttingJob(channelName, filename, filepath, intervals string) (*Job,
 	return addJob(channelName, filename, filepath, StatusCut, &intervals)
 }
 
+func (job *Job) FindRecording() (*Recording, error) {
+	recording := Recording{}
+
+	err := Db.Model(&Recording{}).
+		Where("channel_name = ? AND filename = ?", job.ChannelName, job.Filename).
+		First(&recording).Error
+
+	return &recording, err
+}
+
 func addJob(channelName, filename, filepath, status string, args *string) (*Job, error) {
 	job := Job{
 		ChannelName: channelName,
@@ -51,14 +62,17 @@ func addJob(channelName, filename, filepath, status string, args *string) (*Job,
 		Active:      false,
 		CreatedAt:   time.Now(),
 	}
+
 	if err := Db.Create(&job).Error; err != nil {
-		return nil, err
+		log.Printf("[Job] Error enqueing job: '%s/%s' -> %s: %v", channelName, filename, status, err)
+		return &job, err
 	}
+	log.Printf("[Job] Enqueued job: '%s/%s' -> %s", channelName, filename, status)
 
 	return &job, nil
 }
 
-func GetJobs() ([]*Job, error) {
+func JobList() ([]*Job, error) {
 	var jobs []*Job
 	err := Db.Find(&jobs).Error
 	if err != nil && err != gorm.ErrRecordNotFound {
@@ -68,11 +82,12 @@ func GetJobs() ([]*Job, error) {
 	return jobs, nil
 }
 
-func DeleteJob(jobId uint) error {
-	err := Db.Table("jobs").Where("job_id = ?", jobId).Delete(Job{}).Error
+func (job *Job) Destroy() error {
+	err := Db.Table("jobs").Where("job_id = ?", job.JobId).Delete(Job{}).Error
 	if err != nil {
 		return err
 	}
+	log.Printf("[Job] Job id delete %d", job.JobId)
 
 	return nil
 }

@@ -40,7 +40,7 @@ func previewJobs() {
 	}
 
 	// Delete any old previews first
-	errDelete := models.DeletePreview(job.ChannelName, job.Filename)
+	errDelete := models.DestroyPreviews(job.ChannelName, job.Filename)
 	if errDelete != nil && errDelete != gorm.ErrRecordNotFound {
 		log.Printf("[Job] Error deleting existing previews: %v", errDelete)
 	}
@@ -57,22 +57,25 @@ func previewJobs() {
 		// Delete the file if it is corrupted
 		checkFileErr := media.CheckVideo(conf.GetRecordingsPaths(job.ChannelName, job.Filename).Filepath)
 		if checkFileErr != nil {
-			models.DeleteRecording(job.ChannelName, job.Filename)
+			models.FindRecording(job.ChannelName, job.Filename)
+			if rec, err := job.FindRecording(); err != nil {
+				rec.Destroy()
+			}
 			log.Printf("[Job] File corrupted, deleting '%s', %v\n", job.Filename, checkFileErr)
 		}
 		// Since the job failed for some reason, remove it
-		models.DeleteJob(job.JobId)
+		job.Destroy()
 		log.Printf("[Job] Error generating preview for '%s' : %v\n", job.Filename, err)
 		return
 	}
 
-	_, err2 := models.AddPreview(job.ChannelName, job.Filename)
+	_, err2 := models.UpdatePreview(job.ChannelName, job.Filename)
 	if err2 != nil {
 		log.Printf("[Job] Error adding previews: %v", err2)
 		return
 	}
 
-	err3 := models.DeleteJob(job.JobId)
+	err3 := job.Destroy()
 	if err3 != nil {
 		log.Printf("[Job] Error deleteing job: %v", err3)
 		return
@@ -111,13 +114,14 @@ func cuttingJobs() {
 		return
 	}
 
-	err2 := models.AddRecording(&models.Recording{
+	rec := &models.Recording{
 		ChannelName:  job.ChannelName,
 		Bookmark:     false,
 		CreatedAt:    time.Now(),
 		PathRelative: conf.GetRelativeRecordingsPath(job.ChannelName, outputFilename),
 		Filename:     outputFilename,
-	})
+	}
+	err2 := rec.Save()
 
 	if err2 != nil {
 		log.Printf("Error adding job for cut '%s': %v", job.Filename, err2)
@@ -125,7 +129,7 @@ func cuttingJobs() {
 	}
 	log.Printf("Completed cutting '%s'", absolutePath)
 
-	err3 := models.DeleteJob(job.JobId)
+	err3 := job.Destroy()
 	if err3 != nil {
 		log.Printf("Error deleteing job: %v", err3)
 	}

@@ -1,12 +1,9 @@
 package utils
 
 import (
-	"bufio"
 	"fmt"
-	"io"
 	"log"
 	"net"
-	"strings"
 )
 
 const (
@@ -41,23 +38,23 @@ func TCPServer() {
 // TODO: Replace with named pipe when using ffmpeg -progress ..pipe..
 func handleTCPConnection(conn net.Conn) {
 	fmt.Printf("Serving %s\n", conn.RemoteAddr().String())
-	for {
-		netData, err := bufio.NewReader(conn).ReadString('\n')
-		if err == io.EOF {
-			log.Println("TCP EOF")
-			break
-		}
-		if err != nil {
-			log.Println(err)
-			return
-		}
-
-		msg := strings.TrimSpace(string(netData))
-		log.Println(msg)
-		//if workers.ActiveJobId != 0 {
-		//	models.UpdateJobInfo(workers.ActiveJobId, msg)
-		//}
-	}
-	log.Println("End TCP connection")
+	//for {
+	//	netData, err := bufio.NewReader(conn).ReadString('\n')
+	//	if err == io.EOF {
+	//		log.Println("TCP EOF")
+	//		break
+	//	}
+	//	if err != nil {
+	//		log.Println(err)
+	//		return
+	//	}
+	//
+	//	msg := strings.TrimSpace(string(netData))
+	//	log.Println(msg)
+	//	//if workers.ActiveJobId != 0 {
+	//	//	models.UpdateJobInfo(workers.ActiveJobId, msg)
+	//	//}
+	//}
+	//log.Println("End TCP connection")
 	conn.Close()
 }

@@ -42,15 +42,13 @@ func FindByName(channelName string) ([]*Recording, error) {
 	return recordings, nil
 }
 
-func FindLatest(limit int) ([]*Recording, error) {
+func LatestList(limit int) ([]*Recording, error) {
 	var recordings []*Recording
 
 	err := Db.Model(Recording{}).
-		Select("*").
-		Joins("left join channels on recordings.channel_name = channels.channel_name").
 		Order("recordings.created_at DESC").
 		Limit(limit).
-		Scan(&recordings).Error
+		Find(&recordings).Error
 
 	if err != nil {
 		return nil, err
@@ -63,11 +61,9 @@ func FindRandom(limit int) ([]*Recording, error) {
 	var recordings []*Recording
 
 	err := Db.Model(Recording{}).
-		Select("*").
-		Joins("left join channels on recordings.channel_name = channels.channel_name").
 		Order("RANDOM()").
 		Limit(limit).
-		Scan(&recordings).Error
+		Find(&recordings).Error
 
 	if err != nil {
 		return nil, err
@@ -76,7 +72,7 @@ func FindRandom(limit int) ([]*Recording, error) {
 	return recordings, nil
 }
 
-func FindAll() ([]*Recording, error) {
+func RecordingList() ([]*Recording, error) {
 	var recordings []*Recording
 
 	err := Db.Table("recordings").
@@ -90,7 +86,7 @@ func FindAll() ([]*Recording, error) {
 	return recordings, nil
 }
 
-func FindBookmarks() ([]*Recording, error) {
+func BookmarkList() ([]*Recording, error) {
 	var recordings []*Recording
 	err := Db.Table("recordings").Where("bookmark = 1").
 		Select("recordings.*").Order("recordings.channel_name asc").
@@ -102,7 +98,7 @@ func FindBookmarks() ([]*Recording, error) {
 	return recordings, nil
 }
 
-func AddRecording(recording *Recording) error {
+func (recording *Recording) Save() error {
 	info, err := media.GetVideoInfo(conf.AbsoluteFilepath(recording.ChannelName, recording.Filename))
 	if err != nil {
 		log.Printf("[AddRecord] Duration error %v for '%s'", err, conf.AbsoluteFilepath(recording.ChannelName, recording.Filename))
@@ -126,34 +122,19 @@ func AddRecording(recording *Recording) error {
 	return nil
 }
 
-func DeleteRecordings(channelName string) error {
-	var recordings []*Recording
-	if err := Db.Where("channel_name = ?", channelName).Find(&recordings).Error; err != nil {
-		return err
-	}
-
-	for _, recording := range recordings {
-		if err := DeleteRecording(recording.ChannelName, recording.Filename); err != nil {
-			log.Printf("Error deleting recording '%s': %v", err, recording.Filename)
-		}
-	}
-
-	return nil
-}
-
-func DeleteRecording(channelName, filename string) error {
-	if err := Db.Delete(&Recording{}, "channel_name = ? AND filename = ?", channelName, filename).Error; err != nil {
-		log.Println(fmt.Sprintf("Error deleting recordings of file '%s' from channel '%s': %v", filename, channelName, err))
+func (recording *Recording) Destroy() error {
+	if err := Db.Delete(&Recording{}, "channel_name = ? AND filename = ?", recording.ChannelName, recording.Filename).Error; err != nil {
+		log.Println(fmt.Sprintf("Error deleting recordings of file '%s' from channel '%s': %v", recording.Filename, recording.ChannelName, err))
 		return err
 	}
 
 	// Remove associated jobs
-	if err := Db.Delete(&Job{}, "channel_name = ? AND filename = ?", channelName, filename).Error; err != nil && err != gorm.ErrRecordNotFound {
-		log.Println(fmt.Sprintf("Error job for recording of file '%s' from channel '%s': %v", filename, channelName, err))
+	if err := Db.Delete(&Job{}, "channel_name = ? AND filename = ?", recording.ChannelName, recording.Filename).Error; err != nil && err != gorm.ErrRecordNotFound {
+		log.Println(fmt.Sprintf("Error job for recording of file '%s' from channel '%s': %v", recording.Filename, recording.ChannelName, err))
 		return err
 	}
 
-	paths := conf.GetRecordingsPaths(channelName, filename)
+	paths := conf.GetRecordingsPaths(recording.ChannelName, recording.Filename)
 
 	if err := os.Remove(paths.Filepath); err != nil {
 		log.Println(fmt.Sprintf("Error deleting recording: %v", err))
@@ -162,8 +143,13 @@ func DeleteRecording(channelName, filename string) error {
 	return nil
 }
 
-func DeleteRecordingsFile(channelName, filename string) error {
-	paths := conf.GetRecordingsPaths(channelName, filename)
+func (channel *Channel) Filename() string {
+	return info[channel.ChannelName].Filename
+}
+
+func (channel *Channel) DeleteRecordingsFile(filename string) error {
+	paths := conf.GetRecordingsPaths(channel.ChannelName, filename)
+	log.Printf("[Info] Deleting file")
 
 	if err := os.Remove(paths.Filepath); err != nil {
 		log.Println(fmt.Sprintf("Error deleting recording: %v", err))
@@ -173,7 +159,7 @@ func DeleteRecordingsFile(channelName, filename string) error {
 	return nil
 }
 
-func GetRecord(channelName, filename string) (*Recording, error) {
+func FindRecording(channelName, filename string) (*Recording, error) {
 	var recording *Recording
 	err := Db.Table("recordings").
 		Where("channel_name = ? AND filename = ?", channelName, filename).
@@ -185,6 +171,22 @@ func GetRecord(channelName, filename string) (*Recording, error) {
 	return recording, nil
 }
 
+func (recording *Recording) FindJobs() (*[]Job, error) {
+	var jobs *[]Job
+	err := Db.Model(&Job{}).
+		Where("channel_name = ? AND filename = ?", recording.ChannelName, recording.Filename).
+		Find(&jobs).Error
+	if err != nil && err != gorm.ErrRecordNotFound {
+		return nil, err
+	}
+
+	return jobs, nil
+}
+
+func (recording *Recording) DestroyJobs() error {
+	return Db.Delete(&Job{}, "channel_name = ? AND filename = ?", recording.ChannelName, recording.Filename).Error
+}
+
 func AddIfNotExistsRecording(channelName, filename string) (*Recording, error) {
 	rec := Db.First(&Recording{ChannelName: channelName, Filename: filename})
 	if rec.Error != nil && rec.Error != gorm.ErrRecordNotFound {
@@ -193,7 +195,7 @@ func AddIfNotExistsRecording(channelName, filename string) (*Recording, error) {
 	}
 
 	if rec.RowsAffected > 0 {
-		log.Printf("[AddIfNotExistsRecording] Recording '%s' already in database", filename)
+		log.Printf("[AddIfNotExistsRecording] Info '%s' already in database", filename)
 
 		return nil, nil
 	}
@@ -217,11 +219,19 @@ func AddIfNotExistsRecording(channelName, filename string) (*Recording, error) {
 		Bookmark:     false,
 	}
 
-	err = AddRecording(newRec)
+	err = newRec.Save()
 	if err != nil {
 		log.Printf("[AddIfNotExistsRecording] Error creating: %v", rec.Error)
 		return nil, err
 	}
 
 	return newRec, nil
+}
+
+func (recording *Recording) GetVideoInfo() (*media.FFProbeInfo, error) {
+	return media.GetVideoInfo(conf.AbsoluteFilepath(recording.ChannelName, recording.Filename))
+}
+
+func (recording *Recording) UpdateInfo(info *media.FFProbeInfo) error {
+	return Db.Updates(&Recording{ChannelName: recording.ChannelName, Filename: recording.Filename, Duration: info.Duration, BitRate: info.BitRate, Size: info.Size, Width: info.Width, Height: info.Height}).Error
 }

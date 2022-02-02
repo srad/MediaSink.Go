@@ -1,11 +1,11 @@
 package models
 
 import (
+	"fmt"
 	"github.com/srad/streamsink/conf"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
-	"log"
 )
 
 var Db *gorm.DB
@@ -21,14 +21,14 @@ func Init() *gorm.DB {
 	}
 
 	// Migrate the schema
-	if err := db.AutoMigrate(Channel{}); err != nil {
-		log.Printf("[Migrate] Error Channel: %v", err)
+	if err := db.AutoMigrate(&Channel{}); err != nil {
+		panic(fmt.Sprintf("[Migrate] Error Channel: %v", err))
 	}
-	if err := db.AutoMigrate(Recording{}); err != nil {
-		log.Printf("[Migrate] Error Recording: %v", err)
+	if err := db.AutoMigrate(&Recording{}); err != nil {
+		panic(fmt.Sprintf("[Migrate] Error Info: %v", err))
 	}
-	if err := db.AutoMigrate(Job{}); err != nil {
-		log.Printf("[Migrate] Error Job: %v", err)
+	if err := db.AutoMigrate(&Job{}); err != nil {
+		panic(fmt.Sprintf("[Migrate] Error Job: %v", err))
 	}
 	//db.LogMode(true)
 	Db = db

@@ -13,11 +13,10 @@ import (
 	"github.com/srad/streamsink/app"
 	"github.com/srad/streamsink/conf"
 	"github.com/srad/streamsink/models"
-	"github.com/srad/streamsink/services"
 )
 
 var (
-	rChannel, _ = regexp.Compile("(?i)^[a-z_]+$")
+	rChannel, _ = regexp.Compile("(?i)^[a-z_0-9]+$")
 )
 
 type ChannelResponse struct {
@@ -30,16 +29,16 @@ type ChannelResponse struct {
 
 func GetChannels(c *gin.Context) {
 	appG := app.Gin{C: c}
-	channels, err := models.GetChannels()
+	channels, err := models.ChannelList()
 	response := make([]ChannelResponse, len(channels))
 
 	for index, channel := range channels {
 		// Add to each channel current system information
 		response[index] = ChannelResponse{Channel: *channel,
 			Preview:      filepath.Join(conf.AppCfg.RecordingsFolder, channel.ChannelName, conf.AppCfg.DataPath, "live.jpg"),
-			IsOnline:     services.IsOnline(channel.ChannelName),
-			IsRecording:  services.IsRecording(channel.ChannelName),
-			MinRecording: services.RecordingMinutes(channel.ChannelName)}
+			IsOnline:     channel.IsOnline(),
+			IsRecording:  channel.IsRecording(),
+			MinRecording: channel.RecordingMinutes()}
 	}
 
 	if err != nil {
@@ -77,7 +76,7 @@ func AddChannel(c *gin.Context) {
 
 	if err := models.Db.Create(&channel).Error; err != nil {
 		log.Printf("[AddChannel] Error creating record: %v", err)
-		appG.Response(http.StatusInternalServerError, err.Error())
+		appG.Response(http.StatusInternalServerError, err)
 		return
 	}
 
@@ -86,21 +85,20 @@ func AddChannel(c *gin.Context) {
 
 func DeleteChannel(c *gin.Context) {
 	appG := app.Gin{C: c}
-	channelName := strings.ToLower(strings.TrimSpace(c.Param("channelName")))
-
-	if len(channelName) == 0 {
-		appG.Response(http.StatusBadRequest, "The channelName paramter is missing")
-		return
-	}
-
-	log.Printf("Deleting channel '%s'\n", channelName)
-
-	if err := models.DeleteChannel(channelName); err != nil {
+	channel, err := models.GetChannelByName(c.Param("channelName"))
+	if err != nil {
 		appG.Response(http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	appG.Response(http.StatusOK, nil)
+	log.Printf("Deleting channel '%s'\n", channel.ChannelName)
+
+	if err := channel.Destroy(); err != nil {
+		appG.Response(http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	appG.Response(http.StatusOK, channel)
 }
 
 func ResumeChannel(c *gin.Context) {
@@ -113,14 +111,14 @@ func ResumeChannel(c *gin.Context) {
 		return
 	}
 
-	channel, err := models.GetChannel(channelName)
+	channel, err := models.GetChannelByName(channelName)
 	if err != nil {
 		log.Printf("[ResumeChannel] Error getting channel '%s': %v", channelName, err.Error())
 		appG.Response(http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	if err := services.Start(channel); err != nil {
+	if err := channel.Start(); err != nil {
 		log.Printf("[ResumeChannel] Error resuming channel '%s': %v", channelName, err.Error())
 		appG.Response(http.StatusInternalServerError, err.Error())
 		return
@@ -140,7 +138,12 @@ func PauseChannel(c *gin.Context) {
 	}
 
 	log.Println("Pausing channel " + channelName)
-	services.Stop(channelName, true)
+	channel, err := models.GetChannelByName(channelName)
+	if err != nil {
+		appG.Response(http.StatusBadRequest, err.Error())
+		return
+	}
+	channel.Stop(true)
 
 	appG.Response(http.StatusOK, nil)
 }

@@ -31,7 +31,7 @@ func AddJob(c *gin.Context) {
 
 func GetJobs(c *gin.Context) {
 	appG := app.Gin{C: c}
-	jobs, err := models.GetJobs()
+	jobs, err := models.JobList()
 
 	if err != nil {
 		appG.Response(http.StatusBadRequest, err)

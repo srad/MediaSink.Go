@@ -16,7 +16,7 @@ import (
 
 func GetRecordings(c *gin.Context) {
 	appG := app.Gin{C: c}
-	recordings, err := models.FindAll()
+	recordings, err := models.RecordingList()
 
 	if err != nil {
 		appG.Response(http.StatusInternalServerError, nil)
@@ -28,7 +28,7 @@ func GetRecordings(c *gin.Context) {
 
 func GetBookmarks(c *gin.Context) {
 	appG := app.Gin{C: c}
-	recordings, err := models.FindBookmarks()
+	recordings, err := models.BookmarkList()
 
 	if err != nil {
 		appG.Response(http.StatusInternalServerError, nil)
@@ -113,7 +113,7 @@ func CutRecording(c *gin.Context) {
 
 func IsRecording(c *gin.Context) {
 	appG := app.Gin{C: c}
-	appG.Response(http.StatusOK, services.Recording())
+	appG.Response(http.StatusOK, services.IsRecording())
 }
 
 func GetRecording(c *gin.Context) {
@@ -144,7 +144,7 @@ func GetLatestRecordings(c *gin.Context) {
 		return
 	}
 
-	recordings, err := models.FindLatest(limit)
+	recordings, err := models.LatestList(limit)
 
 	if err != nil {
 		appG.Response(http.StatusInternalServerError, err.Error())
@@ -202,7 +202,14 @@ func DeleteRecording(c *gin.Context) {
 		appG.Response(http.StatusBadRequest, "invalid params")
 		return
 	}
-	if err := models.DeleteRecording(channelName, filename); err != nil {
+
+	rec, err := models.FindRecording(channelName, filename)
+	if err != nil {
+		appG.Response(http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	if err := rec.Destroy(); err != nil {
 		appG.Response(http.StatusInternalServerError, err.Error())
 		return
 	}

@@ -20,10 +20,9 @@ func ExecSync(exe string, args ...string) error {
 		return err
 	}
 
-	if b, err := io.ReadAll(sterr); err == nil {
-		log.Println(string(b))
+	if b, err := io.ReadAll(sterr); err != nil {
+		log.Printf("[ExecSync] %s: %v", string(b), err)
 	}
-
 
 	if err := cmd.Wait(); err != nil {
 		if exiterr, ok := err.(*exec.ExitError); ok {
