@@ -13,7 +13,7 @@ var (
 )
 
 const (
-	sleepBetweenRequests = 1 * time.Second
+	sleepBetweenRequests = 3 * time.Second
 	sleepBetweenRounds   = 60 * time.Second
 )
 
