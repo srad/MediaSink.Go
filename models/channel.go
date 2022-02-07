@@ -308,7 +308,7 @@ func (channel *Channel) Capture(url string) error {
 	}
 
 	// Wait for process to exit
-	if err := recorded[channel.ChannelName].Wait(); err != nil && err != nil && !strings.Contains(err.Error(), "255") {
+	if err := recorded[channel.ChannelName].Wait(); err != nil && !strings.Contains(err.Error(), "255") {
 		log.Printf("[Capture] Wait for process exit '%s' error: %v", channel.ChannelName, err)
 		channel.RemoveData()
 		channel.DeleteRecordingsFile(filename)
@@ -335,7 +335,7 @@ func (channel *Channel) Capture(url string) error {
 
 	if duration > recordingMinMinutes {
 		// keep
-		if err := channel.Info().Save(); err != nil {
+		if err := channel.Info().Save("recording"); err != nil {
 			log.Printf("[Info] Error adding recording: %v\n", channel.Info())
 		}
 

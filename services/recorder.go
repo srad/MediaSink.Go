@@ -23,7 +23,6 @@ type ChannelObserver struct {
 
 func iterate() {
 	checkStreams()
-	log.Println("Sleep")
 	for {
 		select {
 		case <-quit:
@@ -31,7 +30,6 @@ func iterate() {
 			return
 		case <-time.After(sleepBetweenRounds):
 			checkStreams()
-			log.Println("Sleep")
 			break
 			// Wait between each round to reduce the chance of API blocking
 		}

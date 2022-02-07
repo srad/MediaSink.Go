@@ -17,6 +17,7 @@ type Recording struct {
 	Filename    string    `json:"filename" gorm:"primaryKey;not null;default:null"`
 	Bookmark    bool      `json:"bookmark" gorm:"not null"`
 	CreatedAt   time.Time `json:"createdAt" gorm:"not null"`
+	VideoType   string    `json:"videoType"`
 
 	Duration float64 `json:"duration" gorm:"default:0;not null"`
 	Size     uint64  `json:"size" gorm:"default:0;not null"`
@@ -98,7 +99,7 @@ func BookmarkList() ([]*Recording, error) {
 	return recordings, nil
 }
 
-func (recording *Recording) Save() error {
+func (recording *Recording) Save(videoType string) error {
 	info, err := media.GetVideoInfo(conf.AbsoluteFilepath(recording.ChannelName, recording.Filename))
 	if err != nil {
 		log.Printf("[AddRecord] Duration error %v for '%s'", err, conf.AbsoluteFilepath(recording.ChannelName, recording.Filename))
@@ -110,6 +111,7 @@ func (recording *Recording) Save() error {
 	recording.BitRate = info.BitRate
 	recording.Width = info.Width
 	recording.Height = info.Height
+	recording.VideoType = videoType
 
 	log.Printf("[AddRecord] Creating %v", recording)
 	if err := Db.Create(&recording).Error; err != nil {
@@ -219,7 +221,7 @@ func AddIfNotExistsRecording(channelName, filename string) (*Recording, error) {
 		Bookmark:     false,
 	}
 
-	err = newRec.Save()
+	err = newRec.Save("recording")
 	if err != nil {
 		log.Printf("[AddIfNotExistsRecording] Error creating: %v", rec.Error)
 		return nil, err

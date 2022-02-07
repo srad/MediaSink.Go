@@ -1,29 +1,38 @@
 package workers
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/srad/streamsink/media"
+	v1 "github.com/srad/streamsink/routers/api/v1"
 	"log"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/srad/streamsink/conf"
 	"gorm.io/gorm"
 
 	"github.com/srad/streamsink/models"
-	"github.com/srad/streamsink/utils"
 )
 
 var (
-	ActiveJobId uint = 0
+	Quit               = make(chan bool)
+	sleepBetweenRounds = 10 * time.Second
 )
 
 func JobWorker() {
 	for {
-		// These jobs do not run in parallel,
-		// so they don't use up too much CPU
-		previewJobs()
-		cuttingJobs()
-		time.Sleep(10 * time.Second)
+		select {
+		case <-Quit:
+			log.Println("Stopping iteration")
+			return
+		case <-time.After(sleepBetweenRounds):
+			cuttingJobs()
+			previewJobs()
+			break
+			// Wait between each round to reduce the chance of API blocking
+		}
 	}
 }
 
@@ -49,7 +58,6 @@ func previewJobs() {
 	err = models.ActiveJob(job.JobId)
 	if err != nil {
 		log.Printf("[Job] Error activating job: %d", job.JobId)
-		ActiveJobId = job.JobId
 	}
 
 	err = media.GeneratePreviews(job.ChannelName, job.Filename)
@@ -81,61 +89,145 @@ func previewJobs() {
 		return
 	}
 
-	ActiveJobId = 0
 	log.Printf("[Job] Preview job complete for '%s'", job.Filepath)
 }
 
-func cuttingJobs() {
+// Cut video, add preview job, destroy job
+func cuttingJobs() error {
 	job, err := models.GetNextJob(models.StatusCut)
-	if job == nil && err == nil {
-		// log.Printf("No jobs found with status '%s'", models.StatusPreview)
-		return
+	if err == gorm.ErrRecordNotFound || job == nil {
+		return err
 	}
+
 	if err != nil {
-		log.Printf("[Job] Error handlung job: %v", err)
-		return
+		log.Printf("[Job] Error handling cutting job: %v", err)
+		return err
 	}
 
-	log.Printf("Starting video cutting for '%s'", job.Filename)
-	models.ActiveJob(job.JobId)
-
-	filename := utils.FileNameWithoutExtension(job.Filename)
-
-	// Count the number of copies to enumerate them
-	var count int64
-	models.Db.Model(&models.Recording{}).Where("filename LIKE ?", filename+"_%").Count(&count)
-
-	outputFilename := fmt.Sprintf("%s_%04d.mp4", filename, count)
-	absolutePath := conf.AbsoluteFilepath(job.ChannelName, outputFilename)
-
-	err = media.CutVideo(job.Filepath, absolutePath, *job.Args)
+	log.Printf("[Job] Generating preview for '%s'", job.Filename)
+	err = models.ActiveJob(job.JobId)
 	if err != nil {
-		log.Printf("Error cutting video: '%s'", outputFilename)
-		return
+		log.Printf("[Job] Error activating job: %d", job.JobId)
 	}
 
-	rec := &models.Recording{
+	if job.Args == nil {
+		log.Printf("[Job] Error missing args for cutting job: %d", job.JobId)
+		return err
+	}
+
+	// Parse arguments
+	cutRequest := v1.CutRequest{}
+	s := []byte(*job.Args)
+	err = json.Unmarshal(s, &cutRequest)
+	if err != nil {
+		log.Printf("[Job] Error parsing cutting job arguments: %v", err)
+		job.Destroy()
+		return err
+	}
+
+	// Filenames
+	now := time.Now()
+	stamp := now.Format("2006_01_02_15_04_05")
+	filename := fmt.Sprintf("%s_cut_%s.mp4", job.ChannelName, stamp)
+	inputPath := conf.AbsoluteFilepath(job.ChannelName, job.Filename)
+	outputFile := conf.AbsoluteFilepath(job.ChannelName, filename)
+	segFiles := make([]string, len(cutRequest.Starts))
+	mergeFileContent := make([]string, len(cutRequest.Starts))
+
+	// Cut
+	segmentFilename := fmt.Sprintf("%s_cut_%s", job.ChannelName, stamp)
+	for i, start := range cutRequest.Starts {
+		segFiles[i] = conf.AbsoluteFilepath(job.ChannelName, fmt.Sprintf("%s_%04d.mp4", segmentFilename, i))
+		err = media.CutVideo(inputPath, segFiles[i], start, cutRequest.Ends[i])
+		// Failed, delete all segments
+		if err != nil {
+			log.Printf("[Job] Error generating cut for file '%s': %v", inputPath, err)
+			log.Println("[Job] Deleting orphaned segments")
+			for _, file := range segFiles {
+				if err := os.RemoveAll(file); err != nil {
+					log.Printf("[Job] Error deleting %s: %v", file, err)
+				}
+			}
+			job.Destroy()
+			return err
+		}
+	}
+	// Merge file txt, enumerate
+	for i, file := range segFiles {
+		mergeFileContent[i] = fmt.Sprintf("file '%s'", file)
+	}
+	mergeTextfile := conf.AbsoluteFilepath(job.ChannelName, fmt.Sprintf("%s.txt", segmentFilename))
+	err = os.WriteFile(mergeTextfile, []byte(strings.Join(mergeFileContent, "\n")), 0644)
+	if err != nil {
+		log.Printf("[Job] Error writing concat text file '%s': %v", mergeTextfile, err)
+		for _, file := range segFiles {
+			if err := os.RemoveAll(file); err != nil {
+				log.Printf("[Job] Error deleting %s: %v", file, err)
+			}
+		}
+		job.Destroy()
+		return err
+	}
+
+	err = media.MergeVideos(mergeTextfile, outputFile)
+	if err != nil {
+		log.Printf("[Job] Error merging file '%s': %v", mergeTextfile, err)
+		for _, file := range segFiles {
+			if err := os.RemoveAll(file); err != nil {
+				log.Printf("[Job] Error deleting %s: %v", file, err)
+			}
+		}
+		job.Destroy()
+		return err
+	}
+	os.RemoveAll(mergeTextfile)
+	for _, file := range segFiles {
+		if err := os.Remove(file); err != nil {
+			log.Printf("[Job] Error deleting segment '%s': %v", file, err)
+		} else {
+			log.Printf("[Job] Deleted %s: %v", file, err)
+		}
+	}
+
+	info, err := media.GetVideoInfo(outputFile)
+	if err != nil {
+		log.Printf("[Job] Error reading video information for file '%s': %v", filename, err)
+	}
+
+	// Cutting written to dist, add record to database
+	newRec := models.Recording{
 		ChannelName:  job.ChannelName,
-		Bookmark:     false,
+		Filename:     filename,
+		PathRelative: conf.GetRelativeRecordingsPath(job.ChannelName, filename),
+		Duration:     info.Duration,
+		Width:        info.Width,
+		Height:       info.Height,
+		Size:         info.Size,
+		BitRate:      info.BitRate,
 		CreatedAt:    time.Now(),
-		PathRelative: conf.GetRelativeRecordingsPath(job.ChannelName, outputFilename),
-		Filename:     outputFilename,
-	}
-	err2 := rec.Save()
-
-	if err2 != nil {
-		log.Printf("Error adding job for cut '%s': %v", job.Filename, err2)
-		return
-	}
-	log.Printf("Completed cutting '%s'", absolutePath)
-
-	err3 := job.Destroy()
-	if err3 != nil {
-		log.Printf("Error deleteing job: %v", err3)
+		Bookmark:     false,
 	}
 
-	_, err4 := models.EnqueuePreviewJob(job.ChannelName, outputFilename)
-	if err4 != nil {
-		log.Printf("Error adding preview job for '%s': %v", outputFilename, err4)
+	err = newRec.Save("cut")
+	if err != nil {
+		log.Printf("[Job] Error creating: %v", err)
+		return err
 	}
+
+	// Successfully added cut record, enqueue preview job
+	_, err = models.EnqueuePreviewJob(job.ChannelName, filename)
+	if err != nil {
+		log.Printf("[Job] Error adding preview for cutting job %d: %v", job.JobId, err)
+		return err
+	}
+
+	// Finished, destroy job
+	err = job.Destroy()
+	if err != nil {
+		log.Printf("[Job] Error deleteing job: %v", err)
+		return err
+	}
+
+	log.Printf("[Job] Cutting job complete for '%s'", job.Filepath)
+	return nil
 }

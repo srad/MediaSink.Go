@@ -42,7 +42,7 @@ func DestroyPreviews(channelName, filename string) error {
 	paths := conf.GetRecordingsPaths(channelName, filename)
 
 	if err := os.Remove(paths.VideosPath); err != nil {
-		log.Println(fmt.Sprintf("Error deleting file file '%s' from channel '%s': %v", paths.VideosPath, channelName, err))
+		log.Println(fmt.Sprintf("Error deleting file '%s' from channel '%s': %v", paths.VideosPath, channelName, err))
 	}
 	if err := os.Remove(paths.StripePath); err != nil {
 		log.Println(fmt.Sprintf("Error deleting file file '%s' from channel '%s': %v", paths.StripePath, channelName, err))

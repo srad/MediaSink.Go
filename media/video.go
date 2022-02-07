@@ -65,18 +65,24 @@ func GeneratePreviews(channelName, filename string) error {
 	return ExtractFrames(inputPath, conf.AbsoluteDataPath(channelName), FrameCount, 128, 256)
 }
 
-func CutVideo(absoluteFilepath, absoluteOutputFilepath, intervals string) error {
-	script := filepath.Join(conf.AppCfg.ScriptPath, "segment.sh")
-
-	log.Println("---------------------------------------------- Cutting Job ----------------------------------------------")
-	log.Println(script)
-	log.Println(absoluteFilepath)
+func MergeVideos(absoluteMergeTextfile, absoluteOutputFilepath string) error {
+	log.Println("---------------------------------------------- Merge Job ----------------------------------------------")
+	log.Println(absoluteMergeTextfile)
 	log.Println(absoluteOutputFilepath)
-	log.Println(intervals)
 	log.Println("---------------------------------------------------------------------------------------------------------")
 
-	args := append([]string{script, absoluteFilepath, absoluteOutputFilepath}, strings.Split(intervals, " ")...)
-	return utils.ExecSync("/bin/bash", args...)
+	return utils.ExecSync("ffmpeg", "-hide_banner", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", absoluteMergeTextfile, "-codec", "copy", absoluteOutputFilepath)
+}
+
+func CutVideo(absoluteFilepath, absoluteOutputFilepath, startInvervals, endIntervals string) error {
+	log.Println("---------------------------------------------- Cutting Job ----------------------------------------------")
+	log.Println(absoluteFilepath)
+	log.Println(absoluteOutputFilepath)
+	log.Println(startInvervals)
+	log.Println(endIntervals)
+	log.Println("---------------------------------------------------------------------------------------------------------")
+
+	return utils.ExecSync("ffmpeg", "-i", absoluteFilepath, "-ss", startInvervals, "-to", endIntervals, "-codec", "copy", absoluteOutputFilepath)
 }
 
 func ExtractFrames(inputPath, outputDir string, extractCount int, frameHeight, videoHeight uint) error {

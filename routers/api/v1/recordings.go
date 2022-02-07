@@ -1,9 +1,10 @@
 package v1
 
 import (
-	"io/ioutil"
+	"encoding/json"
 	"log"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -12,6 +13,11 @@ import (
 	"github.com/srad/streamsink/conf"
 	"github.com/srad/streamsink/models"
 	"github.com/srad/streamsink/services"
+)
+
+var (
+	// Example: 4.3789 8.2128 12.1970 15.0161 19.0379 16.4819 24.7135 27.4386:
+	intervalPattern, err = regexp.Compile("[0-9]+\\.[0-9]+(\\w[0-9]+\\.[0-9]+)*")
 )
 
 func GetRecordings(c *gin.Context) {
@@ -49,13 +55,13 @@ func GeneratePreview(c *gin.Context) {
 		return
 	}
 
-	_, err := models.EnqueuePreviewJob(channelName, filename)
+	job, err := models.EnqueuePreviewJob(channelName, filename)
 	if err != nil {
 		appG.Response(http.StatusInternalServerError, err)
 		return
 	}
 
-	appG.Response(http.StatusOK, nil)
+	appG.Response(http.StatusOK, job)
 }
 
 func UpdateVideoInfo(c *gin.Context) {
@@ -88,27 +94,36 @@ func Bookmark(c *gin.Context) {
 	appG.Response(http.StatusOK, nil)
 }
 
+type CutRequest struct {
+	Starts []string `json:"starts"`
+	Ends   []string `json:"ends"`
+}
+
 func CutRecording(c *gin.Context) {
 	appG := app.Gin{C: c}
 
-	body, err := ioutil.ReadAll(c.Request.Body)
+	cutRequest := CutRequest{}
+	if err := c.BindJSON(&cutRequest); err != nil {
+		appG.Response(http.StatusBadRequest, err.Error())
+		return
+	}
 
+	channelName := c.Param("channelName")
+	filename := c.Param("filename")
+
+	cut, err := json.Marshal(cutRequest)
 	if err != nil {
-		appG.Response(http.StatusBadRequest, "invalid body")
+		appG.Response(http.StatusBadRequest, err.Error())
 		return
 	}
 
-	intervals := string(body)
-
-	channelName := strings.ToLower(strings.TrimSpace(c.Param("channelName")))
-	filename := strings.ToLower(strings.TrimSpace(c.Param("filename")))
-
-	if channelName == "" || filename == "" {
-		appG.Response(http.StatusBadRequest, "invalid params")
+	job, err := models.EnqueueCuttingJob(channelName, filename, conf.AbsoluteFilepath(channelName, filename), string(cut))
+	if err != nil {
+		appG.Response(http.StatusBadRequest, err.Error())
 		return
 	}
 
-	models.EnqueueCuttingJob(channelName, filename, conf.AbsoluteFilepath(channelName, filename), intervals)
+	appG.Response(http.StatusOK, job)
 }
 
 func IsRecording(c *gin.Context) {

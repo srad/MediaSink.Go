@@ -50,7 +50,7 @@ func FixOrphanedRecordings() {
 				Bookmark:     false,
 				CreatedAt:    time.Now(),
 			}
-			rec.Save()
+			rec.Save("recording")
 			job.Destroy()
 			log.Printf("Added recording for '%s' and deleted orphaned recording job\n", job.Filename)
 		}

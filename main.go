@@ -2,28 +2,21 @@ package main
 
 import (
 	"fmt"
+	"github.com/gin-gonic/gin"
+	"github.com/srad/streamsink/conf"
+	"github.com/srad/streamsink/models"
+	"github.com/srad/streamsink/routers"
+	"github.com/srad/streamsink/services"
 	"github.com/srad/streamsink/utils"
+	"github.com/srad/streamsink/workers"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
-
-	"github.com/gin-gonic/gin"
-	"github.com/srad/streamsink/conf"
-	"github.com/srad/streamsink/models"
-	"github.com/srad/streamsink/routers"
-	"github.com/srad/streamsink/services"
-	"github.com/srad/streamsink/workers"
 	//"github.com/srad/streamsink/workers"
 )
-
-func cleanup() {
-	log.Println("cleanup ...")
-	services.StopAll()
-	log.Println("cleanup complete")
-}
 
 func main() {
 	c := make(chan os.Signal)
@@ -52,7 +45,7 @@ func main() {
 	server := &http.Server{
 		Addr:         endPoint,
 		Handler:      routers.Setup(),
-		ReadTimeout:  5 * time.Second,
+		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 10 * time.Second,
 	}
 
@@ -65,6 +58,13 @@ func main() {
 	}()
 
 	<-c
+}
+
+func cleanup() {
+	log.Println("cleanup ...")
+	workers.Quit <- true
+	services.StopAll()
+	log.Println("cleanup complete")
 }
 
 func setupFolders() {
