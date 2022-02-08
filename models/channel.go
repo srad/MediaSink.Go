@@ -43,6 +43,7 @@ type Channel struct {
 	CreatedAt       time.Time   `json:"createdAt"`
 	Recordings      []Recording `json:"recordings" gorm:"table:recordings;foreignKey:channel_name;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
 	RecordingsCount uint        `json:"recordingsCount"`
+	RecordingsSize  uint        `json:"recordingsSize"`
 }
 
 func (channel *Channel) Save() error {
@@ -174,7 +175,7 @@ func ChannelList() ([]*Channel, error) {
 	var result []*Channel
 
 	err := Db.Model(&Channel{}).
-		Select("channels.*", "(SELECT COUNT(*) FROM recordings WHERE recordings.channel_name = channels.channel_name) recordings_count").
+		Select("channels.*", "(SELECT COUNT(*) FROM recordings WHERE recordings.channel_name = channels.channel_name) recordings_count", "(SELECT SUM(size) FROM recordings WHERE recordings.channel_name = channels.channel_name) recordings_size").
 		Find(&result).Error
 
 	if err != nil && err != gorm.ErrRecordNotFound {
