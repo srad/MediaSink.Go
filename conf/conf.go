@@ -82,7 +82,7 @@ func GetAbsoluteRecordingsPath(channelName, filename string) string {
 func getEnvOrYML(key, envKey string) string {
 	val := os.Getenv(envKey)
 	if val == "" {
-		return viper.GetString(fmt.Sprintf("dirs.%s", key))
+		return viper.GetString(key)
 	}
 	return val
 }
@@ -95,13 +95,16 @@ func Read() {
 		panic(fmt.Errorf("Fatal error config file: %w \n", err))
 	}
 
-	AppCfg.RecordingsAbsolutePath = getEnvOrYML("dirs.recordingsfolder", "REC_PATH")
 	AppCfg.DbFileName = getEnvOrYML("db.filename", "DB_FILENAME")
+
+	AppCfg.RecordingsAbsolutePath = getEnvOrYML("dirs.recordingsfolder", "REC_PATH")
 	AppCfg.RecordingsFolder = getEnvOrYML("dirs.recordings", "REC_FOLDERNAME")
 	AppCfg.DataPath = getEnvOrYML("dirs.data", "DATA_DIR")
 	AppCfg.PublicPath = getEnvOrYML("dirs.public", "PUBLIC_PATH")
+
 	AppCfg.DataDisk = getEnvOrYML("sys.disk", "DATA_DISK")
 	AppCfg.NetworkDev = getEnvOrYML("sys.network", "NET_ADAPTER")
+
 	AppCfg.DefaulImportUrl = getEnvOrYML("default.importurl", "DEFAULT_IMPORT_URL")
 }
 

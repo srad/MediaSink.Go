@@ -28,3 +28,16 @@ func GetInfo(c *gin.Context) {
 
 	appG.Response(http.StatusOK, data)
 }
+
+func GetDiskInfo(c *gin.Context) {
+	appG := app.Gin{C: c}
+
+	info, err := utils.DiskUsage(conf.AppCfg.DataDisk)
+
+	if err != nil {
+		appG.Response(http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	appG.Response(http.StatusOK, info)
+}

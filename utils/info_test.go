@@ -13,7 +13,7 @@ func TestCpuUsage(t *testing.T) {
 }
 
 func TestDiskUsage(t *testing.T) {
-	_, err := diskUsage("/")
+	_, err := DiskUsage("/")
 	if err != nil {
 		t.Fatalf("Error getting disk usage: %v", err)
 	}

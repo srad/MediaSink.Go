@@ -63,7 +63,7 @@ func ImportRecordings() error {
 
 	file, err := os.Open(conf.AppCfg.RecordingsAbsolutePath)
 	if err != nil {
-		log.Printf(" [Import] Failed opening directory: %s\n", err.Error())
+		log.Printf(" [Import] Failed opening directory '%s': %v\n", conf.AppCfg.RecordingsAbsolutePath, err)
 		return err
 	}
 	defer file.Close()

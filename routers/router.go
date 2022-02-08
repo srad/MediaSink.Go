@@ -72,6 +72,7 @@ func Setup() http.Handler {
 		apiv1.POST("/recordings/pause", v1.PauseRecording)
 
 		apiv1.GET("/info/:seconds", v1.GetInfo)
+		apiv1.GET("/info/disk", v1.GetDiskInfo)
 
 		apiv1.GET("/ws", v1.WsHandler)
 	}

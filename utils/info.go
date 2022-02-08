@@ -134,7 +134,7 @@ func parseCpuStats(cols []string) (float64, float64, error) {
 	return float64(vals[3]), float64(sum), nil
 }
 
-func diskUsage(path string) (*DiskInfo, error) {
+func DiskUsage(path string) (*DiskInfo, error) {
 	// df -h -BG --output=used,avail,pcent / | tail -n1
 	out, err := exe("df", "-h", "-BG", "--output=size,used,avail,pcent", path)
 	if err != nil {
@@ -147,7 +147,7 @@ func diskUsage(path string) (*DiskInfo, error) {
 }
 
 func Info(path, networkDev string, measureSeconds uint64) (*SysInfo, error) {
-	disk, err := diskUsage(path)
+	disk, err := DiskUsage(path)
 	if err != nil {
 		return nil, err
 	}
