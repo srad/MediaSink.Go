@@ -18,9 +18,7 @@ type Cfg struct {
 	DataPath               string
 	PublicPath             string
 	ScriptPath             string
-	Default                struct {
-		ImportUrl string
-	}
+	DefaulImportUrl        string
 }
 
 var AppCfg = &Cfg{}
@@ -81,6 +79,14 @@ func GetAbsoluteRecordingsPath(channelName, filename string) string {
 	return filepath.Join(AppCfg.RecordingsAbsolutePath, channelName, filename)
 }
 
+func getEnvOrYML(key, envKey string) string {
+	val := os.Getenv(envKey)
+	if val == "" {
+		return viper.GetString(fmt.Sprintf("dirs.%s", key))
+	}
+	return val
+}
+
 func Read() {
 	viper.SetConfigName("conf/app") // name of config file (without extension)
 	viper.AddConfigPath("./")       // path to look for the config file in
@@ -89,15 +95,14 @@ func Read() {
 		panic(fmt.Errorf("Fatal error config file: %w \n", err))
 	}
 
-	AppCfg.RecordingsAbsolutePath = viper.GetString("dirs.recordingsfolder")
-	AppCfg.DbFileName = viper.GetString("db.filename")
-	AppCfg.RecordingsFolder = viper.GetString("dirs.recordings")
-	AppCfg.DataPath = viper.GetString("dirs.data")
-	AppCfg.PublicPath = viper.GetString("dirs.public")
-	AppCfg.ScriptPath = viper.GetString("dirs.scripts")
-	AppCfg.DataDisk = viper.GetString("sys.disk")
-	AppCfg.NetworkDev = viper.GetString("sys.network")
-	AppCfg.Default.ImportUrl = viper.GetString("default.importurl")
+	AppCfg.RecordingsAbsolutePath = getEnvOrYML("dirs.recordingsfolder", "REC_PATH")
+	AppCfg.DbFileName = getEnvOrYML("db.filename", "DB_FILENAME")
+	AppCfg.RecordingsFolder = getEnvOrYML("dirs.recordings", "REC_FOLDERNAME")
+	AppCfg.DataPath = getEnvOrYML("dirs.data", "DATA_DIR")
+	AppCfg.PublicPath = getEnvOrYML("dirs.public", "PUBLIC_PATH")
+	AppCfg.DataDisk = getEnvOrYML("sys.disk", "DATA_DISK")
+	AppCfg.NetworkDev = getEnvOrYML("sys.network", "NET_ADAPTER")
+	AppCfg.DefaulImportUrl = getEnvOrYML("default.importurl", "DEFAULT_IMPORT_URL")
 }
 
 func MakeChannelFolders(channelName string) {
