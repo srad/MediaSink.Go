@@ -34,7 +34,7 @@ func main() {
 	go workers.JobWorker()
 
 	gin.SetMode("release")
-	endPoint := fmt.Sprintf(":%d", 3000)
+	endPoint := fmt.Sprintf("0.0.0.0:%d", 3000)
 	setupFolders()
 	services.Resume()
 

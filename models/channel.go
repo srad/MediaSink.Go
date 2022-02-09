@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	recordingMinMinutes = 15
+	recordingMinMinutes = 1
 	frameWidth          = "480"
 	frameName           = "live.jpg"
 )
@@ -149,7 +149,7 @@ func (channel *Channel) IsRecording() bool {
 }
 
 func (channel *Channel) StreamUrl() (string, error) {
-	cmd := exec.Command("youtube-dl", "--force-ipv4", "-f best", "--get-url", channel.Url)
+	cmd := exec.Command("youtube-dl", "--force-ipv4", "--ignore-errors", "--youtube-skip-dash-manifest", "-f best/bestvideo", "--get-url", channel.Url)
 	stdout, err := cmd.CombinedOutput()
 	output := strings.TrimSpace(string(stdout))
 

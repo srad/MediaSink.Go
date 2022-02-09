@@ -64,7 +64,7 @@ func AddChannel(c *gin.Context) {
 		return
 	}
 
-	url := strings.ToLower(strings.TrimSpace(data.Url))
+	url := strings.TrimSpace(data.Url)
 	if !rChannel.MatchString(data.ChannelName) || len(url) == 0 {
 		log.Printf("[AddChannel] Error validating: %s, %s", data.ChannelName, data.Url)
 		appG.Response(http.StatusBadRequest, fmt.Sprintf("Parameters wrong, Channel: '%s', Url: '%s'", data.ChannelName, data.Url))

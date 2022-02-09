@@ -6,7 +6,7 @@ echo ########################################################
 echo
 
 sudo apt update
-sudo apt install -y sqlite3 nasm python git
+sudo apt install -y sqlite3 nasm python git gcc binutils
 
 # youtube dl
 sudo wget https://yt-dl.org/downloads/latest/youtube-dl -O /usr/local/bin/youtube-dl
