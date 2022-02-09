@@ -19,9 +19,8 @@ import (
 )
 
 const (
-	recordingMinMinutes = 1
-	frameWidth          = "480"
-	frameName           = "live.jpg"
+	frameWidth = "480"
+	frameName  = "live.jpg"
 )
 
 var (
@@ -332,9 +331,9 @@ func (channel *Channel) Capture(url string) error {
 
 	// Finish recording
 
-	duration := time.Now().Sub(channel.Info().CreatedAt).Minutes()
+	duration := int(time.Now().Sub(channel.Info().CreatedAt).Minutes())
 
-	if duration > recordingMinMinutes {
+	if duration > conf.AppCfg.MinRecMin {
 		// keep
 		if err := channel.Info().Save("recording"); err != nil {
 			log.Printf("[Info] Error adding recording: %v\n", channel.Info())

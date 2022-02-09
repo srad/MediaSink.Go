@@ -2,8 +2,10 @@ package conf
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/spf13/viper"
@@ -19,6 +21,7 @@ type Cfg struct {
 	PublicPath             string
 	ScriptPath             string
 	DefaulImportUrl        string
+	MinRecMin              int
 }
 
 var AppCfg = &Cfg{}
@@ -79,7 +82,21 @@ func GetAbsoluteRecordingsPath(channelName, filename string) string {
 	return filepath.Join(AppCfg.RecordingsAbsolutePath, channelName, filename)
 }
 
-func getEnvOrYML(key, envKey string) string {
+func getConfInt(key, envKey string) int {
+	val := os.Getenv(envKey)
+	if val == "" {
+		return viper.GetInt(key)
+	}
+
+	n, err := strconv.Atoi(val)
+	if err != nil {
+		log.Printf("[getConfInt] Error parsing env variable '%s': %v", envKey, err)
+	}
+
+	return n
+}
+
+func getConfString(key, envKey string) string {
 	val := os.Getenv(envKey)
 	if val == "" {
 		return viper.GetString(key)
@@ -95,17 +112,18 @@ func Read() {
 		panic(fmt.Errorf("Fatal error config file: %w \n", err))
 	}
 
-	AppCfg.DbFileName = getEnvOrYML("db.filename", "DB_FILENAME")
+	AppCfg.DbFileName = getConfString("db.filename", "DB_FILENAME")
 
-	AppCfg.RecordingsAbsolutePath = getEnvOrYML("dirs.recordingsfolder", "REC_PATH")
-	AppCfg.RecordingsFolder = getEnvOrYML("dirs.recordings", "REC_FOLDERNAME")
-	AppCfg.DataPath = getEnvOrYML("dirs.data", "DATA_DIR")
-	AppCfg.PublicPath = getEnvOrYML("dirs.public", "PUBLIC_PATH")
+	AppCfg.RecordingsAbsolutePath = getConfString("dirs.recordingsfolder", "REC_PATH")
+	AppCfg.RecordingsFolder = getConfString("dirs.recordings", "REC_FOLDERNAME")
+	AppCfg.DataPath = getConfString("dirs.data", "DATA_DIR")
+	AppCfg.PublicPath = getConfString("dirs.public", "PUBLIC_PATH")
 
-	AppCfg.DataDisk = getEnvOrYML("sys.disk", "DATA_DISK")
-	AppCfg.NetworkDev = getEnvOrYML("sys.network", "NET_ADAPTER")
+	AppCfg.DataDisk = getConfString("sys.disk", "DATA_DISK")
+	AppCfg.NetworkDev = getConfString("sys.network", "NET_ADAPTER")
 
-	AppCfg.DefaulImportUrl = getEnvOrYML("default.importurl", "DEFAULT_IMPORT_URL")
+	AppCfg.DefaulImportUrl = getConfString("default.importurl", "DEFAULT_IMPORT_URL")
+	AppCfg.MinRecMin = getConfInt("settings.minrecmin", "MIN_REC_MIN")
 }
 
 func MakeChannelFolders(channelName string) {

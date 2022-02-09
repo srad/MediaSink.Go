@@ -11,3 +11,5 @@ sys:
   disk: ''
 default:
   importurl: ''
+settings:
+  minrecmin: 15
