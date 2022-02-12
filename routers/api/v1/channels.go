@@ -49,15 +49,20 @@ func GetChannels(c *gin.Context) {
 	appG.Response(http.StatusOK, &response)
 }
 
-type RequeestAddChannel struct {
-	ChannelName string `json:"channelName"`
-	Url         string `json:"url"`
+type ReqAddChannel struct {
+	ChannelName string   `json:"channelName"`
+	Url         string   `json:"url"`
+	Tags        []string `json:"tags"`
+}
+
+type ReqTagChannel struct {
+	Tags []string `json:"tags"`
 }
 
 func AddChannel(c *gin.Context) {
 	appG := app.Gin{C: c}
 
-	data := &RequeestAddChannel{}
+	data := &ReqAddChannel{}
 	if err := c.BindJSON(&data); err != nil {
 		log.Printf("[AddChannel] Error parsing request: %v", err)
 		appG.Response(http.StatusInternalServerError, err)
@@ -71,10 +76,9 @@ func AddChannel(c *gin.Context) {
 		return
 	}
 
-	channelName := strings.ToLower(strings.TrimSpace(data.ChannelName))
-	channel := models.Channel{ChannelName: channelName, Url: url, IsPaused: false, CreatedAt: time.Now()}
+	channel := models.Channel{ChannelName: data.ChannelName, Url: url, IsPaused: false, CreatedAt: time.Now()}
 
-	if err := models.Db.Create(&channel).Error; err != nil {
+	if err := channel.Create(&data.Tags); err != nil {
 		log.Printf("[AddChannel] Error creating record: %v", err)
 		appG.Response(http.StatusInternalServerError, err)
 		return
@@ -99,6 +103,26 @@ func DeleteChannel(c *gin.Context) {
 	}
 
 	appG.Response(http.StatusOK, channel)
+}
+
+func TagChannel(c *gin.Context) {
+	appG := app.Gin{C: c}
+	channelName := c.Param("channelName")
+
+	data := &ReqTagChannel{}
+	if err := c.BindJSON(&data); err != nil {
+		log.Printf("[TagChannel] Error parsing request: %v", err)
+		appG.Response(http.StatusInternalServerError, err)
+		return
+	}
+
+	if err := models.TagChannel(channelName, data.Tags); err != nil {
+		log.Println(err)
+		appG.Response(http.StatusInternalServerError, err)
+		return
+	}
+
+	appG.Response(http.StatusOK, nil)
 }
 
 func ResumeChannel(c *gin.Context) {

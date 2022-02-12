@@ -1,6 +1,7 @@
 package models
 
 import (
+	"errors"
 	"fmt"
 	"github.com/srad/streamsink/utils"
 	"io"
@@ -8,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"syscall"
@@ -28,15 +30,16 @@ var (
 	isOnline = make(map[string]bool)
 	quit     chan bool
 	recorded = make(map[string]*exec.Cmd)
+	// "tag1,tag2,...
+	rTags, _ = regexp.Compile("^[a-z\\-0-9]+(,[a-z\\-0-9]+)*$")
 )
 
 type Channel struct {
-	ChannelId       uint        `json:"channelId" gorm:"primaryKey;not null;default:null"`
-	ChannelName     string      `json:"channelName" gorm:"unique;not null;default:null"`
-	Url             string      `json:"url" gorm:"unique;not null;default:null"`
-	BitRate         uint64      `json:"bitRate" gorm:"column:bit_rate;default 0"`
-	Width           uint        `json:"width" gorm:"default 0"`
-	Height          uint        `json:"height" gorm:"default 0"`
+	ChannelId   uint   `json:"channelId" gorm:"primaryKey;not null;default:null"`
+	ChannelName string `json:"channelName" gorm:"unique;not null;default:null"`
+	Url         string `json:"url" gorm:"unique;not null;default:null"`
+
+	Tags            string      `json:"tags" gorm:"not null;default:''"`
 	IsPaused        bool        `json:"isPaused" gorm:"not null"`
 	CreatedAt       time.Time   `json:"createdAt"`
 	Recordings      []Recording `json:"recordings" gorm:"table:recordings;foreignKey:channel_name;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
@@ -44,9 +47,19 @@ type Channel struct {
 	RecordingsSize  uint        `json:"recordingsSize"`
 }
 
-func (channel *Channel) Save() error {
+func (channel *Channel) Create(tags *[]string) error {
+	channel.ChannelName = strings.ToLower(strings.TrimSpace(channel.ChannelName))
 	channel.IsPaused = false
 	channel.CreatedAt = time.Now()
+
+	if tags != nil {
+		str, err := prepareTags(*tags)
+		if err != nil {
+			return err
+		}
+		channel.Tags = str
+	}
+
 	if err := Db.Create(&channel).Error; err != nil {
 		return err
 	}
@@ -54,6 +67,26 @@ func (channel *Channel) Save() error {
 	conf.MakeChannelFolders(channel.ChannelName)
 
 	return nil
+}
+
+func TagChannel(channelName string, tags []string) error {
+	joined, err := prepareTags(tags)
+	if err != nil {
+		return err
+	}
+
+	return Db.Table("channels").
+		Where("channel_name = ?", channelName).
+		Update("tags", joined).Error
+}
+
+func prepareTags(tags []string) (string, error) {
+	joined := strings.ToLower(strings.Join(tags, ","))
+	if !rTags.MatchString(joined) {
+		return "", errors.New(fmt.Sprintf("Invalid tags: '%s'", tags))
+	}
+
+	return joined, nil
 }
 
 func IsRecording(channelName string) bool {

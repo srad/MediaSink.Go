@@ -76,7 +76,7 @@ func ImportRecordings() error {
 			Url:         fmt.Sprintf(conf.AppCfg.DefaulImportUrl, channelName),
 		}
 
-		if err := channel.Save(); err != nil {
+		if err := channel.Create(nil); err != nil {
 			log.Printf(" + Error adding channel channel '%s': %v", channelName, err)
 		}
 

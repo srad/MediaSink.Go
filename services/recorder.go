@@ -33,7 +33,7 @@ func checkStreams() {
 	if pause {
 		return
 	}
-	channels, err := models.ChannelActiveList()
+	channels, err := models.ChannelList()
 	if err != nil {
 		log.Println(err)
 		return
