@@ -41,6 +41,7 @@ type Channel struct {
 
 	Tags string `json:"tags" gorm:"not null;default:''"`
 
+	Fav             bool        `json:"fav" gorm:"not null;default:0"`
 	IsPaused        bool        `json:"isPaused" gorm:"not null"`
 	CreatedAt       time.Time   `json:"createdAt"`
 	Recordings      []Recording `json:"recordings" gorm:"table:recordings;foreignKey:channel_name;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
@@ -238,6 +239,18 @@ func ChannelActiveList() ([]*Channel, error) {
 	}
 
 	return result, nil
+}
+
+func (channel *Channel) FavChannel() error {
+	return Db.Table("channels").
+		Where("channel_name = ?", channel.ChannelName).
+		Update("fav", true).Error
+}
+
+func (channel *Channel) UnFavChannel() error {
+	return Db.Table("channels").
+		Where("channel_name = ?", channel.ChannelName).
+		Update("fav", false).Error
 }
 
 func (channel *Channel) UpdateStreamInfo(url string) error {

@@ -151,10 +151,35 @@ func ResumeChannel(c *gin.Context) {
 	appG.Response(http.StatusOK, nil)
 }
 
+func FavChannel(c *gin.Context) {
+	appG := app.Gin{C: c}
+
+	channel := models.Channel{ChannelName: c.Param("channelName"), Fav: true}
+
+	if err := channel.FavChannel(); err != nil {
+		appG.Response(http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	appG.Response(http.StatusOK, nil)
+}
+
+func UnFavChannel(c *gin.Context) {
+	appG := app.Gin{C: c}
+
+	channel := models.Channel{ChannelName: c.Param("channelName"), Fav: false}
+	if err := channel.UnFavChannel(); err != nil {
+		appG.Response(http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	appG.Response(http.StatusOK, nil)
+}
+
 func PauseChannel(c *gin.Context) {
 	appG := app.Gin{C: c}
 
-	channelName := strings.ToLower(strings.TrimSpace(c.Param("channelName")))
+	channelName := c.Param("channelName")
 
 	if len(channelName) == 0 {
 		appG.Response(http.StatusBadRequest, "invalid channel name")
