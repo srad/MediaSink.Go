@@ -8,8 +8,8 @@ import (
 )
 
 var (
-	quit  = make(chan bool)
-	pause = false
+	pause  = true
+	ticker *time.Timer
 )
 
 const (
@@ -22,18 +22,11 @@ type ChannelObserver struct {
 }
 
 func iterate() {
-	checkStreams()
-	for {
-		select {
-		case <-quit:
-			log.Println("Stopping iteration")
-			return
-		case <-time.After(sleepBetweenRounds):
-			checkStreams()
-			break
-			// Wait between each round to reduce the chance of API blocking
-		}
+	ticker = time.NewTimer(sleepBetweenRounds)
+	for _ = range ticker.C {
+		checkStreams()
 	}
+	log.Println("[iterate] stopped")
 }
 
 func checkStreams() {
@@ -101,7 +94,8 @@ func Pause() {
 
 func StopAll() error {
 	// TerminateProcess the go routine for iteration over channels
-	quit <- true
+	pause = true
+	ticker.Stop()
 
 	// TerminateProcess each recording individually
 	channels, err := models.ChannelActiveList()

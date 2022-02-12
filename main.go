@@ -7,15 +7,12 @@ import (
 	"github.com/srad/streamsink/models"
 	"github.com/srad/streamsink/routers"
 	"github.com/srad/streamsink/services"
-	"github.com/srad/streamsink/utils"
-	"github.com/srad/streamsink/workers"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
-	//"github.com/srad/streamsink/workers"
 )
 
 func main() {
@@ -31,7 +28,7 @@ func main() {
 	models.Init()
 	go services.ImportRecordings()
 	go services.FixOrphanedRecordings()
-	go workers.JobWorker()
+	go models.StartWorker()
 
 	gin.SetMode("release")
 	endPoint := fmt.Sprintf("0.0.0.0:%d", 3000)
@@ -39,8 +36,6 @@ func main() {
 	services.Resume()
 
 	log.Printf("[info] start http server listening %s", endPoint)
-
-	go utils.TCPServer()
 
 	server := &http.Server{
 		Addr:         endPoint,
@@ -62,7 +57,7 @@ func main() {
 
 func cleanup() {
 	log.Println("cleanup ...")
-	workers.Quit <- true
+	models.StopWorker()
 	services.StopAll()
 	log.Println("cleanup complete")
 }

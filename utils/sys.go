@@ -1,16 +1,35 @@
 package utils
 
 import (
-	"io"
+	"bufio"
+	"fmt"
 	"log"
 	"os/exec"
+	"strings"
 	"syscall"
 )
 
+type CommandInfo struct {
+	Command string
+	Pid     int
+}
+
+type ExecArgs struct {
+	OnStart     func(CommandInfo)
+	OnPipeOut   func(string)
+	OnPipeErr   func(string)
+	Command     string
+	CommandArgs []string
+}
+
+func (execArgs *ExecArgs) ToString() string {
+	return fmt.Sprintf("%s %s", execArgs.Command, strings.Join(execArgs.CommandArgs, " "))
+}
+
 // ExecSync See: https://stackoverflow.com/questions/10385551/get-exit-code-go
-func ExecSync(exe string, args ...string) error {
-	cmd := exec.Command(exe, args...)
-	log.Println("Executing: ", exe, args, "\\n")
+func ExecSync(execArgs *ExecArgs) error {
+	cmd := exec.Command(execArgs.Command, execArgs.CommandArgs...)
+	log.Println("Executing: ", execArgs.ToString())
 
 	//stdout, _ := cmd.StdoutPipe()
 	sterr, _ := cmd.StderrPipe()
@@ -20,8 +39,16 @@ func ExecSync(exe string, args ...string) error {
 		return err
 	}
 
-	if b, err := io.ReadAll(sterr); err != nil {
-		log.Printf("[ExecSync] %s: %v", string(b), err)
+	if execArgs.OnStart != nil {
+		execArgs.OnStart(CommandInfo{Pid: cmd.Process.Pid, Command: execArgs.ToString()})
+	}
+
+	if execArgs.OnPipeErr != nil {
+		scanner := bufio.NewScanner(sterr)
+		scanner.Split(bufio.ScanLines)
+		for scanner.Scan() {
+			execArgs.OnPipeErr(scanner.Text())
+		}
 	}
 
 	if err := cmd.Wait(); err != nil {

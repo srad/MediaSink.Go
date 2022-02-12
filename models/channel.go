@@ -2,7 +2,6 @@ package models
 
 import (
 	"fmt"
-	"github.com/srad/streamsink/media"
 	"github.com/srad/streamsink/utils"
 	"io"
 	"log"
@@ -81,7 +80,7 @@ func (channel *Channel) Start() error {
 	isOnline[channel.ChannelName] = url != ""
 
 	if url != "" {
-		go media.ExtractFirstFrame(url, frameWidth, filepath.Join(conf.AbsoluteDataPath(channel.ChannelName), frameName))
+		go ExtractFirstFrame(url, frameWidth, filepath.Join(conf.AbsoluteDataPath(channel.ChannelName), frameName))
 	}
 
 	if url == "" {
@@ -202,7 +201,7 @@ func ChannelActiveList() ([]*Channel, error) {
 }
 
 func (channel *Channel) UpdateStreamInfo(url string) error {
-	info, _ := media.GetVideoInfo(url)
+	info, _ := GetVideoInfo(url)
 
 	return Db.Table("channels").
 		Where("channel_name = ?", channel.ChannelName).
@@ -374,5 +373,5 @@ func (channel *Channel) Online(val bool) {
 }
 
 func (channel *Channel) Screenshot(url string) error {
-	return media.ExtractFirstFrame(url, frameWidth, filepath.Join(conf.AbsoluteDataPath(channel.ChannelName), frameName))
+	return ExtractFirstFrame(url, frameWidth, filepath.Join(conf.AbsoluteDataPath(channel.ChannelName), frameName))
 }

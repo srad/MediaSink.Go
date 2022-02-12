@@ -1,4 +1,4 @@
-package media
+package models
 
 import (
 	"path/filepath"

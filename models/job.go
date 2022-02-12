@@ -1,11 +1,10 @@
 package models
 
 import (
-	"log"
-	"time"
-
 	"github.com/srad/streamsink/conf"
 	"gorm.io/gorm"
+	"log"
+	"time"
 )
 
 const (
@@ -29,8 +28,13 @@ type Job struct {
 	Filepath  string    `json:"pathRelative" gorm:"not null;default:null"`
 	Active    bool      `json:"active" gorm:"not null;default:false"`
 	CreatedAt time.Time `json:"createdAt" gorm:"not null;default:null;index:idx_create_at"`
-	Info      *string   `json:"info" gorm:"default:null"`
-	Args      *string   `json:"args" gorm:"default:null"`
+
+	// Additional information
+	Pid      int     `json:"pid" gorm:"default:null"`
+	Command  *string `json:"command" gorm:"default:null"`
+	Progress *string `json:"progress" gorm:"default:null"`
+	Info     *string `json:"info" gorm:"default:null"`
+	Args     *string `json:"args" gorm:"default:null"`
 }
 
 func EnqueueRecordingJob(channelName, filename, filepath string) (*Job, error) {
@@ -77,8 +81,7 @@ func addJob(channelName, filename, filepath, status string, args *string) (*Job,
 
 func JobList() ([]*Job, error) {
 	var jobs []*Job
-	err := Db.Find(&jobs).Error
-	if err != nil && err != gorm.ErrRecordNotFound {
+	if err := Db.Find(&jobs).Error; err != nil && err != gorm.ErrRecordNotFound {
 		return nil, err
 	}
 
@@ -97,8 +100,7 @@ func (job *Job) Destroy() error {
 
 func GetJobsByStatus(status string) ([]*Job, error) {
 	var jobs []*Job
-	err := Db.Where("status = ?", status).Find(&jobs).Error
-	if err != nil {
+	if err := Db.Where("status = ?", status).Find(&jobs).Error; err != nil {
 		return nil, err
 	}
 
@@ -123,10 +125,23 @@ func UpdateJobStatus(jobId uint, status string) error {
 	return Db.Model(&Job{}).Where("job_id = ?", jobId).Update("status", status).Error
 }
 
+func (job *Job) UpdateInfo(pid int, command string) error {
+	return Db.Model(&Job{}).Where("job_id = ?", job.JobId).
+		Update("pid", pid).
+		Update("command", command).Error
+}
+
+func (job *Job) UpdateProgress(progress string) error {
+	return Db.Model(&Job{}).Where("job_id = ?", job.JobId).
+		Update("progress", progress).Error
+}
+
 func UpdateJobInfo(jobId uint, info string) error {
-	return Db.Model(&Job{}).Where("job_id = ?", jobId).Update("info", info).Error
+	return Db.Model(&Job{}).Where("job_id = ?", jobId).
+		Update("info", info).Error
 }
 
 func ActiveJob(jobId uint) error {
-	return Db.Model(&Job{}).Where("job_id = ?", jobId).Update("active", true).Error
+	return Db.Model(&Job{}).Where("job_id = ?", jobId).
+		Update("active", true).Error
 }

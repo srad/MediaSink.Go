@@ -3,7 +3,6 @@ package services
 import (
 	"errors"
 	"fmt"
-	"github.com/srad/streamsink/media"
 	"log"
 	"os"
 	"path/filepath"
@@ -32,7 +31,7 @@ func FixOrphanedRecordings() {
 	// Check for orphaned videos
 	for _, job := range jobs {
 		log.Printf("Handling Job #%d of '%s/%s'", job.JobId, job.Filepath, job.Filename)
-		err := media.CheckVideo(job.Filepath)
+		err := models.CheckVideo(job.Filepath)
 		if err != nil {
 			log.Printf("The file '%s' is corrupted, deleting from disk and job queue: %v\n", job.Filename, err)
 			job.Destroy()
@@ -58,12 +57,12 @@ func FixOrphanedRecordings() {
 }
 
 func ImportRecordings() error {
-	log.Println("////////////////////////////////////// ImportRecordings //////////////////////////////////////")
+	log.Println("################################## ImportRecordings ##################################")
 	log.Printf("[Import] Importing files from file system: %s", conf.AppCfg.RecordingsAbsolutePath)
 
 	file, err := os.Open(conf.AppCfg.RecordingsAbsolutePath)
 	if err != nil {
-		log.Printf(" [Import] Failed opening directory '%s': %v\n", conf.AppCfg.RecordingsAbsolutePath, err)
+		log.Printf("->[Import] Failed opening directory '%s': %v\n", conf.AppCfg.RecordingsAbsolutePath, err)
 		return err
 	}
 	defer file.Close()
@@ -91,7 +90,7 @@ func ImportRecordings() error {
 			if !file.IsDir() && filepath.Ext(file.Name()) == ".mp4" {
 				log.Printf(" + [Import] Checking file: %s, %s", channelName, file.Name())
 
-				if _, err := media.GetVideoInfo(conf.GetAbsoluteRecordingsPath(channelName, file.Name())); err != nil {
+				if _, err := models.GetVideoInfo(conf.GetAbsoluteRecordingsPath(channelName, file.Name())); err != nil {
 					log.Printf(" + [Import] File '%s' seems corrupted, deleting", file.Name())
 					if err := channel.DeleteRecordingsFile(file.Name()); err != nil {
 						log.Printf(" + [Import] Error deleting '%s'", file.Name())
@@ -128,7 +127,7 @@ func ImportRecordings() error {
 			}
 		}
 	}
-	log.Println("//////////////////////////////////////////////////////////////////////////////////////////////")
+	log.Println("######################################################################################")
 
 	return nil
 }

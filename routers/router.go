@@ -47,9 +47,9 @@ func Setup() http.Handler {
 	{
 		apiv1.GET("/channels", v1.GetChannels)
 		apiv1.POST("/channels", v1.AddChannel)
-		apiv1.DELETE("/channels/:channelName", v1.DeleteChannel)
 		apiv1.POST("/channels/:channelName/resume", v1.ResumeChannel)
 		apiv1.POST("/channels/:channelName/pause", v1.PauseChannel)
+		apiv1.DELETE("/channels/:channelName", v1.DeleteChannel)
 
 		apiv1.POST("/jobs/:channelName/:filename", v1.AddJob)
 		apiv1.GET("/jobs", v1.GetJobs)
@@ -65,11 +65,13 @@ func Setup() http.Handler {
 		apiv1.GET("/recordings/bookmarks", v1.GetBookmarks)
 
 		apiv1.GET("/recordings/:channelName", v1.GetRecording)
-		apiv1.POST("/recordings/:channelName/:filename/preview", v1.GeneratePreview)
-		apiv1.DELETE("/recordings/:channelName/:filename", v1.DeleteRecording)
 		apiv1.GET("/recordings/:channelName/:filename/download", v1.DownloadRecording)
+
+		apiv1.POST("/recordings/:channelName/:filename/preview", v1.GeneratePreview)
 		apiv1.POST("/recordings/resume", v1.ResumeRecording)
 		apiv1.POST("/recordings/pause", v1.PauseRecording)
+
+		apiv1.DELETE("/recordings/:channelName/:filename", v1.DeleteRecording)
 
 		apiv1.GET("/info/:seconds", v1.GetInfo)
 		apiv1.GET("/info/disk", v1.GetDiskInfo)

@@ -2,22 +2,15 @@ package v1
 
 import (
 	"encoding/json"
-	"log"
-	"net/http"
-	"regexp"
-	"strconv"
-	"strings"
-
 	"github.com/gin-gonic/gin"
 	"github.com/srad/streamsink/app"
 	"github.com/srad/streamsink/conf"
 	"github.com/srad/streamsink/models"
 	"github.com/srad/streamsink/services"
-)
-
-var (
-	// Example: 4.3789 8.2128 12.1970 15.0161 19.0379 16.4819 24.7135 27.4386:
-	intervalPattern, err = regexp.Compile("[0-9]+\\.[0-9]+(\\w[0-9]+\\.[0-9]+)*")
+	"log"
+	"net/http"
+	"strconv"
+	"strings"
 )
 
 func GetRecordings(c *gin.Context) {
@@ -30,6 +23,24 @@ func GetRecordings(c *gin.Context) {
 	}
 
 	appG.Response(http.StatusOK, recordings)
+}
+
+func GetRecording(c *gin.Context) {
+	appG := app.Gin{C: c}
+	channelName := c.Param("channelName")
+
+	if channelName == "" {
+		appG.Response(http.StatusBadRequest, nil)
+		return
+	}
+
+	recordings, err := models.FindByName(channelName)
+	if err != nil {
+		appG.Response(http.StatusInternalServerError, err)
+		return
+	}
+
+	appG.Response(http.StatusOK, &recordings)
 }
 
 func GetBookmarks(c *gin.Context) {
@@ -129,25 +140,6 @@ func CutRecording(c *gin.Context) {
 func IsRecording(c *gin.Context) {
 	appG := app.Gin{C: c}
 	appG.Response(http.StatusOK, services.IsRecording())
-}
-
-func GetRecording(c *gin.Context) {
-	appG := app.Gin{C: c}
-	channelName := c.Param("channelName")
-
-	if channelName == "" {
-		appG.Response(http.StatusBadRequest, nil)
-		return
-	}
-
-	recordings, err := models.FindByName(channelName)
-	if err != nil {
-		appG.Response(http.StatusInternalServerError, err)
-		return
-	}
-
-	appG.Response(http.StatusOK, &recordings)
-
 }
 
 func GetLatestRecordings(c *gin.Context) {
