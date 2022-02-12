@@ -50,9 +50,9 @@ func GetChannels(c *gin.Context) {
 }
 
 type ReqAddChannel struct {
-	ChannelName string   `json:"channelName"`
-	Url         string   `json:"url"`
-	Tags        []string `json:"tags"`
+	ChannelName string    `json:"channelName"`
+	Url         string    `json:"url"`
+	Tags        *[]string `json:"tags"`
 }
 
 type ReqTagChannel struct {
@@ -78,9 +78,9 @@ func AddChannel(c *gin.Context) {
 
 	channel := models.Channel{ChannelName: data.ChannelName, Url: url, IsPaused: false, CreatedAt: time.Now()}
 
-	if err := channel.Create(&data.Tags); err != nil {
+	if err := channel.Create(data.Tags); err != nil {
 		log.Printf("[AddChannel] Error creating record: %v", err)
-		appG.Response(http.StatusInternalServerError, err)
+		appG.Response(http.StatusInternalServerError, err.Error())
 		return
 	}
 
@@ -118,7 +118,7 @@ func TagChannel(c *gin.Context) {
 
 	if err := models.TagChannel(channelName, data.Tags); err != nil {
 		log.Println(err)
-		appG.Response(http.StatusInternalServerError, err)
+		appG.Response(http.StatusInternalServerError, err.Error())
 		return
 	}
 

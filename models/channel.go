@@ -39,7 +39,8 @@ type Channel struct {
 	ChannelName string `json:"channelName" gorm:"unique;not null;default:null"`
 	Url         string `json:"url" gorm:"unique;not null;default:null"`
 
-	Tags            string      `json:"tags" gorm:"not null;default:''"`
+	Tags string `json:"tags" gorm:"not null;default:''"`
+
 	IsPaused        bool        `json:"isPaused" gorm:"not null"`
 	CreatedAt       time.Time   `json:"createdAt"`
 	Recordings      []Recording `json:"recordings" gorm:"table:recordings;foreignKey:channel_name;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
@@ -70,14 +71,20 @@ func (channel *Channel) Create(tags *[]string) error {
 }
 
 func TagChannel(channelName string, tags []string) error {
-	joined, err := prepareTags(tags)
-	if err != nil {
-		return err
+	if len(tags) > 0 {
+		joined, err := prepareTags(tags)
+		if err != nil {
+			return err
+		}
+
+		return Db.Table("channels").
+			Where("channel_name = ?", channelName).
+			Update("tags", joined).Error
 	}
 
 	return Db.Table("channels").
 		Where("channel_name = ?", channelName).
-		Update("tags", joined).Error
+		Update("tags", "").Error
 }
 
 func prepareTags(tags []string) (string, error) {
