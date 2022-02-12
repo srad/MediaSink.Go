@@ -228,9 +228,11 @@ func ChannelList() ([]*Channel, error) {
 func ChannelActiveList() ([]*Channel, error) {
 	var result []*Channel
 
+	// Query favourites first
 	err := Db.Model(&Channel{}).
 		Where("is_paused = ?", false).
 		Select("channels.*", "(SELECT COUNT(*) FROM recordings WHERE recordings.channel_name = channels.channel_name) recordings_count").
+		Order("fav desc").
 		Find(&result).Error
 
 	if err != nil && err != gorm.ErrRecordNotFound {
