@@ -8,12 +8,12 @@ import (
 )
 
 var (
-	pause  = true
-	ticker *time.Timer
+	pause = false
+	quit  = make(chan bool)
 )
 
 const (
-	sleepBetweenRequests = 3 * time.Second
+	sleepBetweenRequests = 2 * time.Second
 	sleepBetweenRounds   = 60 * time.Second
 )
 
@@ -22,11 +22,16 @@ type ChannelObserver struct {
 }
 
 func iterate() {
-	ticker = time.NewTimer(sleepBetweenRounds)
-	for _ = range ticker.C {
-		checkStreams()
+	for {
+		select {
+		case <-quit:
+			log.Println("[iterate] stopped")
+			return
+		default:
+			checkStreams()
+			time.Sleep(sleepBetweenRounds)
+		}
 	}
-	log.Println("[iterate] stopped")
 }
 
 func checkStreams() {
@@ -86,16 +91,10 @@ func Resume() {
 	go iterate()
 }
 
-func Pause() {
-	log.Printf("[Recorder] Pausing recording thread")
-	pause = true
-	StopAll()
-}
-
-func StopAll() error {
+func Pause() error {
 	// TerminateProcess the go routine for iteration over channels
 	pause = true
-	ticker.Stop()
+	quit <- true
 
 	// TerminateProcess each recording individually
 	channels, err := models.ChannelActiveList()
