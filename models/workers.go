@@ -19,7 +19,7 @@ import (
 
 var (
 	sleepBetweenRounds = 10 * time.Second
-	ticker             *time.Ticker
+	quit               = make(chan bool)
 	threadCount        = uint(float32(runtime.NumCPU() / 2))
 )
 
@@ -172,12 +172,17 @@ func ExtractFirstFrame(input, height, output string) error {
 }
 
 func StartWorker() {
-	ticker = time.NewTicker(sleepBetweenRounds)
-	for range ticker.C {
-		_ = cuttingJobs()
-		previewJobs()
+	for {
+		select {
+		case <-quit:
+			log.Println("[StartWorker] Stopped jobs")
+			return
+		default:
+			_ = cuttingJobs()
+			previewJobs()
+			time.Sleep(sleepBetweenRounds)
+		}
 	}
-	log.Println("[StartWorker] Stopped jobs")
 }
 
 type PreviewJob struct {
@@ -252,7 +257,7 @@ func previewJobs() {
 }
 
 func StopWorker() {
-	ticker.Stop()
+	quit <- true
 }
 
 // Cut video, add preview job, destroy job.

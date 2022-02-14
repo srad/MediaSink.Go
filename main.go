@@ -26,14 +26,16 @@ func main() {
 
 	conf.Read()
 	models.Init()
+	setupFolders()
+
+	services.Resume()
+
 	go services.ImportRecordings()
 	go services.FixOrphanedRecordings()
 	go models.StartWorker()
 
 	gin.SetMode("release")
 	endPoint := fmt.Sprintf("0.0.0.0:%d", 3000)
-	setupFolders()
-	services.Resume()
 
 	log.Printf("[info] start http server listening %s", endPoint)
 
@@ -58,7 +60,7 @@ func main() {
 func cleanup() {
 	log.Println("cleanup ...")
 	models.StopWorker()
-	services.StopAll()
+	services.Pause()
 	log.Println("cleanup complete")
 }
 

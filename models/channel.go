@@ -28,7 +28,6 @@ var (
 	info     = make(map[string]*Recording)
 	pause    = false
 	isOnline = make(map[string]bool)
-	quit     chan bool
 	recorded = make(map[string]*exec.Cmd)
 	// "tag1,tag2,...
 	rTags, _ = regexp.Compile("^[a-z\\-0-9]+(,[a-z\\-0-9]+)*$")
@@ -95,17 +94,6 @@ func prepareTags(tags []string) (string, error) {
 	}
 
 	return joined, nil
-}
-
-func IsRecording(channelName string) bool {
-	if _, ok := recorded[channelName]; ok {
-		return true
-	}
-	return false
-}
-
-func IsPaused() bool {
-	return pause
 }
 
 func (channel *Channel) Start() error {

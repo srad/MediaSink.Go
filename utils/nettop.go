@@ -88,21 +88,3 @@ type NetTopInfo struct {
 	DRx string `json:"dRx"`
 	DTx string `json:"dTx"`
 }
-
-func Measure(device string, measureSeconds uint64) *DevStat {
-	first := GetInfo(device)
-
-	if first == nil {
-		return nil
-	}
-
-	time.Sleep(time.Duration(measureSeconds) * time.Second)
-	second := GetInfo(device)
-
-	return &DevStat{
-		Name:             device,
-		ReceivedBytes:    (second.ReceivedBytes - first.ReceivedBytes) / float64(measureSeconds),
-		TransmittedBytes: (second.TransmittedBytes - first.TransmittedBytes) / float64(measureSeconds),
-		MeasureSeconds:   measureSeconds,
-	}
-}
