@@ -44,7 +44,7 @@ func main() {
 
 	services.Resume()
 
-	go services.ImportRecordings()   11
+	go services.ImportRecordings()
 	go services.FixOrphanedRecordings()
 	go models.StartWorker()
 
