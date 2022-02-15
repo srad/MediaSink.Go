@@ -6,6 +6,7 @@ import (
 	"github.com/srad/streamsink/conf"
 	"github.com/srad/streamsink/models"
 	"github.com/srad/streamsink/routers"
+	v1 "github.com/srad/streamsink/routers/api/v1"
 	"github.com/srad/streamsink/services"
 	"log"
 	"net/http"
@@ -27,6 +28,20 @@ func main() {
 	conf.Read()
 	models.Init()
 	setupFolders()
+
+	services.ObserveRecorder(func(message services.RecorderMessage) {
+		v1.SendMessage(v1.SocketMessage{
+			Tag:     message.Event,
+			Message: message.ChannelName,
+		})
+	})
+
+	models.ObserveJobs(func(message models.JobMessage) {
+		v1.SendMessage(v1.SocketMessage{
+			Tag:     message.Event,
+			Message: message.ChannelName,
+		})
+	})
 
 	services.Resume()
 

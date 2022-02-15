@@ -15,6 +15,29 @@ const (
 	StatusCut     = "cut"
 )
 
+var (
+	dispatch = dispatcher{}
+)
+
+type dispatcher struct {
+	listeners []func(JobMessage)
+}
+
+type JobMessage struct {
+	Event       string
+	ChannelName string
+}
+
+func ObserveJobs(f func(JobMessage)) {
+	dispatch.listeners = append(dispatch.listeners, f)
+}
+
+func notify(msg JobMessage) {
+	for _, f := range dispatch.listeners {
+		f(msg)
+	}
+}
+
 type Job struct {
 	Recording Recording `json:"-" gorm:"foreignKey:ChannelName,Filename;References:ChannelName,Filename;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
 	JobId     uint      `json:"jobId" gorm:"primaryKey;AUTO_INCREMENT"`
@@ -76,6 +99,8 @@ func addJob(channelName, filename, filepath, status string, args *string) (*Job,
 	}
 	log.Printf("[Job] Enqueued job: '%s/%s' -> %s", channelName, filename, status)
 
+	notify(JobMessage{ChannelName: channelName, Event: status})
+
 	return &job, nil
 }
 
@@ -94,6 +119,8 @@ func (job *Job) Destroy() error {
 		return err
 	}
 	log.Printf("[Job] Job id delete %d", job.JobId)
+
+	notify(JobMessage{ChannelName: job.ChannelName, Event: "destroyJob"})
 
 	return nil
 }

@@ -8,17 +8,33 @@ import (
 )
 
 var (
-	pause = false
-	quit  = make(chan bool)
+	pause    = false
+	quit     = make(chan bool)
+	dispatch = dispatcher{}
 )
 
 const (
 	sleepBetweenRequests = 2 * time.Second
-	sleepBetweenRounds   = 60 * time.Second
+	sleepBetweenRounds   = 10 * time.Second
 )
 
-type ChannelObserver struct {
-	name string
+type dispatcher struct {
+	listeners []func(RecorderMessage)
+}
+
+type RecorderMessage struct {
+	Event       string
+	ChannelName string
+}
+
+func ObserveRecorder(f func(RecorderMessage)) {
+	dispatch.listeners = append(dispatch.listeners, f)
+}
+
+func notify(msg RecorderMessage) {
+	for _, f := range dispatch.listeners {
+		f(msg)
+	}
 }
 
 func iterate() {
@@ -58,19 +74,20 @@ func checkStreams() {
 		//}
 
 		channel.Online(url != "")
+
 		log.Printf("[Recorder] Checking: channel: '%s' | paused: %t | online: %t | url: '%s'", channel.ChannelName, channel.IsPaused, channel.IsOnline(), url)
 
 		if url != "" {
+			notify(RecorderMessage{Event: "online", ChannelName: channel.ChannelName})
 			log.Println("[Recorder] Extracting first frame of ", channel.ChannelName)
 			err := channel.Screenshot(url)
 			if err != nil {
 				log.Printf("[Recorder] Error extracting first frame of channel | file: %s", channel.ChannelName)
+			} else {
+				notify(RecorderMessage{Event: "thumbnail", ChannelName: channel.ChannelName})
 			}
-
-			// The quality might change during streaming, due to bandwidth issue, keep updating
-			if err := channel.UpdateStreamInfo(url); err != nil {
-				log.Printf("[Recorder] Error updating stream info: %v", err)
-			}
+		} else {
+			notify(RecorderMessage{Event: "offline", ChannelName: channel.ChannelName})
 		}
 
 		if url == "" || pause || channel.IsPaused {
@@ -78,6 +95,7 @@ func checkStreams() {
 		}
 
 		go channel.Capture(url)
+		notify(RecorderMessage{Event: "start", ChannelName: channel.ChannelName})
 	}
 }
 
@@ -138,9 +156,4 @@ func UpdateVideoInfo() error {
 	}
 
 	return nil
-}
-
-func (s *ChannelObserver) Update(t string) {
-	// do something
-	println("StockObserver:", s.name, "has been updated,", "received subject string:", t)
 }

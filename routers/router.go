@@ -79,6 +79,7 @@ func Setup() http.Handler {
 		apiv1.GET("/info/:seconds", v1.GetInfo)
 		apiv1.GET("/info/disk", v1.GetDiskInfo)
 
+		go v1.WsListen()
 		apiv1.GET("/ws", v1.WsHandler)
 	}
 

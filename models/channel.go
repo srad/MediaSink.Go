@@ -243,16 +243,6 @@ func (channel *Channel) UnFavChannel() error {
 		Update("fav", false).Error
 }
 
-func (channel *Channel) UpdateStreamInfo(url string) error {
-	info, _ := GetVideoInfo(url)
-
-	return Db.Table("channels").
-		Where("channel_name = ?", channel.ChannelName).
-		Update("bit_rate", info.BitRate).
-		Update("width", info.Width).
-		Update("height", info.Height).Error
-}
-
 func (channel *Channel) Destroy() error {
 	if err := channel.DestroyAllRecordings(); err != nil {
 		log.Printf("Error deleting recordings of channel '%s': %v", channel.ChannelName, err)
@@ -372,11 +362,10 @@ func (channel *Channel) Capture(url string) error {
 	}
 
 	// Finish recording
-
 	duration := int(time.Now().Sub(channel.Info().CreatedAt).Minutes())
 
+	// keep
 	if duration > conf.AppCfg.MinRecMin {
-		// keep
 		if err := channel.Info().Save("recording"); err != nil {
 			log.Printf("[Info] Error adding recording: %v\n", channel.Info())
 		}
@@ -391,8 +380,7 @@ func (channel *Channel) Capture(url string) error {
 		} else {
 			log.Printf("[FinishRecording] Job enqueued %v\n", job)
 		}
-	} else {
-		// Throw away
+	} else { // Throw away
 		log.Printf("[FinishRecording] Deleting stream '%s/%s' because it is too short (%vmin)\n", channel.ChannelName, filename, duration)
 
 		channel.RemoveData()
