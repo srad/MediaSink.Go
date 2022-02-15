@@ -219,9 +219,11 @@ func previewJobs() {
 	err = GeneratePreviews(&PreviewJob{
 		OnStart: func(info *utils.CommandInfo) {
 			_ = job.UpdateInfo(info.Pid, info.Command)
+			notify("job:preview:start", JobMessage{jobId: job.JobId, ChannelName: job.ChannelName, Filename: job.Filename})
 		},
 		OnProgress: func(info *ProcessInfo) {
 			_ = job.UpdateProgress(fmt.Sprintf("%f", float32(info.Frame)/float32(info.Total)*100))
+			notify("job:preview:progress", JobMessage{jobId: job.JobId, ChannelName: job.ChannelName, Filename: job.Filename})
 		},
 		ChannelName: job.ChannelName,
 		Filename:    job.Filename,
@@ -247,6 +249,9 @@ func previewJobs() {
 		return
 	}
 
+	if rec, err := job.FindRecording(); err != nil {
+		notify("job:preview:done", JobMessage{jobId: job.JobId, ChannelName: job.ChannelName, Filename: job.Filename, Data: rec})
+	}
 	err3 := job.Destroy()
 	if err3 != nil {
 		log.Printf("[Job] Error deleteing job: %v", err3)

@@ -3,6 +3,7 @@ package v1
 import (
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
+	"github.com/srad/streamsink/utils"
 	"log"
 	"net/http"
 	"sync"
@@ -49,8 +50,12 @@ func (d *wsDispatcher) rmWs(ws *websocket.Conn) {
 }
 
 type SocketMessage struct {
-	Message string `json:"message"`
-	Tag     string `json:"tag"`
+	Data  map[string]interface{} `json:"data"`
+	Event string                 `json:"event"`
+}
+
+func NewMessage(event string, data interface{}) SocketMessage {
+	return SocketMessage{Event: event, Data: utils.StructToDict(data)}
 }
 
 type wsConnection struct {

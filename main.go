@@ -29,23 +29,22 @@ func main() {
 	models.Init()
 	setupFolders()
 
-	services.ObserveRecorder(func(message services.RecorderMessage) {
+	services.ObserveRecorder(func(message services.SocketMessage) {
 		v1.SendMessage(v1.SocketMessage{
-			Tag:     message.Event,
-			Message: message.ChannelName,
+			Event: message.Event,
+			Data:  message.Data,
 		})
 	})
-
-	models.ObserveJobs(func(message models.JobMessage) {
+	models.ObserveJobs(func(message models.SocketMessage) {
 		v1.SendMessage(v1.SocketMessage{
-			Tag:     message.Event,
-			Message: message.ChannelName,
+			Event: message.Event,
+			Data:  message.Data,
 		})
 	})
 
 	services.Resume()
 
-	go services.ImportRecordings()
+	go services.ImportRecordings()   11
 	go services.FixOrphanedRecordings()
 	go models.StartWorker()
 

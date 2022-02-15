@@ -1,6 +1,7 @@
 package services
 
 import (
+	"github.com/srad/streamsink/utils"
 	"log"
 	"time"
 
@@ -18,20 +19,29 @@ const (
 	sleepBetweenRounds   = 10 * time.Second
 )
 
+type SocketMessage struct {
+	Data  map[string]interface{} `json:"data"`
+	Event string                 `json:"event"`
+}
+
+func NewMessage(event string, data interface{}) SocketMessage {
+	return SocketMessage{Event: event, Data: utils.StructToDict(data)}
+}
+
 type dispatcher struct {
-	listeners []func(RecorderMessage)
+	listeners []func(message SocketMessage)
 }
 
 type RecorderMessage struct {
-	Event       string
-	ChannelName string
+	ChannelName string `json:"channelName"`
 }
 
-func ObserveRecorder(f func(RecorderMessage)) {
+func ObserveRecorder(f func(message SocketMessage)) {
 	dispatch.listeners = append(dispatch.listeners, f)
 }
 
-func notify(msg RecorderMessage) {
+func notify(event string, data interface{}) {
+	msg := NewMessage(event, data)
 	for _, f := range dispatch.listeners {
 		f(msg)
 	}
@@ -78,16 +88,16 @@ func checkStreams() {
 		log.Printf("[Recorder] Checking: channel: '%s' | paused: %t | online: %t | url: '%s'", channel.ChannelName, channel.IsPaused, channel.IsOnline(), url)
 
 		if url != "" {
-			notify(RecorderMessage{Event: "online", ChannelName: channel.ChannelName})
+			notify("channel:online", RecorderMessage{ChannelName: channel.ChannelName})
 			log.Println("[Recorder] Extracting first frame of ", channel.ChannelName)
 			err := channel.Screenshot(url)
 			if err != nil {
 				log.Printf("[Recorder] Error extracting first frame of channel | file: %s", channel.ChannelName)
 			} else {
-				notify(RecorderMessage{Event: "thumbnail", ChannelName: channel.ChannelName})
+				notify("channel:thumbnail", RecorderMessage{ChannelName: channel.ChannelName})
 			}
 		} else {
-			notify(RecorderMessage{Event: "offline", ChannelName: channel.ChannelName})
+			notify("channel:offline", RecorderMessage{ChannelName: channel.ChannelName})
 		}
 
 		if url == "" || pause || channel.IsPaused {
@@ -95,7 +105,7 @@ func checkStreams() {
 		}
 
 		go channel.Capture(url)
-		notify(RecorderMessage{Event: "start", ChannelName: channel.ChannelName})
+		notify("channel:start", RecorderMessage{ChannelName: channel.ChannelName})
 	}
 }
 

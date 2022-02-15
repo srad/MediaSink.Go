@@ -300,6 +300,16 @@ func (channel *Channel) RemoveData() {
 	isOnline[channel.ChannelName] = false
 }
 
+func (channel *Channel) NewRecording() (Recording, string) {
+	now := time.Now()
+	stamp := now.Format("2006_01_02_15_04_05")
+	filename := fmt.Sprintf("%s_%s.mp4", channel.ChannelName, stamp)
+	relativePath := filepath.Join("recordings", channel.ChannelName, filename)
+	outputFile := filepath.Join(conf.AppCfg.RecordingsAbsolutePath, channel.ChannelName, filename)
+
+	return Recording{ChannelName: channel.ChannelName, Filename: filename, Duration: 0, Bookmark: false, CreatedAt: now, PathRelative: relativePath}, outputFile
+}
+
 // Capture Starts and also waits for the stream to end or being killed
 func (channel *Channel) Capture(url string) error {
 	if _, ok := recorded[channel.ChannelName]; ok {
@@ -308,19 +318,14 @@ func (channel *Channel) Capture(url string) error {
 	}
 
 	conf.MakeChannelFolders(channel.ChannelName)
-
-	now := time.Now()
-	stamp := now.Format("2006_01_02_15_04_05")
-	filename := fmt.Sprintf("%s_%s.mp4", channel.ChannelName, stamp)
-	outputFile := filepath.Join(conf.AppCfg.RecordingsAbsolutePath, channel.ChannelName, filename)
-	relativePath := filepath.Join("recordings", channel.ChannelName, filename)
+	recording, outputPath := channel.NewRecording()
 
 	log.Println("----------------------------------------Capturing----------------------------------------")
 	log.Println("Url: " + url)
-	log.Println("to: " + outputFile)
+	log.Println("to: " + outputPath)
 
-	info[channel.ChannelName] = &Recording{ChannelName: channel.ChannelName, Filename: filename, Duration: 0, Bookmark: false, CreatedAt: now, PathRelative: relativePath}
-	recorded[channel.ChannelName] = exec.Command("ffmpeg", "-hide_banner", "-loglevel", "quiet", "-i", url, "-c", "copy", outputFile)
+	info[channel.ChannelName] = &recording
+	recorded[channel.ChannelName] = exec.Command("ffmpeg", "-hide_banner", "-loglevel", "quiet", "-i", url, "-c", "copy", outputPath)
 
 	sterr, _ := recorded[channel.ChannelName].StderrPipe()
 
@@ -330,9 +335,9 @@ func (channel *Channel) Capture(url string) error {
 	}
 
 	// Before recording store that the process has started, for recovery
-	recordingJob, err := EnqueueRecordingJob(channel.ChannelName, filename, outputFile)
+	recordingJob, err := EnqueueRecordingJob(channel.ChannelName, recording.Filename, outputPath)
 	if err != nil {
-		log.Printf("[Capture] Error enqueuing reccording for: %s/%s: %v", channel.ChannelName, filename, err)
+		log.Printf("[Capture] Error enqueuing reccording for: %s/%s: %v", channel.ChannelName, recording.Filename, err)
 	}
 
 	if b, err := io.ReadAll(sterr); err != nil {
@@ -343,7 +348,7 @@ func (channel *Channel) Capture(url string) error {
 	if err := recorded[channel.ChannelName].Wait(); err != nil && !strings.Contains(err.Error(), "255") {
 		log.Printf("[Capture] Wait for process exit '%s' error: %v", channel.ChannelName, err)
 		channel.RemoveData()
-		channel.DeleteRecordingsFile(filename)
+		channel.DeleteRecordingsFile(recording.Filename)
 		recordingJob.Destroy()
 		if exiterr, ok := err.(*exec.ExitError); ok {
 			log.Printf("[Capture] Exec error: %v", err)
@@ -374,20 +379,20 @@ func (channel *Channel) Capture(url string) error {
 		channel.RemoveData()
 		recordingJob.Destroy()
 
-		if job, err := EnqueuePreviewJob(channel.ChannelName, filename); err != nil {
+		if job, err := EnqueuePreviewJob(channel.ChannelName, recording.Filename); err != nil {
 			log.Printf("[FinishRecording] Error enqueuing job for %v\n", err)
 			return err
 		} else {
 			log.Printf("[FinishRecording] Job enqueued %v\n", job)
 		}
 	} else { // Throw away
-		log.Printf("[FinishRecording] Deleting stream '%s/%s' because it is too short (%vmin)\n", channel.ChannelName, filename, duration)
+		log.Printf("[FinishRecording] Deleting stream '%s/%s' because it is too short (%vmin)\n", channel.ChannelName, recording.Filename, duration)
 
 		channel.RemoveData()
 		recordingJob.Destroy()
 
-		if err := channel.DeleteRecordingsFile(filename); err != nil {
-			log.Printf("[FinishRecording] Error deleting '%s/%s': %v\n", channel.ChannelName, filename, err.Error())
+		if err := channel.DeleteRecordingsFile(recording.Filename); err != nil {
+			log.Printf("[FinishRecording] Error deleting '%s/%s': %v\n", channel.ChannelName, recording.Filename, err.Error())
 			return err
 		}
 	}

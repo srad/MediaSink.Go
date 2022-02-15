@@ -2,8 +2,10 @@ package v1
 
 import (
 	"fmt"
+	"io"
 	"log"
 	"net/http"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -174,6 +176,36 @@ func UnFavChannel(c *gin.Context) {
 	}
 
 	appG.Response(http.StatusOK, nil)
+}
+
+func UploadChannel(c *gin.Context) {
+	appG := app.Gin{C: c}
+
+	file, _, err := c.Request.FormFile("file")
+	if err != nil {
+		appG.Response(http.StatusBadRequest, err.Error())
+		return
+	}
+
+	channel := models.Channel{ChannelName: c.Param("channelName"), Fav: false}
+	recording, outputPath := channel.NewRecording()
+
+	out, err := os.Create(outputPath)
+	if err != nil {
+		appG.Response(http.StatusInternalServerError, err.Error())
+		return
+	}
+	defer out.Close()
+	_, err = io.Copy(out, file)
+	if err != nil {
+		appG.Response(http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	recording.Save("recording")
+	models.EnqueuePreviewJob(recording.ChannelName, recording.Filename)
+
+	appG.Response(http.StatusOK, recording)
 }
 
 func PauseChannel(c *gin.Context) {

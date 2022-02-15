@@ -52,6 +52,7 @@ func Setup() http.Handler {
 		apiv1.POST("/channels/:channelName/pause", v1.PauseChannel)
 		apiv1.POST("/channels/:channelName/fav", v1.FavChannel)
 		apiv1.POST("/channels/:channelName/unfav", v1.UnFavChannel)
+		apiv1.POST("/channels/:channelName/upload", v1.UploadChannel)
 		apiv1.DELETE("/channels/:channelName", v1.DeleteChannel)
 
 		apiv1.POST("/jobs/:channelName/:filename", v1.AddJob)

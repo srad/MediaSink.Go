@@ -2,6 +2,7 @@ package models
 
 import (
 	"github.com/srad/streamsink/conf"
+	"github.com/srad/streamsink/utils"
 	"gorm.io/gorm"
 	"log"
 	"time"
@@ -19,20 +20,33 @@ var (
 	dispatch = dispatcher{}
 )
 
+type SocketMessage struct {
+	Data  map[string]interface{} `json:"data"`
+	Event string                 `json:"event"`
+}
+
+func NewMessage(event string, data interface{}) SocketMessage {
+	return SocketMessage{Event: event, Data: utils.StructToDict(data)}
+}
+
 type dispatcher struct {
-	listeners []func(JobMessage)
+	listeners []func(message SocketMessage)
 }
 
-type JobMessage struct {
-	Event       string
-	ChannelName string
-}
-
-func ObserveJobs(f func(JobMessage)) {
+func ObserveJobs(f func(message SocketMessage)) {
 	dispatch.listeners = append(dispatch.listeners, f)
 }
 
-func notify(msg JobMessage) {
+type JobMessage struct {
+	jobId       uint        `json:"jobId,omitempty"`
+	ChannelName string      `json:"channelName,omitempty"`
+	Filename    string      `json:"filename,omitempty"`
+	Type        string      `json:"type,omitempty"`
+	Data        interface{} `json:"data,omitempty"`
+}
+
+func notify(event string, job JobMessage) {
+	msg := NewMessage(event, job)
 	for _, f := range dispatch.listeners {
 		f(msg)
 	}
@@ -99,7 +113,7 @@ func addJob(channelName, filename, filepath, status string, args *string) (*Job,
 	}
 	log.Printf("[Job] Enqueued job: '%s/%s' -> %s", channelName, filename, status)
 
-	notify(JobMessage{ChannelName: channelName, Event: status})
+	notify("job:create", JobMessage{jobId: job.JobId, Type: status, ChannelName: job.ChannelName, Filename: job.Filename})
 
 	return &job, nil
 }
@@ -120,7 +134,7 @@ func (job *Job) Destroy() error {
 	}
 	log.Printf("[Job] Job id delete %d", job.JobId)
 
-	notify(JobMessage{ChannelName: job.ChannelName, Event: "destroyJob"})
+	notify("job:destroy", JobMessage{jobId: job.JobId, ChannelName: job.ChannelName, Filename: job.Filename})
 
 	return nil
 }
