@@ -80,6 +80,9 @@ func Setup() http.Handler {
 		apiv1.GET("/info/:seconds", v1.GetInfo)
 		apiv1.GET("/info/disk", v1.GetDiskInfo)
 
+		apiv1.GET("/metric/cpu", v1.GetCpu)
+		apiv1.GET("/metric/net", v1.GetNet)
+
 		go v1.WsListen()
 		apiv1.GET("/ws", v1.WsHandler)
 	}

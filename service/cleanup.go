@@ -1,4 +1,4 @@
-package services
+package service
 
 import (
 	"errors"
@@ -9,17 +9,17 @@ import (
 	"time"
 
 	"github.com/srad/streamsink/conf"
-	"github.com/srad/streamsink/models"
+	"github.com/srad/streamsink/model"
 	"gorm.io/gorm"
 )
 
 // FixOrphanedRecordings Go through all open jobs with status "recording" and complete them.
 func FixOrphanedRecordings() {
 	log.Println("Fixing orphaned recordings ...")
-	jobs, err := models.GetJobsByStatus(models.StatusRecording)
+	jobs, err := model.GetJobsByStatus(model.StatusRecording)
 
 	if err == gorm.ErrRecordNotFound {
-		log.Printf("No jobs with status '%s' found\n", models.StatusRecording)
+		log.Printf("No jobs with status '%s' found\n", model.StatusRecording)
 		return
 	}
 	// Other errors
@@ -31,7 +31,7 @@ func FixOrphanedRecordings() {
 	// Check for orphaned videos
 	for _, job := range jobs {
 		log.Printf("Handling Job #%d of '%s/%s'", job.JobId, job.Filepath, job.Filename)
-		err := models.CheckVideo(job.Filepath)
+		err := model.CheckVideo(job.Filepath)
 		if err != nil {
 			log.Printf("The file '%s' is corrupted, deleting from disk and job queue: %v\n", job.Filename, err)
 			job.Destroy()
@@ -41,7 +41,7 @@ func FixOrphanedRecordings() {
 			}
 			log.Printf("Deleted file '%s'", job.Filename)
 		} else {
-			rec := &models.Recording{
+			rec := &model.Recording{
 				ChannelName:  job.ChannelName,
 				Duration:     0,
 				Filename:     job.Filename,
@@ -71,7 +71,7 @@ func ImportRecordings() error {
 	for _, channelName := range channelFolders {
 		log.Printf("[Import] Reading folder: %s\n", channelName)
 
-		channel := &models.Channel{
+		channel := &model.Channel{
 			ChannelName: channelName,
 			Url:         fmt.Sprintf(conf.AppCfg.DefaulImportUrl, channelName),
 		}
@@ -90,17 +90,17 @@ func ImportRecordings() error {
 			if !file.IsDir() && filepath.Ext(file.Name()) == ".mp4" {
 				log.Printf(" + [Import] Checking file: %s, %s", channelName, file.Name())
 
-				if _, err := models.GetVideoInfo(conf.GetAbsoluteRecordingsPath(channelName, file.Name())); err != nil {
+				if _, err := model.GetVideoInfo(conf.GetAbsoluteRecordingsPath(channelName, file.Name())); err != nil {
 					log.Printf(" + [Import] File '%s' seems corrupted, deleting", file.Name())
 					if err := channel.DeleteRecordingsFile(file.Name()); err != nil {
 						log.Printf(" + [Import] Error deleting '%s'", file.Name())
 					} else {
-						models.DestroyPreviews(channelName, file.Name())
+						model.DestroyPreviews(channelName, file.Name())
 						log.Printf(" + [Import] Deleted file '%s'", file.Name())
 					}
 					continue
 				}
-				if _, err := models.AddIfNotExistsRecording(channelName, file.Name()); err != nil {
+				if _, err := model.AddIfNotExistsRecording(channelName, file.Name()); err != nil {
 					log.Printf(" + [Import] Error: %s\n", err.Error())
 					continue
 				}
@@ -114,11 +114,11 @@ func ImportRecordings() error {
 
 				if err1 == nil && err2 == nil {
 					log.Println(" + [Import] Preview files exist")
-					models.UpdatePreview(channelName, file.Name())
+					model.UpdatePreview(channelName, file.Name())
 					continue
 				} else if errors.Is(err1, os.ErrNotExist) || errors.Is(err2, os.ErrNotExist) {
 					log.Printf(" + [Import] Adding job for %s\n", file.Name())
-					models.EnqueuePreviewJob(channelName, file.Name())
+					model.EnqueuePreviewJob(channelName, file.Name())
 				} else {
 					// Schrodinger: file may or may not exist. See err for details.
 					// Therefore, do *NOT* use !os.IsNotExist(err) to test for file existence

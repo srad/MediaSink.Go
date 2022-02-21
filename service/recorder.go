@@ -1,15 +1,15 @@
-package services
+package service
 
 import (
 	"github.com/srad/streamsink/utils"
 	"log"
 	"time"
 
-	"github.com/srad/streamsink/models"
+	"github.com/srad/streamsink/model"
 )
 
 var (
-	pause    = false
+	pause    = true
 	quit     = make(chan bool)
 	dispatch = dispatcher{}
 )
@@ -36,7 +36,7 @@ type RecorderMessage struct {
 	ChannelName string `json:"channelName"`
 }
 
-func ObserveRecorder(f func(message SocketMessage)) {
+func Subscribe(f func(message SocketMessage)) {
 	dispatch.listeners = append(dispatch.listeners, f)
 }
 
@@ -64,7 +64,7 @@ func checkStreams() {
 	if pause {
 		return
 	}
-	channels, err := models.ChannelActiveList()
+	channels, err := model.ChannelActiveList()
 	if err != nil {
 		log.Println(err)
 		return
@@ -125,7 +125,7 @@ func Pause() error {
 	quit <- true
 
 	// TerminateProcess each recording individually
-	channels, err := models.ChannelActiveList()
+	channels, err := model.ChannelActiveList()
 	if err != nil {
 		log.Println(err)
 		return err
@@ -142,7 +142,7 @@ func Pause() error {
 
 func UpdateVideoInfo() error {
 	log.Println("[Recorder] Updating all recordings info")
-	recordings, err := models.RecordingList()
+	recordings, err := model.RecordingList()
 	count := len(recordings)
 	if err != nil {
 		log.Printf("Error %v", err)

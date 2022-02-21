@@ -1,4 +1,4 @@
-package models
+package model
 
 import (
 	"github.com/srad/streamsink/conf"
@@ -33,7 +33,7 @@ type dispatcher struct {
 	listeners []func(message SocketMessage)
 }
 
-func ObserveJobs(f func(message SocketMessage)) {
+func Subscribe(f func(message SocketMessage)) {
 	dispatch.listeners = append(dispatch.listeners, f)
 }
 

@@ -6,7 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/srad/streamsink/app"
-	"github.com/srad/streamsink/models"
+	"github.com/srad/streamsink/model"
 )
 
 func AddJob(c *gin.Context) {
@@ -20,7 +20,7 @@ func AddJob(c *gin.Context) {
 		return
 	}
 
-	job, err := models.EnqueuePreviewJob(channelName, filename)
+	job, err := model.EnqueuePreviewJob(channelName, filename)
 	if err != nil {
 		appG.Response(http.StatusBadRequest, err)
 		return
@@ -31,7 +31,7 @@ func AddJob(c *gin.Context) {
 
 func GetJobs(c *gin.Context) {
 	appG := app.Gin{C: c}
-	jobs, err := models.JobList()
+	jobs, err := model.JobList()
 
 	if err != nil {
 		appG.Response(http.StatusBadRequest, err)

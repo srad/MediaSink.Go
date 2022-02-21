@@ -1,13 +1,18 @@
-package utils
+package model
 
 import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"os/exec"
 	"strconv"
 	"strings"
 	"time"
+)
+
+var (
+	quitMetrics = make(chan bool)
 )
 
 type SysInfo struct {
@@ -17,9 +22,14 @@ type SysInfo struct {
 }
 
 type NetInfo struct {
-	Dev           string `json:"dev"`
-	TransmitBytes uint64 `json:"transmitBytes"`
-	ReceiveBytes  uint64 `json:"receiveBytes"`
+	Dev           string    `json:"dev"`
+	TransmitBytes uint64    `json:"transmitBytes"`
+	ReceiveBytes  uint64    `json:"receiveBytes"`
+	CreatedAt     time.Time `json:"createdAt"`
+}
+
+func (NetInfo) TableName() string {
+	return "network_metrics"
 }
 
 type DiskInfo struct {
@@ -30,8 +40,13 @@ type DiskInfo struct {
 }
 
 type CPULoad struct {
-	CPU  string  `json:"cpu"`
-	Load float64 `json:"load"`
+	CPU       string    `json:"cpu"`
+	Load      float64   `json:"load"`
+	CreatedAt time.Time `json:"createdAt"`
+}
+
+func (CPULoad) TableName() string {
+	return "cpu_metrics"
 }
 
 type CPUInfo struct {
@@ -42,6 +57,73 @@ type CPUMeasure struct {
 	CPU   string
 	Idle  float64
 	Total float64
+}
+
+func GetNetworkMeasure() (*[]NetInfo, error) {
+	var info *[]NetInfo
+	if err := Db.Model(&NetInfo{}).
+		Order("created_at asc").
+		Find(&info).Error; err != nil {
+		return nil, err
+	}
+
+	return info, nil
+}
+
+func GetCpuMeasure() (*[]CPULoad, error) {
+	var load *[]CPULoad
+	if err := Db.Model(&CPULoad{}).
+		Order("created_at asc").
+		Find(&load).Error; err != nil {
+		return nil, err
+	}
+
+	return load, nil
+}
+
+func StartMetrics(networkDev string) {
+	go trackCpu()
+	go trackNetwork(networkDev)
+}
+
+func trackCpu() {
+	for {
+		select {
+		case <-quitMetrics:
+			log.Println("[trackCpu] stopped")
+			return
+		default:
+			// sleeps automatically
+			cpu, err := cpuUsage(30)
+			if err != nil {
+				log.Printf("[trackCpu] Error reasing cpu: %v", err)
+				return
+			}
+
+			if err := Db.Model(&CPULoad{}).Create(cpu.LoadCpu).Error; err != nil {
+				log.Printf("[trackCpu] Error saving metric: %v", err)
+			}
+		}
+	}
+}
+
+func trackNetwork(networkDev string) {
+	for {
+		select {
+		case <-quitMetrics:
+			log.Println("[trackNetwork] stopped")
+			return
+		default:
+			netInfo, err := netInfo(networkDev, 15)
+			if err != nil {
+				log.Println("[trackNetwork] stopped")
+				return
+			}
+			if err := Db.Model(&NetInfo{}).Create(netInfo).Error; err != nil {
+				log.Printf("[trackCpu] Error saving metric: %v", err)
+			}
+		}
+	}
 }
 
 func cpuUsage(waitSeconds uint64) (*CPUInfo, error) {
@@ -69,7 +151,7 @@ func cpuUsage(waitSeconds uint64) (*CPUInfo, error) {
 }
 
 func cpuMeasures() ([]CPUMeasure, error) {
-	// Source: https://www.linuxhowtos.org/System/procstat.htm
+	// Documentation of values: https://www.linuxhowtos.org/System/procstat.htm
 	//The very first "cpu" line aggregates the numbers in all of the other "cpuN" lines.
 	//
 	//These numbers identify the amount of time the CPU has spent performing different kinds of work. Time units are in USER_HZ or Jiffies (typically hundredths of a second).
@@ -146,6 +228,27 @@ func DiskUsage(path string) (*DiskInfo, error) {
 	return &DiskInfo{Size: parts[0], Used: parts[1], Avail: parts[2], Pcent: parts[3]}, nil
 }
 
+func netInfo(networkDev string, measureSeconds uint64) (*NetInfo, error) {
+	startNet, err := networkTraffic(networkDev)
+	if err != nil {
+		return nil, err
+	}
+	time.Sleep(time.Duration(measureSeconds) * time.Second)
+
+	endNet, err := networkTraffic(networkDev)
+	if err != nil {
+		return nil, err
+	}
+
+	diffNet := &NetInfo{
+		Dev:           networkDev,
+		ReceiveBytes:  endNet.ReceiveBytes - startNet.ReceiveBytes,
+		TransmitBytes: endNet.TransmitBytes - startNet.TransmitBytes,
+	}
+
+	return diffNet, nil
+}
+
 func Info(path, networkDev string, measureSeconds uint64) (*SysInfo, error) {
 	disk, err := DiskUsage(path)
 	if err != nil {
@@ -157,21 +260,9 @@ func Info(path, networkDev string, measureSeconds uint64) (*SysInfo, error) {
 		return nil, err
 	}
 
-	startNet, err := deviceTraffic(networkDev)
+	diffNet, err := netInfo(networkDev, measureSeconds)
 	if err != nil {
 		return nil, err
-	}
-	time.Sleep(time.Duration(measureSeconds) * time.Second)
-
-	endNet, err := deviceTraffic(networkDev)
-	if err != nil {
-		return nil, err
-	}
-
-	diffNet := &NetInfo{
-		Dev:           networkDev,
-		ReceiveBytes:  endNet.ReceiveBytes - startNet.ReceiveBytes,
-		TransmitBytes: endNet.TransmitBytes - startNet.TransmitBytes,
 	}
 
 	info := &SysInfo{
@@ -183,7 +274,7 @@ func Info(path, networkDev string, measureSeconds uint64) (*SysInfo, error) {
 	return info, nil
 }
 
-func deviceTraffic(device string) (*NetInfo, error) {
+func networkTraffic(device string) (*NetInfo, error) {
 	out, err := ioutil.ReadFile("/proc/net/dev")
 	if err != nil {
 		return nil, err

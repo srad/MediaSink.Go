@@ -1,13 +1,13 @@
 package v1
 
 import (
+	"github.com/srad/streamsink/model"
 	"net/http"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"github.com/srad/streamsink/app"
 	"github.com/srad/streamsink/conf"
-	"github.com/srad/streamsink/utils"
 )
 
 func GetInfo(c *gin.Context) {
@@ -19,7 +19,7 @@ func GetInfo(c *gin.Context) {
 		appG.Response(http.StatusInternalServerError, err.Error())
 	}
 
-	data, err := utils.Info(conf.AppCfg.DataDisk, conf.AppCfg.NetworkDev, val)
+	data, err := model.Info(conf.AppCfg.DataDisk, conf.AppCfg.NetworkDev, val)
 
 	if err != nil {
 		appG.Response(http.StatusInternalServerError, err.Error())
@@ -32,7 +32,7 @@ func GetInfo(c *gin.Context) {
 func GetDiskInfo(c *gin.Context) {
 	appG := app.Gin{C: c}
 
-	info, err := utils.DiskUsage(conf.AppCfg.DataDisk)
+	info, err := model.DiskUsage(conf.AppCfg.DataDisk)
 
 	if err != nil {
 		appG.Response(http.StatusInternalServerError, err.Error())

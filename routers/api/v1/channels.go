@@ -14,7 +14,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/srad/streamsink/app"
 	"github.com/srad/streamsink/conf"
-	"github.com/srad/streamsink/models"
+	"github.com/srad/streamsink/model"
 )
 
 var (
@@ -22,7 +22,7 @@ var (
 )
 
 type ChannelResponse struct {
-	models.Channel
+	model.Channel
 	IsRecording  bool    `json:"isRecording"`
 	IsOnline     bool    `json:"isOnline"`
 	Preview      string  `json:"preview"`
@@ -31,7 +31,7 @@ type ChannelResponse struct {
 
 func GetChannels(c *gin.Context) {
 	appG := app.Gin{C: c}
-	channels, err := models.ChannelList()
+	channels, err := model.ChannelList()
 	response := make([]ChannelResponse, len(channels))
 
 	for index, channel := range channels {
@@ -78,7 +78,7 @@ func AddChannel(c *gin.Context) {
 		return
 	}
 
-	channel := models.Channel{ChannelName: data.ChannelName, Url: url, IsPaused: false, CreatedAt: time.Now()}
+	channel := model.Channel{ChannelName: data.ChannelName, Url: url, IsPaused: false, CreatedAt: time.Now()}
 
 	if err := channel.Create(data.Tags); err != nil {
 		log.Printf("[AddChannel] Error creating record: %v", err)
@@ -91,16 +91,21 @@ func AddChannel(c *gin.Context) {
 
 func DeleteChannel(c *gin.Context) {
 	appG := app.Gin{C: c}
-	channel, err := models.GetChannelByName(c.Param("channelName"))
+	channel, err := model.GetChannelByName(c.Param("channelName"))
 	if err != nil {
-		appG.Response(http.StatusInternalServerError, err.Error())
+		appG.Response(http.StatusNotFound, fmt.Sprintf("Channel not found: %v", err))
 		return
 	}
 
 	log.Printf("Deleting channel '%s'\n", channel.ChannelName)
 
+	if err := channel.Stop(false); err != nil {
+		appG.Response(http.StatusInternalServerError, fmt.Sprintf("Process cound not be terminated: %v", err))
+		return
+	}
+
 	if err := channel.Destroy(); err != nil {
-		appG.Response(http.StatusInternalServerError, err.Error())
+		appG.Response(http.StatusInternalServerError, fmt.Sprintf("Channel could not be deleted: %v", err))
 		return
 	}
 
@@ -118,7 +123,7 @@ func TagChannel(c *gin.Context) {
 		return
 	}
 
-	if err := models.TagChannel(channelName, data.Tags); err != nil {
+	if err := model.TagChannel(channelName, data.Tags); err != nil {
 		log.Println(err)
 		appG.Response(http.StatusInternalServerError, err.Error())
 		return
@@ -137,7 +142,7 @@ func ResumeChannel(c *gin.Context) {
 		return
 	}
 
-	channel, err := models.GetChannelByName(channelName)
+	channel, err := model.GetChannelByName(channelName)
 	if err != nil {
 		log.Printf("[ResumeChannel] Error getting channel '%s': %v", channelName, err.Error())
 		appG.Response(http.StatusInternalServerError, err.Error())
@@ -156,7 +161,7 @@ func ResumeChannel(c *gin.Context) {
 func FavChannel(c *gin.Context) {
 	appG := app.Gin{C: c}
 
-	channel := models.Channel{ChannelName: c.Param("channelName"), Fav: true}
+	channel := model.Channel{ChannelName: c.Param("channelName"), Fav: true}
 
 	if err := channel.FavChannel(); err != nil {
 		appG.Response(http.StatusInternalServerError, err.Error())
@@ -169,7 +174,7 @@ func FavChannel(c *gin.Context) {
 func UnFavChannel(c *gin.Context) {
 	appG := app.Gin{C: c}
 
-	channel := models.Channel{ChannelName: c.Param("channelName"), Fav: false}
+	channel := model.Channel{ChannelName: c.Param("channelName"), Fav: false}
 	if err := channel.UnFavChannel(); err != nil {
 		appG.Response(http.StatusInternalServerError, err.Error())
 		return
@@ -187,7 +192,7 @@ func UploadChannel(c *gin.Context) {
 		return
 	}
 
-	channel := models.Channel{ChannelName: c.Param("channelName"), Fav: false}
+	channel := model.Channel{ChannelName: c.Param("channelName"), Fav: false}
 	recording, outputPath := channel.NewRecording()
 
 	out, err := os.Create(outputPath)
@@ -203,7 +208,7 @@ func UploadChannel(c *gin.Context) {
 	}
 
 	recording.Save("recording")
-	models.EnqueuePreviewJob(recording.ChannelName, recording.Filename)
+	model.EnqueuePreviewJob(recording.ChannelName, recording.Filename)
 
 	appG.Response(http.StatusOK, recording)
 }
@@ -219,7 +224,7 @@ func PauseChannel(c *gin.Context) {
 	}
 
 	log.Println("Pausing channel " + channelName)
-	channel, err := models.GetChannelByName(channelName)
+	channel, err := model.GetChannelByName(channelName)
 	if err != nil {
 		appG.Response(http.StatusBadRequest, err.Error())
 		return

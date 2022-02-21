@@ -1,16 +1,14 @@
-package models
+package model
 
 import (
 	"errors"
 	"fmt"
-	"github.com/srad/streamsink/utils"
 	"io"
 	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
-	"runtime"
 	"strings"
 	"syscall"
 	"time"
@@ -43,7 +41,7 @@ type Channel struct {
 	Fav             bool        `json:"fav" gorm:"not null;default:0"`
 	IsPaused        bool        `json:"isPaused" gorm:"not null"`
 	CreatedAt       time.Time   `json:"createdAt"`
-	Recordings      []Recording `json:"recordings" gorm:"table:recordings;foreignKey:channel_name;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
+	Recordings      []Recording `json:"recordings,omitempty" gorm:"table:recordings;foreignKey:channel_name;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
 	RecordingsCount uint        `json:"recordingsCount"`
 	RecordingsSize  uint        `json:"recordingsSize"`
 }
@@ -129,32 +127,21 @@ func (channel *Channel) Stop(updateModel bool) error {
 
 // TerminateProcess Terminate the ffmpeg recording process
 // There's maximum one recording job per channel.
-func (channel *Channel) terminateProcess(updateModel bool) error {
-	if updateModel {
+func (channel *Channel) terminateProcess(pauseModel bool) error {
+	if pauseModel {
 		err := channel.Pause(true)
 		if err != nil {
 			return err
 		}
 	}
 
-	// channel exists?
+	// Is current recording at all?
 	if cmd, ok := recorded[channel.ChannelName]; ok {
-		if runtime.GOOS == "windows" {
-			if err := utils.TerminateProc(channel.ChannelName); err != nil {
-				log.Println("[TerminateProcess] Error killing process: " + channel.ChannelName)
-				return err
-			} else {
-				log.Println("Killed process: " + channel.ChannelName)
-			}
+		if err := cmd.Process.Signal(os.Interrupt); err != nil && !strings.Contains(err.Error(), "255") {
+			log.Printf("[TerminateProcess] Error killing process for '%s': %v", channel.ChannelName, err)
+			return err
 		} else {
-			// linux
-			log.Printf("Interrupting process '%s'", channel.ChannelName)
-			if err := cmd.Process.Signal(os.Interrupt); err != nil && !strings.Contains(err.Error(), "255") {
-				log.Printf("[TerminateProcess] Error killing process for '%s': %v", channel.ChannelName, err)
-				return err
-			} else {
-				log.Printf("[TerminateProcess] Killed process: '%s'", channel.ChannelName)
-			}
+			log.Printf("[TerminateProcess] Killed process: '%s'", channel.ChannelName)
 		}
 	}
 

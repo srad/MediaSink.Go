@@ -1,4 +1,4 @@
-package models
+package model
 
 import (
 	"fmt"
@@ -29,6 +29,16 @@ func Init() *gorm.DB {
 	}
 	if err := db.AutoMigrate(&Job{}); err != nil {
 		panic(fmt.Sprintf("[Migrate] Error Job: %v", err))
+	}
+	if err := db.AutoMigrate(&NetInfo{}); err != nil {
+		panic(fmt.Sprintf("[Migrate] Error NetInfo: %v", err))
+	} else {
+		db.Delete(&NetInfo{}, "1=1")
+	}
+	if err := db.AutoMigrate(&CPULoad{}); err != nil {
+		panic(fmt.Sprintf("[Migrate] Error CPULoad: %v", err))
+	} else {
+		db.Delete(&CPULoad{}, "1=1")
 	}
 	//db.LogMode(true)
 	Db = db

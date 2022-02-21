@@ -5,8 +5,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/srad/streamsink/app"
 	"github.com/srad/streamsink/conf"
-	"github.com/srad/streamsink/models"
-	"github.com/srad/streamsink/services"
+	"github.com/srad/streamsink/model"
+	"github.com/srad/streamsink/service"
 	"log"
 	"net/http"
 	"strconv"
@@ -15,7 +15,7 @@ import (
 
 func GetRecordings(c *gin.Context) {
 	appG := app.Gin{C: c}
-	recordings, err := models.RecordingList()
+	recordings, err := model.RecordingList()
 
 	if err != nil {
 		appG.Response(http.StatusInternalServerError, nil)
@@ -34,7 +34,7 @@ func GetRecording(c *gin.Context) {
 		return
 	}
 
-	recordings, err := models.FindByName(channelName)
+	recordings, err := model.FindByName(channelName)
 	if err != nil {
 		appG.Response(http.StatusInternalServerError, err)
 		return
@@ -45,7 +45,7 @@ func GetRecording(c *gin.Context) {
 
 func GetBookmarks(c *gin.Context) {
 	appG := app.Gin{C: c}
-	recordings, err := models.BookmarkList()
+	recordings, err := model.BookmarkList()
 
 	if err != nil {
 		appG.Response(http.StatusInternalServerError, nil)
@@ -66,7 +66,7 @@ func GeneratePreview(c *gin.Context) {
 		return
 	}
 
-	job, err := models.EnqueuePreviewJob(channelName, filename)
+	job, err := model.EnqueuePreviewJob(channelName, filename)
 	if err != nil {
 		appG.Response(http.StatusInternalServerError, err)
 		return
@@ -79,7 +79,7 @@ func UpdateVideoInfo(c *gin.Context) {
 	appG := app.Gin{C: c}
 
 	log.Println("Starting updating video durations ...")
-	go services.UpdateVideoInfo()
+	go service.UpdateVideoInfo()
 
 	appG.Response(http.StatusOK, nil)
 }
@@ -96,7 +96,7 @@ func Bookmark(c *gin.Context) {
 		return
 	}
 
-	errUpdate := models.Db.Table("recordings").Where("channel_name = ? AND filename = ?", channelName, filename).Update("bookmark", bookmark).Error
+	errUpdate := model.Db.Table("recordings").Where("channel_name = ? AND filename = ?", channelName, filename).Update("bookmark", bookmark).Error
 	if errUpdate != nil {
 		appG.Response(http.StatusBadRequest, errUpdate)
 		return
@@ -128,7 +128,7 @@ func CutRecording(c *gin.Context) {
 		return
 	}
 
-	job, err := models.EnqueueCuttingJob(channelName, filename, conf.AbsoluteFilepath(channelName, filename), string(cut))
+	job, err := model.EnqueueCuttingJob(channelName, filename, conf.AbsoluteFilepath(channelName, filename), string(cut))
 	if err != nil {
 		appG.Response(http.StatusBadRequest, err.Error())
 		return
@@ -139,7 +139,7 @@ func CutRecording(c *gin.Context) {
 
 func IsRecording(c *gin.Context) {
 	appG := app.Gin{C: c}
-	appG.Response(http.StatusOK, services.IsRecording())
+	appG.Response(http.StatusOK, service.IsRecording())
 }
 
 func GetLatestRecordings(c *gin.Context) {
@@ -151,7 +151,7 @@ func GetLatestRecordings(c *gin.Context) {
 		return
 	}
 
-	recordings, err := models.LatestList(limit)
+	recordings, err := model.LatestList(limit)
 
 	if err != nil {
 		appG.Response(http.StatusInternalServerError, err.Error())
@@ -170,7 +170,7 @@ func GetRandomRecordings(c *gin.Context) {
 		return
 	}
 
-	recordings, err := models.FindRandom(limit)
+	recordings, err := model.FindRandom(limit)
 
 	if err != nil {
 		appG.Response(http.StatusInternalServerError, err.Error())
@@ -183,7 +183,7 @@ func GetRandomRecordings(c *gin.Context) {
 func PauseRecording(c *gin.Context) {
 	appG := app.Gin{C: c}
 
-	go services.Pause()
+	go service.Pause()
 
 	appG.Response(http.StatusOK, nil)
 }
@@ -191,7 +191,7 @@ func PauseRecording(c *gin.Context) {
 func ResumeRecording(c *gin.Context) {
 	appG := app.Gin{C: c}
 
-	services.Resume()
+	service.Resume()
 	appG.Response(http.StatusOK, nil)
 }
 
@@ -210,7 +210,7 @@ func DeleteRecording(c *gin.Context) {
 		return
 	}
 
-	rec, err := models.FindRecording(channelName, filename)
+	rec, err := model.FindRecording(channelName, filename)
 	if err != nil {
 		appG.Response(http.StatusInternalServerError, err.Error())
 		return
