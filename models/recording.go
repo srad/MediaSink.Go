@@ -1,4 +1,4 @@
-package model
+package models
 
 import (
 	"fmt"
@@ -11,7 +11,7 @@ import (
 )
 
 type Recording struct {
-	Channel     Channel   `json:"channel" gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE;foreignKey:channel_name"`
+	Channel     Channel   `json:"-" gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE;foreignKey:channel_name"`
 	ChannelName string    `json:"channelName" gorm:"primaryKey;not null;default:null"`
 	Filename    string    `json:"filename" gorm:"primaryKey;not null;default:null"`
 	Bookmark    bool      `json:"bookmark" gorm:"not null"`

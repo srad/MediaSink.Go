@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/srad/streamsink/conf"
-	"github.com/srad/streamsink/model"
+	"github.com/srad/streamsink/models"
 	"github.com/srad/streamsink/routers"
 	v1 "github.com/srad/streamsink/routers/api/v1"
-	"github.com/srad/streamsink/service"
+	"github.com/srad/streamsink/services"
 	"log"
 	"net/http"
 	"os"
@@ -26,22 +26,22 @@ func main() {
 	}()
 
 	conf.Read()
-	model.Init()
+	models.Init()
 	//model.StartMetrics(conf.AppCfg.NetworkDev)
 	setupFolders()
 
-	service.Subscribe(func(message service.SocketMessage) {
+	services.Subscribe(func(message services.SocketMessage) {
 		v1.SendMessage(v1.SocketMessage{Event: message.Event, Data: message.Data})
 	})
-	model.Subscribe(func(message model.SocketMessage) {
+	models.Subscribe(func(message models.SocketMessage) {
 		v1.SendMessage(v1.SocketMessage{Event: message.Event, Data: message.Data})
 	})
 
-	service.Resume()
+	services.Resume()
 
-	go service.ImportRecordings()
-	go service.FixOrphanedRecordings()
-	go model.StartWorker()
+	go services.ImportRecordings()
+	go services.FixOrphanedRecordings()
+	go models.StartWorker()
 
 	gin.SetMode("release")
 	endPoint := fmt.Sprintf("0.0.0.0:%d", 3000)
@@ -68,13 +68,13 @@ func main() {
 
 func cleanup() {
 	log.Println("cleanup ...")
-	model.StopWorker()
-	service.Pause()
+	models.StopWorker()
+	services.Pause()
 	log.Println("cleanup complete")
 }
 
 func setupFolders() {
-	channels, err := model.ChannelList()
+	channels, err := models.ChannelList()
 	if err != nil {
 		fmt.Println(err)
 		return

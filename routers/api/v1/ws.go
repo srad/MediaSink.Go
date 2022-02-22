@@ -9,6 +9,10 @@ import (
 	"sync"
 )
 
+// --------------------------------------------------------------------------------------
+// This module manages the incoming ws connections and message dispatching
+// --------------------------------------------------------------------------------------
+
 var (
 	upGrader = websocket.Upgrader{
 		CheckOrigin: func(r *http.Request) bool {

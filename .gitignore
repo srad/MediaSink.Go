@@ -26,3 +26,6 @@ main
 .previews
 rename.sh
 /streamsink
+/docs/swagger.yaml
+/docs/swagger.json
+/docs/docs.go

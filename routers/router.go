@@ -10,9 +10,27 @@ import (
 	"github.com/srad/streamsink/conf"
 	v1 "github.com/srad/streamsink/routers/api/v1"
 
+	docs "github.com/srad/streamsink/docs"
 	ginSwagger "github.com/swaggo/gin-swagger"
 	"github.com/swaggo/gin-swagger/swaggerFiles"
 )
+
+// @title           Swagger Example API
+// @version         1.0
+// @description     This is a sample server celler server.
+// @termsOfService  http://swagger.io/terms/
+
+// @contact.name   API Support
+// @contact.url    http://www.swagger.io/support
+// @contact.email  support@swagger.io
+
+// @license.name  Apache 2.0
+// @license.url   http://www.apache.org/licenses/LICENSE-2.0.html
+
+// @host      localhost:3000
+// @BasePath  /api/v1
+
+// @securityDefinitions.basic  BasicAuth
 
 var (
 	server *socketio.Server
@@ -26,6 +44,8 @@ func Setup() http.Handler {
 	const rec = "./recordings"
 	r.Static("/recordings", conf.AppCfg.RecordingsAbsolutePath)
 	r.Static("/public", conf.AppCfg.PublicPath)
+
+	docs.SwaggerInfo_swagger.BasePath = "/api/v1"
 	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
 	r.Use(cors.New(cors.Config{
@@ -58,22 +78,22 @@ func Setup() http.Handler {
 		apiv1.POST("/jobs/:channelName/:filename", v1.AddJob)
 		apiv1.GET("/jobs", v1.GetJobs)
 
-		apiv1.POST("/recordings/updateinfo", v1.UpdateVideoInfo)
-		apiv1.POST("/recordings/:channelName/:filename/bookmark/:bookmark", v1.Bookmark)
-		apiv1.POST("/recordings/:channelName/:filename/cut", v1.CutRecording)
+		//apiv1.POST("/recordings/updateinfo", v1.UpdateVideoInfo)
 
-		apiv1.GET("/recording", v1.IsRecording)
+		apiv1.POST("/recorder/resume", v1.ResumeRecording)
+		apiv1.POST("/recorder/pause", v1.PauseRecorder)
+		apiv1.GET("/recorder", v1.IsRecording)
+
+		apiv1.GET("/recordings", v1.GetRecordings)
 		apiv1.GET("/recordings/latest/:limit", v1.GetLatestRecordings)
 		apiv1.GET("/recordings/random/:limit", v1.GetRandomRecordings)
-		apiv1.GET("/recordings", v1.GetRecordings)
 		apiv1.GET("/recordings/bookmarks", v1.GetBookmarks)
-
 		apiv1.GET("/recordings/:channelName", v1.GetRecording)
 		apiv1.GET("/recordings/:channelName/:filename/download", v1.DownloadRecording)
 
+		apiv1.POST("/recordings/:channelName/:filename/bookmark/:bookmark", v1.Bookmark)
+		apiv1.POST("/recordings/:channelName/:filename/cut", v1.CutRecording)
 		apiv1.POST("/recordings/:channelName/:filename/preview", v1.GeneratePreview)
-		apiv1.POST("/recordings/resume", v1.ResumeRecording)
-		apiv1.POST("/recordings/pause", v1.PauseRecording)
 
 		apiv1.DELETE("/recordings/:channelName/:filename", v1.DeleteRecording)
 

@@ -1,4 +1,4 @@
-package model
+package models
 
 import (
 	"errors"
@@ -41,7 +41,7 @@ type Channel struct {
 	Fav             bool        `json:"fav" gorm:"not null;default:0"`
 	IsPaused        bool        `json:"isPaused" gorm:"not null"`
 	CreatedAt       time.Time   `json:"createdAt"`
-	Recordings      []Recording `json:"recordings,omitempty" gorm:"table:recordings;foreignKey:channel_name;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
+	Recordings      []Recording `json:"-" gorm:"table:recordings;foreignKey:channel_name;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
 	RecordingsCount uint        `json:"recordingsCount"`
 	RecordingsSize  uint        `json:"recordingsSize"`
 }

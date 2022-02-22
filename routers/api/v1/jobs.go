@@ -6,9 +6,21 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/srad/streamsink/app"
-	"github.com/srad/streamsink/model"
+	"github.com/srad/streamsink/models"
 )
 
+// AddJob godoc
+// @Summary     Enqueue a preview job
+// @Description Enqueue a preview job for a video in a channel. For now only preview jobs allowed via REST
+// @Tags        jobs
+// @Param       channelName path string  true  "Channel name"
+// @Param       filename    path string  true  "Filename in channel"
+// @Accept      json
+// @Produce     json
+// @Success     200 {object} models.Job
+// @Failure     400 {} http.StatusBadRequest
+// @Failure     500 {} http.StatusInternalServerError
+// @Router      /jobs/{channelName}/{filename} [post]
 func AddJob(c *gin.Context) {
 	appG := app.Gin{C: c}
 
@@ -20,21 +32,30 @@ func AddJob(c *gin.Context) {
 		return
 	}
 
-	job, err := model.EnqueuePreviewJob(channelName, filename)
+	job, err := models.EnqueuePreviewJob(channelName, filename)
 	if err != nil {
-		appG.Response(http.StatusBadRequest, err)
+		appG.Response(http.StatusInternalServerError, err)
 		return
 	}
 
 	appG.Response(http.StatusOK, &job)
 }
 
+// GetJobs godoc
+// @Summary     Return a list of jobs
+// @Description Return a list of jobs
+// @Tags        jobs
+// @Accept      json
+// @Produce     json
+// @Success     200 {object} []models.Job
+// @Failure     500 {}  http.StatusInternalServerError
+// @Router      /jobs [get]
 func GetJobs(c *gin.Context) {
 	appG := app.Gin{C: c}
-	jobs, err := model.JobList()
+	jobs, err := models.JobList()
 
 	if err != nil {
-		appG.Response(http.StatusBadRequest, err)
+		appG.Response(http.StatusInternalServerError, err)
 		return
 	}
 

@@ -1,11 +1,11 @@
-package service
+package services
 
 import (
 	"github.com/srad/streamsink/utils"
 	"log"
 	"time"
 
-	"github.com/srad/streamsink/model"
+	"github.com/srad/streamsink/models"
 )
 
 var (
@@ -64,7 +64,7 @@ func checkStreams() {
 	if pause {
 		return
 	}
-	channels, err := model.ChannelActiveList()
+	channels, err := models.ChannelActiveList()
 	if err != nil {
 		log.Println(err)
 		return
@@ -125,7 +125,7 @@ func Pause() error {
 	quit <- true
 
 	// TerminateProcess each recording individually
-	channels, err := model.ChannelActiveList()
+	channels, err := models.ChannelActiveList()
 	if err != nil {
 		log.Println(err)
 		return err
@@ -142,7 +142,7 @@ func Pause() error {
 
 func UpdateVideoInfo() error {
 	log.Println("[Recorder] Updating all recordings info")
-	recordings, err := model.RecordingList()
+	recordings, err := models.RecordingList()
 	count := len(recordings)
 	if err != nil {
 		log.Printf("Error %v", err)
