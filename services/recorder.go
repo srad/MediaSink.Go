@@ -1,6 +1,7 @@
 package services
 
 import (
+	"context"
 	"github.com/srad/streamsink/utils"
 	"log"
 	"time"
@@ -9,9 +10,9 @@ import (
 )
 
 var (
-	pause    = true
-	quit     = make(chan bool)
+	isPaused = false
 	dispatch = dispatcher{}
+	cancel   context.CancelFunc
 )
 
 const (
@@ -47,21 +48,20 @@ func notify(event string, data interface{}) {
 	}
 }
 
-func iterate() {
+func iterate(ctx context.Context) {
 	for {
 		select {
-		case <-quit:
+		case <-ctx.Done():
 			log.Println("[iterate] stopped")
 			return
-		default:
+		case <-time.After(sleepBetweenRounds):
 			checkStreams()
-			time.Sleep(sleepBetweenRounds)
 		}
 	}
 }
 
 func checkStreams() {
-	if pause {
+	if isPaused {
 		return
 	}
 	channels, err := models.ChannelActiveList()
@@ -70,7 +70,7 @@ func checkStreams() {
 		return
 	}
 	for _, channel := range channels {
-		if pause {
+		if isPaused {
 			break
 		}
 
@@ -100,7 +100,7 @@ func checkStreams() {
 			notify("channel:offline", RecorderMessage{ChannelName: channel.ChannelName})
 		}
 
-		if url == "" || pause || channel.IsPaused {
+		if url == "" || isPaused || channel.IsPaused {
 			continue
 		}
 
@@ -110,32 +110,31 @@ func checkStreams() {
 }
 
 func IsRecording() bool {
-	return !pause
+	return !isPaused
 }
 
 func Resume() {
+	ctx := context.Background()
+	// Create a new context, with its cancellation function
+	// from the original context
+	ctx, c := context.WithCancel(ctx)
+	cancel = c
+
 	log.Printf("[Recorder] Resume recording thread")
-	pause = false
-	go iterate()
+	isPaused = false
+	go iterate(ctx)
 }
 
 func Pause() error {
+	log.Printf("[Pause] Stopping recorder ...")
 	// TerminateProcess the go routine for iteration over channels
-	pause = true
-	quit <- true
+	isPaused = true
+	cancel()
+	log.Printf("[Pause] Stopping recorder ...")
 
 	// TerminateProcess each recording individually
-	channels, err := models.ChannelActiveList()
-	if err != nil {
-		log.Println(err)
-		return err
-	}
-	for _, channel := range channels {
-		err := channel.Stop(false)
-		if err != nil {
-			log.Printf("[Recorder] Error stopping channel '%s': %v", channel.ChannelName, err)
-		}
-	}
+	models.TerminateAll()
+	log.Printf("[Pause] Terminated streams ...")
 
 	return nil
 }

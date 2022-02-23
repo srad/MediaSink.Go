@@ -70,7 +70,7 @@ func MergeVideos(outputListener func(string), absoluteMergeTextfile, absoluteOut
 
 	return utils.ExecSync(&utils.ExecArgs{
 		Command:     "ffmpeg",
-		CommandArgs: []string{"-hide_banner", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", absoluteMergeTextfile, "-codec", "copy", absoluteOutputFilepath},
+		CommandArgs: []string{"-hide_banner", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", absoluteMergeTextfile, "-movflags", "faststart", "-codec", "copy", absoluteOutputFilepath},
 		OnStart: func(info utils.CommandInfo) {
 
 		},
@@ -90,7 +90,7 @@ func CutVideo(args *CuttingJob, absoluteFilepath, absoluteOutputFilepath, startI
 
 	return utils.ExecSync(&utils.ExecArgs{
 		Command:     "ffmpeg",
-		CommandArgs: []string{"-progress", "pipe:2", "-hide_banner", "-loglevel", "error", "-i", absoluteFilepath, "-ss", startIntervals, "-to", endIntervals, "-codec", "copy", absoluteOutputFilepath},
+		CommandArgs: []string{"-progress", "pipe:2", "-hide_banner", "-loglevel", "error", "-i", absoluteFilepath, "-ss", startIntervals, "-to", endIntervals, "-movflags", "faststart", "-codec", "copy", absoluteOutputFilepath},
 		OnStart: func(info utils.CommandInfo) {
 			args.OnStart(&info)
 		},
@@ -131,7 +131,7 @@ func createPreviewVideo(errListener func(string), outputDir, outFile, absolutePa
 	return utils.ExecSync(&utils.ExecArgs{
 		OnPipeErr:   errListener,
 		Command:     "ffmpeg",
-		CommandArgs: []string{"-i", absolutePath, "-y", "-progress", "pipe:2", "-q:v", "0", "-threads", fmt.Sprint(threadCount), "-an", "-vf", fmt.Sprintf("select=not(mod(n\\,%d)),scale=-2:%d,drawtext=fontfile=%s: text='%%{pts\\:gmtime\\:0\\:%%H\\\\\\:%%M\\\\\\:%%S}': rate=%f: x=(w-tw)/2: y=h-(2*lh): fontsize=20: fontcolor=white: bordercolor=black: borderw=3: box=0: boxcolor=0x00000000@1,setpts=(7/2)*N/TB", frameDistance, frameHeight, getFontPath(), fps), "-hide_banner", "-loglevel", "error", "-stats", "-vsync", "vfr", filepath.Join(dir, outFile)},
+		CommandArgs: []string{"-i", absolutePath, "-y", "-progress", "pipe:2", "-q:v", "0", "-threads", fmt.Sprint(threadCount), "-an", "-vf", fmt.Sprintf("select=not(mod(n\\,%d)),scale=-2:%d,drawtext=fontfile=%s: text='%%{pts\\:gmtime\\:0\\:%%H\\\\\\:%%M\\\\\\:%%S}': rate=%f: x=(w-tw)/2: y=h-(2*lh): fontsize=20: fontcolor=white: bordercolor=black: borderw=3: box=0: boxcolor=0x00000000@1,setpts=(7/2)*N/TB", frameDistance, frameHeight, getFontPath(), fps), "-hide_banner", "-loglevel", "error", "-stats", "-vsync", "vfr", "-movflags", "faststart", filepath.Join(dir, outFile)},
 	})
 }
 

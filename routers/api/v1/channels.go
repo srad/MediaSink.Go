@@ -86,8 +86,8 @@ func AddChannel(c *gin.Context) {
 	appG := app.Gin{C: c}
 	data := &ReqAddChannel{}
 	if err := c.BindJSON(&data); err != nil {
-		log.Printf("[AddChannel] Error parsing request: %v", err)
-		appG.Response(http.StatusInternalServerError, err)
+		log.Printf("[AddChannel] Error parsing request: %s", err.Error())
+		appG.Response(http.StatusInternalServerError, err.Error())
 		return
 	}
 	url := strings.TrimSpace(data.Url)
@@ -97,15 +97,34 @@ func AddChannel(c *gin.Context) {
 		return
 	}
 
-	channel := models.Channel{ChannelName: data.ChannelName, Url: url, IsPaused: false, CreatedAt: time.Now()}
+	channel := models.Channel{
+		ChannelName:     data.ChannelName,
+		Url:             url,
+		Fav:             false,
+		RecordingsCount: 0,
+		RecordingsSize:  0,
+		Tags:            "",
+		IsPaused:        false,
+		CreatedAt:       time.Now()}
 
-	if err := channel.Create(data.Tags); err != nil {
-		log.Printf("[AddChannel] Error creating record: %v", err)
+	newChannel, err := channel.Create(data.Tags)
+	if err != nil {
+		log.Printf("[AddChannel] Error creating record: %s", err.Error())
 		appG.Response(http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	appG.Response(http.StatusOK, &channel)
+	res := &ChannelResponse{
+		Channel:      *newChannel,
+		IsRecording:  false,
+		IsOnline:     false,
+		Preview:      "",
+		MinRecording: 0,
+	}
+
+	log.Printf("New channel: %v", res)
+
+	appG.Response(http.StatusOK, &res)
 }
 
 // DeleteChannel godoc
@@ -122,19 +141,19 @@ func DeleteChannel(c *gin.Context) {
 	appG := app.Gin{C: c}
 	channel, err := models.GetChannelByName(c.Param("channelName"))
 	if err != nil {
-		appG.Response(http.StatusNotFound, fmt.Sprintf("Channel not found: %v", err))
+		appG.Response(http.StatusNotFound, fmt.Sprintf("Channel not found: %s", err.Error()))
 		return
 	}
 
 	log.Printf("Deleting channel '%s'\n", channel.ChannelName)
 
-	if err := channel.Stop(false); err != nil {
-		appG.Response(http.StatusInternalServerError, fmt.Sprintf("Process cound not be terminated: %v", err))
+	if err := channel.Terminate(false); err != nil {
+		appG.Response(http.StatusInternalServerError, fmt.Sprintf("Process cound not be terminated: %s", err.Error()))
 		return
 	}
 
 	if err := channel.Destroy(); err != nil {
-		appG.Response(http.StatusInternalServerError, fmt.Sprintf("Channel could not be deleted: %v", err))
+		appG.Response(http.StatusInternalServerError, fmt.Sprintf("Channel could not be deleted: %s", err.Error()))
 		return
 	}
 
@@ -158,7 +177,7 @@ func TagChannel(c *gin.Context) {
 
 	data := &ReqTagChannel{}
 	if err := c.BindJSON(&data); err != nil {
-		log.Printf("[TagChannel] Error parsing request: %v", err)
+		log.Printf("[TagChannel] Error parsing request: %s", err.Error())
 		appG.Response(http.StatusInternalServerError, err)
 		return
 	}
@@ -195,13 +214,13 @@ func ResumeChannel(c *gin.Context) {
 
 	channel, err := models.GetChannelByName(channelName)
 	if err != nil {
-		log.Printf("[ResumeChannel] Error getting channel '%s': %v", channelName, err.Error())
+		log.Printf("[ResumeChannel] Error getting channel '%s': %s", channelName, err.Error())
 		appG.Response(http.StatusInternalServerError, err.Error())
 		return
 	}
 
 	if err := channel.Start(); err != nil {
-		log.Printf("[ResumeChannel] Error resuming channel '%s': %v", channelName, err.Error())
+		log.Printf("[ResumeChannel] Error resuming channel '%s': %s", channelName, err.Error())
 		appG.Response(http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -322,7 +341,7 @@ func PauseChannel(c *gin.Context) {
 		appG.Response(http.StatusBadRequest, err.Error())
 		return
 	}
-	channel.Stop(true)
+	channel.Terminate(true)
 
 	appG.Response(http.StatusOK, nil)
 }

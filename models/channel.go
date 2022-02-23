@@ -32,12 +32,10 @@ var (
 )
 
 type Channel struct {
-	ChannelId   uint   `json:"channelId" gorm:"primaryKey;not null;default:null"`
-	ChannelName string `json:"channelName" gorm:"unique;not null;default:null"`
-	Url         string `json:"url" gorm:"unique;not null;default:null"`
-
-	Tags string `json:"tags" gorm:"not null;default:''"`
-
+	ChannelId       uint        `json:"channelId" gorm:"primaryKey;not null;default:null"`
+	ChannelName     string      `json:"channelName" gorm:"unique;not null;default:null"`
+	Url             string      `json:"url" gorm:"unique;not null;default:null"`
+	Tags            string      `json:"tags" gorm:"not null;default:''"`
 	Fav             bool        `json:"fav" gorm:"not null;default:0"`
 	IsPaused        bool        `json:"isPaused" gorm:"not null"`
 	CreatedAt       time.Time   `json:"createdAt"`
@@ -46,7 +44,7 @@ type Channel struct {
 	RecordingsSize  uint        `json:"recordingsSize"`
 }
 
-func (channel *Channel) Create(tags *[]string) error {
+func (channel *Channel) Create(tags *[]string) (*Channel, error) {
 	channel.ChannelName = strings.ToLower(strings.TrimSpace(channel.ChannelName))
 	channel.IsPaused = false
 	channel.CreatedAt = time.Now()
@@ -54,18 +52,18 @@ func (channel *Channel) Create(tags *[]string) error {
 	if tags != nil {
 		str, err := prepareTags(*tags)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		channel.Tags = str
 	}
 
 	if err := Db.Create(&channel).Error; err != nil {
-		return err
+		return nil, err
 	}
 
 	conf.MakeChannelFolders(channel.ChannelName)
 
-	return nil
+	return channel, nil
 }
 
 func TagChannel(channelName string, tags []string) error {
@@ -121,8 +119,17 @@ func (channel *Channel) Start() error {
 	return nil
 }
 
-func (channel *Channel) Stop(updateModel bool) error {
+func (channel *Channel) Terminate(updateModel bool) error {
 	return channel.terminateProcess(updateModel)
+}
+
+func TerminateAll() {
+	for channelName, _ := range recorded {
+		channel := Channel{ChannelName: channelName}
+		if err := channel.Terminate(false); err != nil {
+			log.Printf("Error terminating channel: '%s': %s", channelName, err.Error())
+		}
+	}
 }
 
 // TerminateProcess Terminate the ffmpeg recording process
@@ -240,6 +247,12 @@ func (channel *Channel) Destroy() error {
 		return err
 	}
 
+	// TODO: Cancel running jobs
+
+	if err := Db.Where("channel_name = ?", channel.ChannelName).Delete(Job{}).Error; err != nil {
+		return err
+	}
+
 	if errRemove := os.RemoveAll(conf.AbsoluteRecordingsPath(channel.ChannelName)); errRemove != nil {
 		log.Printf("Error deleting channel folder: %v", errRemove)
 		return errRemove
@@ -312,7 +325,8 @@ func (channel *Channel) Capture(url string) error {
 	log.Println("to: " + outputPath)
 
 	info[channel.ChannelName] = &recording
-	recorded[channel.ChannelName] = exec.Command("ffmpeg", "-hide_banner", "-loglevel", "quiet", "-i", url, "-c", "copy", outputPath)
+	recorded[channel.ChannelName] = exec.Command("ffmpeg", "-hide_banner", "-loglevel", "error", "-i", url, "-movflags", "faststart", "-c", "copy", outputPath)
+	log.Printf("Executing: %s", strings.Join([]string{"ffmpeg", "-hide_banner", "-loglevel", "error", "-i", url, "-movflags", "faststart", "-c", "copy", outputPath}, " "))
 
 	sterr, _ := recorded[channel.ChannelName].StderrPipe()
 

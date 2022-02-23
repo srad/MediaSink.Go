@@ -80,8 +80,8 @@ func Setup() http.Handler {
 
 		//apiv1.POST("/recordings/updateinfo", v1.UpdateVideoInfo)
 
-		apiv1.POST("/recorder/resume", v1.ResumeRecording)
-		apiv1.POST("/recorder/pause", v1.PauseRecorder)
+		apiv1.POST("/recorder/resume", v1.StartRecorder)
+		apiv1.POST("/recorder/pause", v1.StopRecorder)
 		apiv1.GET("/recorder", v1.IsRecording)
 
 		apiv1.GET("/recordings", v1.GetRecordings)
