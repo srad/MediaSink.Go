@@ -45,7 +45,7 @@ func Setup() http.Handler {
 	r.Static("/recordings", conf.AppCfg.RecordingsAbsolutePath)
 	r.Static("/public", conf.AppCfg.PublicPath)
 
-	docs.SwaggerInfo_swagger.BasePath = "/api/v1"
+	docs.SwaggerInfo.BasePath = "/api/v1"
 	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
 	r.Use(cors.New(cors.Config{
