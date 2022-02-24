@@ -76,6 +76,7 @@ func Setup() http.Handler {
 		apiv1.DELETE("/channels/:channelName", v1.DeleteChannel)
 
 		apiv1.POST("/jobs/:channelName/:filename", v1.AddJob)
+		apiv1.POST("/jobs/stop/:pid", v1.StopJob)
 		apiv1.GET("/jobs", v1.GetJobs)
 
 		//apiv1.POST("/recordings/updateinfo", v1.UpdateVideoInfo)

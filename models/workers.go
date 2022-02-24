@@ -1,6 +1,7 @@
 package models
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -18,9 +19,9 @@ import (
 )
 
 var (
-	sleepBetweenRounds = 10 * time.Second
-	quit               = make(chan bool)
+	sleepBetweenRounds = 1 * time.Second
 	threadCount        = uint(float32(runtime.NumCPU() / 2))
+	cancelWorker       context.CancelFunc
 )
 
 type JsonFFProbeInfo struct {
@@ -55,6 +56,20 @@ type CutArgs struct {
 	Ends   []string `json:"ends"`
 }
 
+type PreviewJob struct {
+	OnStart     func(*utils.CommandInfo)
+	OnProgress  func(*ProcessInfo)
+	ChannelName string
+	Filename    string
+}
+
+type ProcessInfo struct {
+	JobType string
+	Frame   int
+	Total   int
+	Raw     string
+}
+
 const (
 	winFont   = "C\\\\:/Windows/Fonts/DMMono-Regular.ttf"
 	linuxFont = "/usr/share/fonts/truetype/DMMono-Regular.ttf"
@@ -74,8 +89,8 @@ func MergeVideos(outputListener func(string), absoluteMergeTextfile, absoluteOut
 		OnStart: func(info utils.CommandInfo) {
 
 		},
-		OnPipeErr: func(s string) {
-			outputListener(s)
+		OnPipeErr: func(info utils.PipeMessage) {
+			outputListener(info.Message)
 		},
 	})
 }
@@ -94,8 +109,8 @@ func CutVideo(args *CuttingJob, absoluteFilepath, absoluteOutputFilepath, startI
 		OnStart: func(info utils.CommandInfo) {
 			args.OnStart(&info)
 		},
-		OnPipeErr: func(s string) {
-			args.OnProgress(s)
+		OnPipeErr: func(info utils.PipeMessage) {
+			args.OnProgress(info.Message)
 		},
 	})
 }
@@ -114,22 +129,22 @@ func createPreviewStripe(errListener func(string), outputDir, outFile, absoluteP
 	}
 
 	return utils.ExecSync(&utils.ExecArgs{
-		OnPipeErr: func(s string) {
-			errListener(s)
+		OnPipeErr: func(info utils.PipeMessage) {
+			errListener(info.Message)
 		},
 		Command:     "ffmpeg",
 		CommandArgs: []string{"-i", absolutePath, "-y", "-progress", "pipe:2", "-frames:v", "1", "-q:v", "0", "-threads", fmt.Sprint(threadCount), "-an", "-vf", fmt.Sprintf("select=not(mod(n\\,%d)),scale=-2:%d,drawtext=fontfile=%s: text='%%{pts\\:gmtime\\:0\\:%%H\\\\\\:%%M\\\\\\:%%S}': rate=%f: x=(w-tw)/2: y=h-(2*lh): fontsize=20: fontcolor=white: bordercolor=black: borderw=3: box=0: boxcolor=0x00000000@1,tile=%dx1", frameDistance, frameHeight, getFontPath(), fps, FrameCount), "-hide_banner", "-loglevel", "error", "-stats", "-vsync", "vfr", filepath.Join(dir, outFile)},
 	})
 }
 
-func createPreviewVideo(errListener func(string), outputDir, outFile, absolutePath string, frameDistance, frameHeight uint, fps float64) error {
+func createPreviewVideo(pipeInfo func(info utils.PipeMessage), outputDir, outFile, absolutePath string, frameDistance, frameHeight uint, fps float64) error {
 	dir := filepath.Join(outputDir, "videos")
 	if err := os.MkdirAll(dir, 0777); err != nil {
 		return err
 	}
 
 	return utils.ExecSync(&utils.ExecArgs{
-		OnPipeErr:   errListener,
+		OnPipeErr:   pipeInfo,
 		Command:     "ffmpeg",
 		CommandArgs: []string{"-i", absolutePath, "-y", "-progress", "pipe:2", "-q:v", "0", "-threads", fmt.Sprint(threadCount), "-an", "-vf", fmt.Sprintf("select=not(mod(n\\,%d)),scale=-2:%d,drawtext=fontfile=%s: text='%%{pts\\:gmtime\\:0\\:%%H\\\\\\:%%M\\\\\\:%%S}': rate=%f: x=(w-tw)/2: y=h-(2*lh): fontsize=20: fontcolor=white: bordercolor=black: borderw=3: box=0: boxcolor=0x00000000@1,setpts=(7/2)*N/TB", frameDistance, frameHeight, getFontPath(), fps), "-hide_banner", "-loglevel", "error", "-stats", "-vsync", "vfr", "-movflags", "faststart", filepath.Join(dir, outFile)},
 	})
@@ -172,24 +187,26 @@ func ExtractFirstFrame(input, height, output string) error {
 }
 
 func StartWorker() {
-	for {
-		select {
-		case <-quit:
-			log.Println("[StartWorker] Stopped jobs")
-			return
-		default:
-			_ = cuttingJobs()
-			previewJobs()
-			time.Sleep(sleepBetweenRounds)
-		}
-	}
+	ctx, c := context.WithCancel(context.Background())
+	cancelWorker = c
+	go processJobs(ctx)
 }
 
-type PreviewJob struct {
-	OnStart     func(*utils.CommandInfo)
-	OnProgress  func(*ProcessInfo)
-	ChannelName string
-	Filename    string
+func StopWorker() {
+	cancelWorker()
+}
+
+func processJobs(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			log.Println("[processJobs] Worker stopped")
+			return
+		case <-time.After(sleepBetweenRounds):
+			cuttingJobs()
+			previewJobs()
+		}
+	}
 }
 
 // Handles one single job.
@@ -259,10 +276,6 @@ func previewJobs() {
 	}
 
 	log.Printf("[Job] Preview job complete for '%s'", job.Filepath)
-}
-
-func StopWorker() {
-	quit <- true
 }
 
 // Cut video, add preview job, destroy job.
@@ -432,13 +445,6 @@ func GeneratePreviews(args *PreviewJob) error {
 	return ExtractFrames(args, inputPath, conf.AbsoluteDataPath(args.ChannelName), FrameCount, 128, 256)
 }
 
-type ProcessInfo struct {
-	JobType string
-	Frame   int
-	Total   int
-	Raw     string
-}
-
 func ExtractFrames(args *PreviewJob, inputPath, outputDir string, extractCount int, frameHeight, videoHeight uint) error {
 	totalFrameCount, err := GetFrameCount(inputPath)
 	if err != nil {
@@ -463,9 +469,9 @@ func ExtractFrames(args *PreviewJob, inputPath, outputDir string, extractCount i
 	}
 
 	i := 1
-	if err := createPreviewVideo(func(s string) {
-		if strings.Contains(s, "frame=") {
-			args.OnProgress(&ProcessInfo{Frame: i, Raw: s, Total: extractCount})
+	if err := createPreviewVideo(func(info utils.PipeMessage) {
+		if strings.Contains(info.Message, "frame=") {
+			args.OnProgress(&ProcessInfo{Frame: i, Raw: info.Message, Total: extractCount})
 			i++
 		}
 	}, outputDir, filename+".mp4", inputPath, frameDistance, videoHeight, info.Fps); err != nil {

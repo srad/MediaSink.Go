@@ -74,7 +74,7 @@ func checkStreams() {
 			break
 		}
 
-		// Pause between each check
+		// StopRecorder between each check
 		time.Sleep(sleepBetweenRequests)
 
 		url, _ := channel.StreamUrl()
@@ -84,8 +84,7 @@ func checkStreams() {
 		//}
 
 		channel.Online(url != "")
-
-		log.Printf("[Recorder] Checking: channel: '%s' | paused: %t | online: %t | url: '%s'", channel.ChannelName, channel.IsPaused, channel.IsOnline(), url)
+		//log.Printf("[Recorder] Checking: channel: '%s' | paused: %t | online: %t | url: '%s'", channel.ChannelName, channel.IsPaused, channel.IsOnline(), url)
 
 		if url != "" {
 			notify("channel:online", RecorderMessage{ChannelName: channel.ChannelName})
@@ -113,28 +112,27 @@ func IsRecording() bool {
 	return !isPaused
 }
 
-func Resume() {
-	ctx := context.Background()
+func StartRecorder() {
 	// Create a new context, with its cancellation function
 	// from the original context
-	ctx, c := context.WithCancel(ctx)
+	ctx, c := context.WithCancel(context.Background())
 	cancel = c
 
-	log.Printf("[Recorder] Resume recording thread")
+	log.Printf("[Recorder] StartRecorder recording thread")
 	isPaused = false
 	go iterate(ctx)
 }
 
-func Pause() error {
-	log.Printf("[Pause] Stopping recorder ...")
+func StopRecorder() error {
+	log.Printf("[StopRecorder] Stopping recorder ...")
 	// TerminateProcess the go routine for iteration over channels
 	isPaused = true
 	cancel()
-	log.Printf("[Pause] Stopping recorder ...")
+	log.Printf("[StopRecorder] Stopping recorder ...")
 
 	// TerminateProcess each recording individually
 	models.TerminateAll()
-	log.Printf("[Pause] Terminated streams ...")
+	log.Printf("[StopRecorder] Terminated streams ...")
 
 	return nil
 }

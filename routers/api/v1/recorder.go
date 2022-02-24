@@ -22,7 +22,7 @@ func IsRecording(c *gin.Context) {
 }
 
 // StopRecorder godoc
-// @Summary     Pause server recording
+// @Summary     StopRecorder server recording
 // @Tags        recorder
 // @Success     200
 // @Router      /recorder/pause [post]
@@ -30,13 +30,13 @@ func StopRecorder(c *gin.Context) {
 	appG := app.Gin{C: c}
 
 	log.Println("Pausing recorder")
-	go services.Pause()
+	go services.StopRecorder()
 
 	appG.Response(http.StatusOK, nil)
 }
 
 // StartRecorder godoc
-// @Summary     Resume server recording
+// @Summary     StartRecorder server recording
 // @Tags        recorder
 // @Success     200
 // @Router      /recorder/resume [post]
@@ -44,6 +44,6 @@ func StartRecorder(c *gin.Context) {
 	appG := app.Gin{C: c}
 
 	log.Println("Resuming recorder")
-	services.Resume()
+	services.StartRecorder()
 	appG.Response(http.StatusOK, nil)
 }

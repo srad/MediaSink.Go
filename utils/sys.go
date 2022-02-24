@@ -2,11 +2,17 @@ package utils
 
 import (
 	"bufio"
+	"context"
+	"errors"
 	"fmt"
 	"log"
 	"os/exec"
 	"strings"
 	"syscall"
+)
+
+var (
+	cmd = make(map[int]*exec.Cmd)
 )
 
 type CommandInfo struct {
@@ -15,11 +21,17 @@ type CommandInfo struct {
 }
 
 type ExecArgs struct {
+	cancel      context.CancelFunc
 	OnStart     func(CommandInfo)
 	OnPipeOut   func(string)
-	OnPipeErr   func(string)
+	OnPipeErr   func(PipeMessage)
 	Command     string
 	CommandArgs []string
+}
+
+type PipeMessage struct {
+	Message string
+	Pid     int
 }
 
 func (execArgs *ExecArgs) ToString() string {
@@ -28,30 +40,34 @@ func (execArgs *ExecArgs) ToString() string {
 
 // ExecSync See: https://stackoverflow.com/questions/10385551/get-exit-code-go
 func ExecSync(execArgs *ExecArgs) error {
-	cmd := exec.Command(execArgs.Command, execArgs.CommandArgs...)
+	c := exec.Command(execArgs.Command, execArgs.CommandArgs...)
 	log.Println("Executing: ", execArgs.ToString())
 
 	//stdout, _ := cmd.StdoutPipe()
-	sterr, _ := cmd.StderrPipe()
+	sterr, _ := c.StderrPipe()
 
-	if err := cmd.Start(); err != nil {
+	if err := c.Start(); err != nil {
 		log.Printf("cmd.Start: %v", err)
 		return err
 	}
 
+	pid := c.Process.Pid
+	cmd[pid] = c
+	defer delete(cmd, pid)
+
 	if execArgs.OnStart != nil {
-		execArgs.OnStart(CommandInfo{Pid: cmd.Process.Pid, Command: execArgs.ToString()})
+		execArgs.OnStart(CommandInfo{Pid: pid, Command: execArgs.ToString()})
 	}
 
 	if execArgs.OnPipeErr != nil {
 		scanner := bufio.NewScanner(sterr)
 		scanner.Split(bufio.ScanLines)
 		for scanner.Scan() {
-			execArgs.OnPipeErr(scanner.Text())
+			execArgs.OnPipeErr(PipeMessage{Message: scanner.Text(), Pid: pid})
 		}
 	}
 
-	if err := cmd.Wait(); err != nil {
+	if err := cmd[pid].Wait(); err != nil {
 		if exiterr, ok := err.(*exec.ExitError); ok {
 			// The program has exited with an exit code != 0
 
@@ -68,4 +84,13 @@ func ExecSync(execArgs *ExecArgs) error {
 	}
 
 	return nil
+}
+
+func Terminate(pid int) error {
+	if c, ok := cmd[pid]; ok {
+		err := c.Process.Signal(syscall.SIGINT)
+		delete(cmd, pid)
+		return err
+	}
+	return errors.New(fmt.Sprintf("pid %d not found", pid))
 }

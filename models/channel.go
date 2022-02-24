@@ -26,7 +26,7 @@ var (
 	info     = make(map[string]*Recording)
 	pause    = false
 	isOnline = make(map[string]bool)
-	recorded = make(map[string]*exec.Cmd)
+	captures = make(map[string]*exec.Cmd)
 	// "tag1,tag2,...
 	rTags, _ = regexp.Compile("^[a-z\\-0-9]+(,[a-z\\-0-9]+)*$")
 )
@@ -124,7 +124,7 @@ func (channel *Channel) Terminate(updateModel bool) error {
 }
 
 func TerminateAll() {
-	for channelName, _ := range recorded {
+	for channelName, _ := range captures {
 		channel := Channel{ChannelName: channelName}
 		if err := channel.Terminate(false); err != nil {
 			log.Printf("Error terminating channel: '%s': %s", channelName, err.Error())
@@ -143,7 +143,7 @@ func (channel *Channel) terminateProcess(pauseModel bool) error {
 	}
 
 	// Is current recording at all?
-	if cmd, ok := recorded[channel.ChannelName]; ok {
+	if cmd, ok := captures[channel.ChannelName]; ok {
 		if err := cmd.Process.Signal(os.Interrupt); err != nil && !strings.Contains(err.Error(), "255") {
 			log.Printf("[TerminateProcess] Error killing process for '%s': %v", channel.ChannelName, err)
 			return err
@@ -163,7 +163,7 @@ func (channel *Channel) IsOnline() bool {
 }
 
 func (channel *Channel) IsRecording() bool {
-	if _, ok := recorded[channel.ChannelName]; ok {
+	if _, ok := captures[channel.ChannelName]; ok {
 		return true
 	}
 	return false
@@ -288,14 +288,14 @@ func (channel *Channel) Pause(pauseVal bool) error {
 }
 
 func (channel *Channel) RecordingMinutes() float64 {
-	if _, ok := recorded[channel.ChannelName]; ok {
+	if _, ok := captures[channel.ChannelName]; ok {
 		return time.Now().Sub(info[channel.ChannelName].CreatedAt).Minutes()
 	}
 	return 0
 }
 
 func (channel *Channel) RemoveData() {
-	delete(recorded, channel.ChannelName)
+	delete(captures, channel.ChannelName)
 	delete(info, channel.ChannelName)
 	isOnline[channel.ChannelName] = false
 }
@@ -312,8 +312,8 @@ func (channel *Channel) NewRecording() (Recording, string) {
 
 // Capture Starts and also waits for the stream to end or being killed
 func (channel *Channel) Capture(url string) error {
-	if _, ok := recorded[channel.ChannelName]; ok {
-		log.Println("[Channel] Already recording: " + channel.ChannelName)
+	if _, ok := captures[channel.ChannelName]; ok {
+		//log.Println("[Channel] Already recording: " + channel.ChannelName)
 		return nil
 	}
 
@@ -325,18 +325,20 @@ func (channel *Channel) Capture(url string) error {
 	log.Println("to: " + outputPath)
 
 	info[channel.ChannelName] = &recording
-	recorded[channel.ChannelName] = exec.Command("ffmpeg", "-hide_banner", "-loglevel", "error", "-i", url, "-movflags", "faststart", "-c", "copy", outputPath)
-	log.Printf("Executing: %s", strings.Join([]string{"ffmpeg", "-hide_banner", "-loglevel", "error", "-i", url, "-movflags", "faststart", "-c", "copy", outputPath}, " "))
+	captures[channel.ChannelName] = exec.Command("ffmpeg", "-hide_banner", "-loglevel", "error", "-i", url, "-movflags", "faststart", "-c", "copy", outputPath)
+	str := strings.Join([]string{"ffmpeg", "-hide_banner", "-loglevel", "error", "-i", url, "-movflags", "faststart", "-c", "copy", outputPath}, " ")
+	log.Printf("Executing: %s", str)
 
-	sterr, _ := recorded[channel.ChannelName].StderrPipe()
+	sterr, _ := captures[channel.ChannelName].StderrPipe()
 
-	if err := recorded[channel.ChannelName].Start(); err != nil {
+	if err := captures[channel.ChannelName].Start(); err != nil {
 		log.Printf("cmd.Start: %v", err)
 		return err
 	}
 
 	// Before recording store that the process has started, for recovery
 	recordingJob, err := EnqueueRecordingJob(channel.ChannelName, recording.Filename, outputPath)
+	recordingJob.UpdateInfo(captures[channel.ChannelName].Process.Pid, str)
 	if err != nil {
 		log.Printf("[Capture] Error enqueuing reccording for: %s/%s: %v", channel.ChannelName, recording.Filename, err)
 	}
@@ -346,7 +348,7 @@ func (channel *Channel) Capture(url string) error {
 	}
 
 	// Wait for process to exit
-	if err := recorded[channel.ChannelName].Wait(); err != nil && !strings.Contains(err.Error(), "255") {
+	if err := captures[channel.ChannelName].Wait(); err != nil && !strings.Contains(err.Error(), "255") {
 		log.Printf("[Capture] Wait for process exit '%s' error: %v", channel.ChannelName, err)
 		channel.RemoveData()
 		channel.DeleteRecordingsFile(recording.Filename)

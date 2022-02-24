@@ -37,7 +37,7 @@ func main() {
 		v1.SendMessage(v1.SocketMessage{Event: message.Event, Data: message.Data})
 	})
 
-	services.Resume()
+	services.StartRecorder()
 
 	go services.ImportRecordings()
 	go services.FixOrphanedRecordings()
@@ -69,7 +69,7 @@ func main() {
 func cleanup() {
 	log.Println("cleanup ...")
 	models.StopWorker()
-	services.Pause()
+	services.StopRecorder()
 	log.Println("cleanup complete")
 }
 

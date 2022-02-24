@@ -1,7 +1,9 @@
 package v1
 
 import (
+	"github.com/srad/streamsink/utils"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -39,6 +41,34 @@ func AddJob(c *gin.Context) {
 	}
 
 	appG.Response(http.StatusOK, &job)
+}
+
+// StopJob godoc
+// @Summary     Terminate job gracefully
+// @Description Terminate job gracefully
+// @Tags        jobs
+// @Param       pid path int  true  "Channel name"
+// @Accept      json
+// @Produce     json
+// @Success     200
+// @Failure     400 {string} http.StatusBadRequest
+// @Failure     500 {string} http.StatusInternalServerError
+// @Router      /jobs/stop/{pid} [post]
+func StopJob(c *gin.Context) {
+	appG := app.Gin{C: c}
+
+	pid, err := strconv.Atoi(c.Param("pid"))
+	if err != nil {
+		appG.Response(http.StatusBadRequest, err)
+		return
+	}
+
+	if utils.Terminate(pid); err != nil {
+		appG.Response(http.StatusInternalServerError, err)
+		return
+	}
+
+	appG.Response(http.StatusOK, pid)
 }
 
 // GetJobs godoc
