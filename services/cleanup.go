@@ -73,6 +73,7 @@ func ImportRecordings() error {
 
 		channel := &models.Channel{
 			ChannelName: channelName,
+			DisplayName: channelName,
 			Url:         fmt.Sprintf(conf.AppCfg.DefaulImportUrl, channelName),
 		}
 
@@ -87,11 +88,13 @@ func ImportRecordings() error {
 		}
 		// Traverse all mp4 files and add to database if not existent
 		for _, file := range files {
-			if !file.IsDir() && filepath.Ext(file.Name()) == ".mp4" {
+			isMp4File := !file.IsDir() && filepath.Ext(file.Name()) == ".mp4"
+
+			if isMp4File {
 				log.Printf(" + [Import] Checking file: %s, %s", channelName, file.Name())
 
 				if _, err := models.GetVideoInfo(conf.GetAbsoluteRecordingsPath(channelName, file.Name())); err != nil {
-					log.Printf(" + [Import] File '%s' seems corrupted, deleting", file.Name())
+					log.Printf(" + [Import] File '%s' seems corrupted, deleting ...", file.Name())
 					if err := channel.DeleteRecordingsFile(file.Name()); err != nil {
 						log.Printf(" + [Import] Error deleting '%s'", file.Name())
 					} else {
@@ -111,8 +114,9 @@ func ImportRecordings() error {
 				paths := conf.GetRecordingsPaths(channelName, file.Name())
 				_, err1 := os.Stat(paths.AbsoluteVideosPath)
 				_, err2 := os.Stat(paths.AbsoluteStripePath)
+				_, err3 := os.Stat(paths.AbsolutePosterPath)
 
-				if err1 == nil && err2 == nil {
+				if err1 == nil && err2 == nil && err3 == nil {
 					log.Println(" + [Import] Preview files exist")
 					models.UpdatePreview(channelName, file.Name())
 					continue

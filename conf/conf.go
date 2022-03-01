@@ -24,6 +24,12 @@ type Cfg struct {
 	MinRecMin              int
 }
 
+const (
+	VideosFolder  = "videos"
+	StripesFolder = "stripes"
+	PostersFolder = "posters"
+)
+
 var AppCfg = &Cfg{}
 
 type VideoPaths struct {
@@ -50,26 +56,31 @@ type RecordingPaths struct {
 	AbsoluteStripePath     string
 	AbsoluteRecordingsPath string
 	AbsoluteVideosPath     string
+	AbsolutePosterPath     string
 	Filepath               string
 	VideosPath             string
 	StripePath             string
+	CoverPath              string
 	JPG                    string
 	MP4                    string
 }
 
 func GetRecordingsPaths(channelName, filename string) RecordingPaths {
-	jpg := strings.TrimSuffix(filename, filepath.Ext(filename)) + ".jpg"
+	posterJpg := strings.TrimSuffix(filename, filepath.Ext(filename)) + ".jpg"
+	stripeJpg := strings.TrimSuffix(filename, filepath.Ext(filename)) + ".jpg"
 	mp4 := strings.TrimSuffix(filename, filepath.Ext(filename)) + ".mp4"
 
 	return RecordingPaths{
 		AbsoluteRecordingsPath: AppCfg.RecordingsAbsolutePath,
 
 		Filepath:           AbsoluteFilepath(channelName, filename),
-		VideosPath:         filepath.Join(DataPath(channelName), "videos", mp4),
-		StripePath:         filepath.Join(DataPath(channelName), "stripes", jpg),
-		AbsoluteVideosPath: filepath.Join(AbsoluteDataPath(channelName), "videos", mp4),
-		AbsoluteStripePath: filepath.Join(AbsoluteDataPath(channelName), "stripes", jpg),
-		JPG:                jpg,
+		VideosPath:         filepath.Join(DataPath(channelName), VideosFolder, mp4),
+		StripePath:         filepath.Join(DataPath(channelName), StripesFolder, stripeJpg),
+		CoverPath:          filepath.Join(DataPath(channelName), PostersFolder, posterJpg),
+		AbsoluteVideosPath: filepath.Join(AbsoluteDataPath(channelName), VideosFolder, mp4),
+		AbsoluteStripePath: filepath.Join(AbsoluteDataPath(channelName), StripesFolder, stripeJpg),
+		AbsolutePosterPath: filepath.Join(AbsoluteDataPath(channelName), PostersFolder, posterJpg),
+		JPG:                stripeJpg,
 		MP4:                mp4,
 	}
 }

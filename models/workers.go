@@ -122,8 +122,8 @@ func getFontPath() string {
 	return linuxFont
 }
 
-func createPreviewStripe(errListener func(string), outputDir, outFile, absolutePath string, frameDistance, frameHeight uint, fps float64) error {
-	dir := filepath.Join(outputDir, "stripes")
+func CreatePreviewStripe(errListener func(string), outputDir, outFile, absolutePath string, frameDistance, frameHeight uint, fps float64) error {
+	dir := filepath.Join(outputDir, conf.StripesFolder)
 	if err := os.MkdirAll(dir, 0777); err != nil {
 		return err
 	}
@@ -137,8 +137,17 @@ func createPreviewStripe(errListener func(string), outputDir, outFile, absoluteP
 	})
 }
 
-func createPreviewVideo(pipeInfo func(info utils.PipeMessage), outputDir, outFile, absolutePath string, frameDistance, frameHeight uint, fps float64) error {
-	dir := filepath.Join(outputDir, "videos")
+func CreatePreviewPoster(inputPath, outputDir, filename string) error {
+	dir := filepath.Join(outputDir, conf.PostersFolder)
+	if err := os.MkdirAll(dir, 0777); err != nil {
+		return err
+	}
+
+	return ExtractFirstFrame(inputPath, frameWidth, filepath.Join(dir, filename))
+}
+
+func CreatePreviewVideo(pipeInfo func(info utils.PipeMessage), outputDir, outFile, absolutePath string, frameDistance, frameHeight uint, fps float64) error {
+	dir := filepath.Join(outputDir, conf.VideosFolder)
 	if err := os.MkdirAll(dir, 0777); err != nil {
 		return err
 	}
@@ -339,7 +348,7 @@ func cuttingJobs() error {
 			log.Println("[Job] Deleting orphaned segments")
 			for _, file := range segFiles {
 				if err := os.RemoveAll(file); err != nil {
-					log.Printf("[Job] Error deleting %s: %v", file, err)
+					log.Printf("[Job] Error deleting segment '%s': %v", file, err)
 				}
 			}
 			_ = job.Destroy()
@@ -367,10 +376,10 @@ func cuttingJobs() error {
 		log.Printf("[MergeVideos] %s", s)
 	}, mergeTextfile, outputFile)
 	if err != nil {
-		log.Printf("[Job] Error merging file '%s': %v", mergeTextfile, err)
+		log.Printf("[Job] Error merging file '%s': %s", mergeTextfile, err.Error())
 		for _, file := range segFiles {
 			if err := os.RemoveAll(file); err != nil {
-				log.Printf("[Job] Error deleting %s: %v", file, err)
+				log.Printf("[Job] Error deleting %s: %s", file, err.Error())
 			}
 		}
 		_ = job.Destroy()
@@ -378,10 +387,10 @@ func cuttingJobs() error {
 	}
 	_ = os.RemoveAll(mergeTextfile)
 	for _, file := range segFiles {
-		if err := os.Remove(file); err != nil && err != os.ErrNotExist {
-			log.Printf("[Job] Error deleting segment '%s': %v", file, err)
+		if err := os.Remove(file); err != nil {
+			log.Printf("[Job] Error deleting segment '%s': %s", file, err.Error())
 		} else {
-			log.Printf("[Job] Deleted %s: %v", file, err)
+			log.Printf("[Job] Deleted segment '%s': %s", file, err.Error())
 		}
 	}
 
@@ -462,20 +471,24 @@ func ExtractFrames(args *PreviewJob, inputPath, outputDir string, extractCount i
 	basename := filepath.Base(inputPath)
 	filename := utils.FileNameWithoutExtension(basename)
 
-	if err := createPreviewStripe(func(s string) {
+	if err := CreatePreviewStripe(func(s string) {
 		log.Printf("[createPreviewStripe] %s", s)
 	}, outputDir, filename+".jpg", inputPath, frameDistance, frameHeight, info.Fps); err != nil {
-		return errors.New(fmt.Sprintf("error generating stripe for '%s': %v", inputPath, err))
+		return errors.New(fmt.Sprintf("error generating stripe for '%s': %s", inputPath, err.Error()))
 	}
 
 	i := 1
-	if err := createPreviewVideo(func(info utils.PipeMessage) {
+	if err := CreatePreviewVideo(func(info utils.PipeMessage) {
 		if strings.Contains(info.Message, "frame=") {
 			args.OnProgress(&ProcessInfo{Frame: i, Raw: info.Message, Total: extractCount})
 			i++
 		}
 	}, outputDir, filename+".mp4", inputPath, frameDistance, videoHeight, info.Fps); err != nil {
-		return errors.New(fmt.Sprintf("error generating preview video for '%s': %v", inputPath, err))
+		return errors.New(fmt.Sprintf("error generating preview video for '%s': %s", inputPath, err.Error()))
+	}
+
+	if err := CreatePreviewPoster(inputPath, outputDir, filename+".jpg"); err != nil {
+		return errors.New(fmt.Sprintf("error generating poster for '%s': %s", inputPath, err.Error()))
 	}
 
 	return nil

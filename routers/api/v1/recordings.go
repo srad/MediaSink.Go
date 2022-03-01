@@ -6,6 +6,7 @@ import (
 	"github.com/srad/streamsink/app"
 	"github.com/srad/streamsink/conf"
 	"github.com/srad/streamsink/models"
+	"github.com/srad/streamsink/services"
 	"net/http"
 	"strconv"
 	"strings"
@@ -27,7 +28,7 @@ type CutRequest struct {
 // @Router      /recordings [get]
 func GetRecordings(c *gin.Context) {
 	appG := app.Gin{C: c}
-	recordings, err := models.RecordingList()
+	recordings, err := models.RecordingsList()
 
 	if err != nil {
 		appG.Response(http.StatusInternalServerError, nil)
@@ -35,6 +36,26 @@ func GetRecordings(c *gin.Context) {
 	}
 
 	appG.Response(http.StatusOK, recordings)
+}
+
+// GeneratePosters godoc
+// @Summary     Return a list of recordings
+// @Description Return a list of recordings.
+// @Tags        recordings
+// @Accept      json
+// @Produce     json
+// @Success     200
+// @Failure     500 {} string "Error message"
+// @Router      /recordings [post]
+func GeneratePosters(c *gin.Context) {
+	appG := app.Gin{C: c}
+
+	if err := services.GeneratePosters(); err != nil {
+		appG.Response(http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	appG.Response(http.StatusOK, nil)
 }
 
 // GetRecording godoc

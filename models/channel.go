@@ -23,10 +23,10 @@ const (
 )
 
 var (
-	info     = make(map[string]*Recording)
-	pause    = false
-	isOnline = make(map[string]bool)
-	captures = make(map[string]*exec.Cmd)
+	recInfo    = make(map[string]*Recording)
+	pause      = false
+	streamInfo = make(map[string]StreamInfo)
+	streams    = make(map[string]*exec.Cmd)
 	// "tag1,tag2,...
 	rTags, _ = regexp.Compile("^[a-z\\-0-9]+(,[a-z\\-0-9]+)*$")
 )
@@ -34,6 +34,7 @@ var (
 type Channel struct {
 	ChannelId       uint        `json:"channelId" gorm:"primaryKey;not null;default:null"`
 	ChannelName     string      `json:"channelName" gorm:"unique;not null;default:null"`
+	DisplayName     string      `json:"displayName"`
 	Url             string      `json:"url" gorm:"unique;not null;default:null"`
 	Tags            string      `json:"tags" gorm:"not null;default:''"`
 	Fav             bool        `json:"fav" gorm:"not null;default:0"`
@@ -42,6 +43,12 @@ type Channel struct {
 	Recordings      []Recording `json:"-" gorm:"table:recordings;foreignKey:channel_name;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
 	RecordingsCount uint        `json:"recordingsCount"`
 	RecordingsSize  uint        `json:"recordingsSize"`
+}
+
+type StreamInfo struct {
+	IsOnline    bool   `json:"isOnline"`
+	StreamUrl   string `json:"streamUrl"`
+	ChannelName string `json:"channelName"`
 }
 
 func (channel *Channel) Create(tags *[]string) (*Channel, error) {
@@ -98,11 +105,9 @@ func (channel *Channel) Start() error {
 		return err
 	}
 
-	url, err := channel.StreamUrl()
-	if err != nil {
-		// Ignore, offline raises also an error
-	}
-	isOnline[channel.ChannelName] = url != ""
+	// Also no url raises an error via youtube-dl, ignore.
+	url, _ := channel.QueryStreamUrl()
+	streamInfo[channel.ChannelName] = StreamInfo{IsOnline: url != "", StreamUrl: url}
 
 	if url != "" {
 		go ExtractFirstFrame(url, frameWidth, filepath.Join(conf.AbsoluteDataPath(channel.ChannelName), frameName))
@@ -124,7 +129,7 @@ func (channel *Channel) Terminate(updateModel bool) error {
 }
 
 func TerminateAll() {
-	for channelName, _ := range captures {
+	for channelName, _ := range streams {
 		channel := Channel{ChannelName: channelName}
 		if err := channel.Terminate(false); err != nil {
 			log.Printf("Error terminating channel: '%s': %s", channelName, err.Error())
@@ -143,7 +148,7 @@ func (channel *Channel) terminateProcess(pauseModel bool) error {
 	}
 
 	// Is current recording at all?
-	if cmd, ok := captures[channel.ChannelName]; ok {
+	if cmd, ok := streams[channel.ChannelName]; ok {
 		if err := cmd.Process.Signal(os.Interrupt); err != nil && !strings.Contains(err.Error(), "255") {
 			log.Printf("[TerminateProcess] Error killing process for '%s': %v", channel.ChannelName, err)
 			return err
@@ -156,20 +161,20 @@ func (channel *Channel) terminateProcess(pauseModel bool) error {
 }
 
 func (channel *Channel) IsOnline() bool {
-	if _, ok := isOnline[channel.ChannelName]; ok {
-		return isOnline[channel.ChannelName]
+	if _, ok := streamInfo[channel.ChannelName]; ok {
+		return streamInfo[channel.ChannelName].IsOnline
 	}
 	return false
 }
 
 func (channel *Channel) IsRecording() bool {
-	if _, ok := captures[channel.ChannelName]; ok {
+	if _, ok := streams[channel.ChannelName]; ok {
 		return true
 	}
 	return false
 }
 
-func (channel *Channel) StreamUrl() (string, error) {
+func (channel *Channel) QueryStreamUrl() (string, error) {
 	cmd := exec.Command("youtube-dl", "--force-ipv4", "--ignore-errors", "--youtube-skip-dash-manifest", "-f best/bestvideo", "--get-url", channel.Url)
 	stdout, err := cmd.CombinedOutput()
 	output := strings.TrimSpace(string(stdout))
@@ -179,7 +184,13 @@ func (channel *Channel) StreamUrl() (string, error) {
 	}
 
 	return output, nil
+}
 
+func (channel *Channel) GetStreamUrl() string {
+	if _, ok := streamInfo[channel.ChannelName]; ok {
+		return streamInfo[channel.ChannelName].StreamUrl
+	}
+	return ""
 }
 
 func GetChannelByName(channelName string) (*Channel, error) {
@@ -207,7 +218,7 @@ func ChannelList() ([]*Channel, error) {
 	return result, nil
 }
 
-func ChannelActiveList() ([]*Channel, error) {
+func EnabledChannelList() ([]*Channel, error) {
 	var result []*Channel
 
 	// Query favourites first
@@ -253,7 +264,7 @@ func (channel *Channel) Destroy() error {
 		return err
 	}
 
-	if errRemove := os.RemoveAll(conf.AbsoluteRecordingsPath(channel.ChannelName)); errRemove != nil {
+	if errRemove := os.RemoveAll(conf.AbsoluteRecordingsPath(channel.ChannelName)); errRemove != nil && !os.IsNotExist(errRemove) {
 		log.Printf("Error deleting channel folder: %v", errRemove)
 		return errRemove
 	}
@@ -288,16 +299,16 @@ func (channel *Channel) Pause(pauseVal bool) error {
 }
 
 func (channel *Channel) RecordingMinutes() float64 {
-	if _, ok := captures[channel.ChannelName]; ok {
-		return time.Now().Sub(info[channel.ChannelName].CreatedAt).Minutes()
+	if _, ok := streams[channel.ChannelName]; ok {
+		return time.Now().Sub(recInfo[channel.ChannelName].CreatedAt).Minutes()
 	}
 	return 0
 }
 
-func (channel *Channel) RemoveData() {
-	delete(captures, channel.ChannelName)
-	delete(info, channel.ChannelName)
-	isOnline[channel.ChannelName] = false
+func (channel *Channel) DestroyData() {
+	delete(streams, channel.ChannelName)
+	delete(recInfo, channel.ChannelName)
+	delete(streamInfo, channel.ChannelName)
 }
 
 func (channel *Channel) NewRecording() (Recording, string) {
@@ -312,7 +323,7 @@ func (channel *Channel) NewRecording() (Recording, string) {
 
 // Capture Starts and also waits for the stream to end or being killed
 func (channel *Channel) Capture(url string) error {
-	if _, ok := captures[channel.ChannelName]; ok {
+	if _, ok := streams[channel.ChannelName]; ok {
 		//log.Println("[Channel] Already recording: " + channel.ChannelName)
 		return nil
 	}
@@ -324,21 +335,21 @@ func (channel *Channel) Capture(url string) error {
 	log.Println("Url: " + url)
 	log.Println("to: " + outputPath)
 
-	info[channel.ChannelName] = &recording
-	captures[channel.ChannelName] = exec.Command("ffmpeg", "-hide_banner", "-loglevel", "error", "-i", url, "-movflags", "faststart", "-c", "copy", outputPath)
+	recInfo[channel.ChannelName] = &recording
+	streams[channel.ChannelName] = exec.Command("ffmpeg", "-hide_banner", "-loglevel", "error", "-i", url, "-movflags", "faststart", "-c", "copy", outputPath)
 	str := strings.Join([]string{"ffmpeg", "-hide_banner", "-loglevel", "error", "-i", url, "-movflags", "faststart", "-c", "copy", outputPath}, " ")
 	log.Printf("Executing: %s", str)
 
-	sterr, _ := captures[channel.ChannelName].StderrPipe()
+	sterr, _ := streams[channel.ChannelName].StderrPipe()
 
-	if err := captures[channel.ChannelName].Start(); err != nil {
+	if err := streams[channel.ChannelName].Start(); err != nil {
 		log.Printf("cmd.Start: %v", err)
 		return err
 	}
 
 	// Before recording store that the process has started, for recovery
-	recordingJob, err := EnqueueRecordingJob(channel.ChannelName, recording.Filename, outputPath)
-	recordingJob.UpdateInfo(captures[channel.ChannelName].Process.Pid, str)
+	recJob, err := EnqueueRecordingJob(channel.ChannelName, recording.Filename, outputPath)
+	recJob.UpdateInfo(streams[channel.ChannelName].Process.Pid, str)
 	if err != nil {
 		log.Printf("[Capture] Error enqueuing reccording for: %s/%s: %v", channel.ChannelName, recording.Filename, err)
 	}
@@ -348,11 +359,11 @@ func (channel *Channel) Capture(url string) error {
 	}
 
 	// Wait for process to exit
-	if err := captures[channel.ChannelName].Wait(); err != nil && !strings.Contains(err.Error(), "255") {
+	if err := streams[channel.ChannelName].Wait(); err != nil && !strings.Contains(err.Error(), "255") {
 		log.Printf("[Capture] Wait for process exit '%s' error: %v", channel.ChannelName, err)
-		channel.RemoveData()
+		channel.DestroyData()
 		channel.DeleteRecordingsFile(recording.Filename)
-		recordingJob.Destroy()
+		recJob.Destroy()
 		if exiterr, ok := err.(*exec.ExitError); ok {
 			log.Printf("[Capture] Exec error: %v", err)
 			// The program has exited with an exit code != 0
@@ -379,8 +390,8 @@ func (channel *Channel) Capture(url string) error {
 		}
 
 		// No access to info after this!
-		channel.RemoveData()
-		recordingJob.Destroy()
+		channel.DestroyData()
+		recJob.Destroy()
 
 		if job, err := EnqueuePreviewJob(channel.ChannelName, recording.Filename); err != nil {
 			log.Printf("[FinishRecording] Error enqueuing job for %v\n", err)
@@ -391,8 +402,8 @@ func (channel *Channel) Capture(url string) error {
 	} else { // Throw away
 		log.Printf("[FinishRecording] Deleting stream '%s/%s' because it is too short (%vmin)\n", channel.ChannelName, recording.Filename, duration)
 
-		channel.RemoveData()
-		recordingJob.Destroy()
+		channel.DestroyData()
+		recJob.Destroy()
 
 		if err := channel.DeleteRecordingsFile(recording.Filename); err != nil {
 			log.Printf("[FinishRecording] Error deleting '%s/%s': %v\n", channel.ChannelName, recording.Filename, err.Error())
@@ -404,13 +415,17 @@ func (channel *Channel) Capture(url string) error {
 }
 
 func (channel *Channel) Info() *Recording {
-	return info[channel.ChannelName]
+	return recInfo[channel.ChannelName]
 }
 
-func (channel *Channel) Online(val bool) {
-	isOnline[channel.ChannelName] = val
+func (channel *Channel) SetStreamInfo(url string) {
+	streamInfo[channel.ChannelName] = StreamInfo{StreamUrl: url, IsOnline: url != ""}
 }
 
-func (channel *Channel) Screenshot(url string) error {
-	return ExtractFirstFrame(url, frameWidth, filepath.Join(conf.AbsoluteDataPath(channel.ChannelName), frameName))
+func (streamInfo *StreamInfo) Screenshot() error {
+	return ExtractFirstFrame(streamInfo.StreamUrl, frameWidth, filepath.Join(conf.AbsoluteDataPath(streamInfo.ChannelName), frameName))
+}
+
+func GetStreamInfo() map[string]StreamInfo {
+	return streamInfo
 }

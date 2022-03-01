@@ -24,9 +24,11 @@ type Recording struct {
 	Width    uint    `json:"width" gorm:"default:0"`
 	Height   uint    `json:"height" gorm:"default 0"`
 
-	PathRelative  string `json:"pathRelative" gorm:"not null;default:null"`
+	PathRelative string `json:"pathRelative" gorm:"not null;default:null"`
+
 	PreviewStripe string `json:"previewStripe" gorm:"default:null"`
 	PreviewVideo  string `json:"previewVideo" gorm:"default:null"`
+	PreviewCover  string `json:"previewCover" gorm:"default:null"`
 }
 
 func FindByName(channelName string) ([]*Recording, error) {
@@ -72,7 +74,7 @@ func FindRandom(limit int) ([]*Recording, error) {
 	return recordings, nil
 }
 
-func RecordingList() ([]*Recording, error) {
+func RecordingsList() ([]*Recording, error) {
 	var recordings []*Recording
 
 	err := Db.Table("recordings").
@@ -137,7 +139,7 @@ func (recording *Recording) Destroy() error {
 
 	paths := conf.GetRecordingsPaths(recording.ChannelName, recording.Filename)
 
-	if err := os.Remove(paths.Filepath); err != nil {
+	if err := os.Remove(paths.Filepath); err != nil && !os.IsNotExist(err) {
 		log.Println(fmt.Sprintf("Error deleting recording: %v", err))
 	}
 
@@ -145,14 +147,14 @@ func (recording *Recording) Destroy() error {
 }
 
 func (channel *Channel) Filename() string {
-	return info[channel.ChannelName].Filename
+	return recInfo[channel.ChannelName].Filename
 }
 
 func (channel *Channel) DeleteRecordingsFile(filename string) error {
 	paths := conf.GetRecordingsPaths(channel.ChannelName, filename)
 	log.Printf("[Info] Deleting file")
 
-	if err := os.Remove(paths.Filepath); err != nil {
+	if err := os.Remove(paths.Filepath); err != nil && !os.IsNotExist(err) {
 		log.Println(fmt.Sprintf("Error deleting recording: %v", err))
 		return err
 	}
@@ -235,4 +237,12 @@ func (recording *Recording) GetVideoInfo() (*FFProbeInfo, error) {
 
 func (recording *Recording) UpdateInfo(info *FFProbeInfo) error {
 	return Db.Updates(&Recording{ChannelName: recording.ChannelName, Filename: recording.Filename, Duration: info.Duration, BitRate: info.BitRate, Size: info.Size, Width: info.Width, Height: info.Height}).Error
+}
+
+func (recording *Recording) FilePath() string {
+	return conf.AbsoluteFilepath(recording.ChannelName, recording.Filename)
+}
+
+func (recording *Recording) DataFolder() string {
+	return conf.AbsoluteDataPath(recording.ChannelName)
 }
