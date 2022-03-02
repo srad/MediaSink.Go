@@ -35,6 +35,7 @@ type ChannelRequest struct {
 	DisplayName string    `json:"displayName"`
 	SkipStart   uint      `json:"skipStart"`
 	Url         string    `json:"url"`
+	IsPaused    bool      `json:"isPaused"`
 	Tags        *[]string `json:"tags"`
 }
 
@@ -109,7 +110,7 @@ func AddChannel(c *gin.Context) {
 		RecordingsCount: 0,
 		RecordingsSize:  0,
 		Tags:            "",
-		IsPaused:        false,
+		IsPaused:        data.IsPaused,
 		CreatedAt:       time.Now()}
 
 	newChannel, err := channel.Create(data.Tags)
@@ -166,6 +167,14 @@ func UpdateChannel(c *gin.Context) {
 		log.Printf("[UpdateChannel] Error creating record: %s", err.Error())
 		appG.Response(http.StatusInternalServerError, err.Error())
 		return
+	}
+
+	if channel.IsPaused {
+		if err := channel.Terminate(false); err != nil {
+			log.Printf("[UpdateChannel] Error stopping stream: %s", err.Error())
+			appG.Response(http.StatusInternalServerError, err.Error())
+			return
+		}
 	}
 
 	appG.Response(http.StatusOK, &channel)

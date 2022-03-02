@@ -54,7 +54,6 @@ type StreamInfo struct {
 
 func (channel *Channel) Create(tags *[]string) (*Channel, error) {
 	channel.ChannelName = strings.ToLower(strings.TrimSpace(channel.ChannelName))
-	channel.IsPaused = false
 	channel.CreatedAt = time.Now()
 
 	if tags != nil {
