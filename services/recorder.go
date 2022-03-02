@@ -109,7 +109,7 @@ func checkStreams() {
 		notify("channel:online", RecorderMessage{ChannelName: channel.ChannelName})
 		log.Println("[Recorder] Extracting first frame of ", channel.ChannelName)
 
-		go channel.Capture(url)
+		go channel.Capture(url, channel.SkipStart)
 		notify("channel:start", RecorderMessage{ChannelName: channel.ChannelName})
 
 		// StopRecorder between each check

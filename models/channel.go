@@ -34,7 +34,8 @@ var (
 type Channel struct {
 	ChannelId       uint        `json:"channelId" gorm:"primaryKey;not null;default:null"`
 	ChannelName     string      `json:"channelName" gorm:"unique;not null;default:null"`
-	DisplayName     string      `json:"displayName"`
+	DisplayName     string      `json:"displayName" gorm:"not null;default:''"`
+	SkipStart       uint        `json:"skipStart" gorm:"not null;default:0"`
 	Url             string      `json:"url" gorm:"unique;not null;default:null"`
 	Tags            string      `json:"tags" gorm:"not null;default:''"`
 	Fav             bool        `json:"fav" gorm:"not null;default:0"`
@@ -73,6 +74,12 @@ func (channel *Channel) Create(tags *[]string) (*Channel, error) {
 	return channel, nil
 }
 
+func (channel *Channel) Update() error {
+	return Db.Table("channels").
+		Where("channel_name = ?", channel.ChannelName).
+		Updates(map[string]interface{}{"display_name": channel.DisplayName, "url": channel.Url, "skip_start": channel.SkipStart}).Error
+}
+
 func TagChannel(channelName string, tags []string) error {
 	if len(tags) > 0 {
 		joined, err := prepareTags(tags)
@@ -100,8 +107,7 @@ func prepareTags(tags []string) (string, error) {
 }
 
 func (channel *Channel) Start() error {
-	err := channel.Pause(false)
-	if err != nil {
+	if err := channel.Pause(false); err != nil {
 		return err
 	}
 
@@ -116,10 +122,7 @@ func (channel *Channel) Start() error {
 	if url == "" {
 		return nil
 	}
-	go channel.Capture(url)
-	if err != nil {
-		return err
-	}
+	go channel.Capture(url, channel.SkipStart)
 
 	return nil
 }
@@ -322,7 +325,7 @@ func (channel *Channel) NewRecording() (Recording, string) {
 }
 
 // Capture Starts and also waits for the stream to end or being killed
-func (channel *Channel) Capture(url string) error {
+func (channel *Channel) Capture(url string, skip uint) error {
 	if _, ok := streams[channel.ChannelName]; ok {
 		//log.Println("[Channel] Already recording: " + channel.ChannelName)
 		return nil
@@ -336,8 +339,8 @@ func (channel *Channel) Capture(url string) error {
 	log.Println("to: " + outputPath)
 
 	recInfo[channel.ChannelName] = &recording
-	streams[channel.ChannelName] = exec.Command("ffmpeg", "-hide_banner", "-loglevel", "error", "-i", url, "-movflags", "faststart", "-c", "copy", outputPath)
-	str := strings.Join([]string{"ffmpeg", "-hide_banner", "-loglevel", "error", "-i", url, "-movflags", "faststart", "-c", "copy", outputPath}, " ")
+	streams[channel.ChannelName] = exec.Command("ffmpeg", "-hide_banner", "-loglevel", "error", "-i", url, "-ss", fmt.Sprintf("%d", skip), "-movflags", "faststart", "-c", "copy", outputPath)
+	str := strings.Join([]string{"ffmpeg", "-hide_banner", "-loglevel", "error", "-i", url, "-ss", fmt.Sprintf("%d", skip), "-movflags", "faststart", "-c", "copy", outputPath}, " ")
 	log.Printf("Executing: %s", str)
 
 	sterr, _ := streams[channel.ChannelName].StderrPipe()

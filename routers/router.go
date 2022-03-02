@@ -68,6 +68,7 @@ func Setup() http.Handler {
 		apiv1.GET("/channels", v1.GetChannels)
 		apiv1.POST("/channels", v1.AddChannel)
 		apiv1.POST("/channels/:channelName/tags", v1.TagChannel)
+		apiv1.POST("/channels/:channelName", v1.UpdateChannel)
 		apiv1.POST("/channels/:channelName/resume", v1.ResumeChannel)
 		apiv1.POST("/channels/:channelName/pause", v1.PauseChannel)
 		apiv1.POST("/channels/:channelName/fav", v1.FavChannel)

@@ -29,13 +29,16 @@ type ChannelResponse struct {
 	MinRecording float64 `json:"minRecording"`
 }
 
-type ReqAddChannel struct {
+type ChannelRequest struct {
+	ChannelId   *uint     `json:"channelId"`
 	ChannelName string    `json:"channelName"`
+	DisplayName string    `json:"displayName"`
+	SkipStart   uint      `json:"skipStart"`
 	Url         string    `json:"url"`
 	Tags        *[]string `json:"tags"`
 }
 
-type ReqTagChannel struct {
+type TagChannelRequest struct {
 	Tags []string `json:"tags"`
 }
 
@@ -75,7 +78,7 @@ func GetChannels(c *gin.Context) {
 // @Summary     Add a new channel
 // @Description Add a new channel
 // @Tags        channels
-// @Param       ReqAddChannel body ReqAddChannel true "Channel data"
+// @Param       ChannelRequest body ChannelRequest true "Channel data"
 // @Accept      json
 // @Produce     json
 // @Success     200 {object} models.Channel
@@ -84,7 +87,7 @@ func GetChannels(c *gin.Context) {
 // @Router      /channels [post]
 func AddChannel(c *gin.Context) {
 	appG := app.Gin{C: c}
-	data := &ReqAddChannel{}
+	data := &ChannelRequest{}
 	if err := c.BindJSON(&data); err != nil {
 		log.Printf("[AddChannel] Error parsing request: %s", err.Error())
 		appG.Response(http.StatusInternalServerError, err.Error())
@@ -99,6 +102,8 @@ func AddChannel(c *gin.Context) {
 
 	channel := models.Channel{
 		ChannelName:     data.ChannelName,
+		DisplayName:     data.DisplayName,
+		SkipStart:       data.SkipStart,
 		Url:             url,
 		Fav:             false,
 		RecordingsCount: 0,
@@ -125,6 +130,45 @@ func AddChannel(c *gin.Context) {
 	log.Printf("New channel: %v", res)
 
 	appG.Response(http.StatusOK, &res)
+}
+
+// UpdateChannel godoc
+// @Summary     Add a new channel
+// @Description Add a new channel
+// @Tags        channels
+// @Param       ChannelRequest body ChannelRequest true "Channel data"
+// @Accept      json
+// @Produce     json
+// @Success     200 {object} models.Channel
+// @Failure     400 {} http.StatusBadRequest
+// @Failure     500 {} http.StatusInternalServerError
+// @Router      /channels/{channelName} [post]
+func UpdateChannel(c *gin.Context) {
+	appG := app.Gin{C: c}
+	data := &ChannelRequest{}
+	if err := c.BindJSON(&data); err != nil {
+		log.Printf("[UpdateChannel] Error parsing request: %s", err.Error())
+		appG.Response(http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	url := strings.TrimSpace(data.Url)
+	displayName := strings.TrimSpace(data.DisplayName)
+
+	if !rChannel.MatchString(data.ChannelName) || len(url) == 0 || len(displayName) == 0 {
+		log.Printf("[UpdateChannel] Error validating: %v", data)
+		appG.Response(http.StatusBadRequest, fmt.Sprintf("Invalid parameters: %v", data))
+		return
+	}
+
+	channel := models.Channel{ChannelId: *data.ChannelId, ChannelName: data.ChannelName, DisplayName: data.DisplayName, SkipStart: data.SkipStart, Url: url}
+	if err := channel.Update(); err != nil {
+		log.Printf("[UpdateChannel] Error creating record: %s", err.Error())
+		appG.Response(http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	appG.Response(http.StatusOK, &channel)
 }
 
 // DeleteChannel godoc
@@ -157,7 +201,7 @@ func DeleteChannel(c *gin.Context) {
 		return
 	}
 
-	appG.Response(http.StatusOK, channel)
+	appG.Response(http.StatusOK, &channel)
 }
 
 // TagChannel godoc
@@ -166,7 +210,7 @@ func DeleteChannel(c *gin.Context) {
 // @Tags        channels
 // @Accept      json
 // @Produce     json
-// @Param       ReqTagChannel body ReqTagChannel true "Channel data"
+// @Param       TagChannelRequest body TagChannelRequest true "Channel data"
 // @Param       channelName path string true "Channel name"
 // @Success     200 {object} models.Channel
 // @Failure     500 {}  http.StatusInternalServerError
@@ -175,7 +219,7 @@ func TagChannel(c *gin.Context) {
 	appG := app.Gin{C: c}
 	channelName := c.Param("channelName")
 
-	data := &ReqTagChannel{}
+	data := &TagChannelRequest{}
 	if err := c.BindJSON(&data); err != nil {
 		log.Printf("[TagChannel] Error parsing request: %s", err.Error())
 		appG.Response(http.StatusInternalServerError, err)
