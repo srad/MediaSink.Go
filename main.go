@@ -49,10 +49,11 @@ func main() {
 	log.Printf("[info] start http server listening %s", endPoint)
 
 	server := &http.Server{
-		Addr:         endPoint,
-		Handler:      routers.Setup(),
-		ReadTimeout:  12 * time.Hour,
-		WriteTimeout: 12 * time.Hour,
+		Addr:           endPoint,
+		Handler:        routers.Setup(),
+		ReadTimeout:    12 * time.Hour,
+		WriteTimeout:   12 * time.Hour,
+		MaxHeaderBytes: 0,
 	}
 
 	go func() {
