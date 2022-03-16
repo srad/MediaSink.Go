@@ -88,7 +88,7 @@ func Setup() http.Handler {
 		apiv1.GET("/recorder", v1.IsRecording)
 
 		apiv1.GET("/recordings", v1.GetRecordings)
-		apiv1.GET("/recordings/latest/:limit", v1.GetLatestRecordings)
+		apiv1.GET("/recordings/sorted/:column/:order/:limit", v1.GetSorted)
 		apiv1.GET("/recordings/random/:limit", v1.GetRandomRecordings)
 		apiv1.GET("/recordings/bookmarks", v1.GetBookmarks)
 		apiv1.GET("/recordings/:channelName", v1.GetRecording)

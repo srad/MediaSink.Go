@@ -3,6 +3,7 @@ package models
 import (
 	"errors"
 	"fmt"
+	"github.com/srad/streamsink/utils"
 	"io"
 	"log"
 	"os"
@@ -15,11 +16,6 @@ import (
 
 	"github.com/srad/streamsink/conf"
 	"gorm.io/gorm"
-)
-
-const (
-	frameWidth = "480"
-	frameName  = "live.jpg"
 )
 
 var (
@@ -40,6 +36,7 @@ type Channel struct {
 	Tags            string      `json:"tags" gorm:"not null;default:''"`
 	Fav             bool        `json:"fav" gorm:"not null;default:0"`
 	IsPaused        bool        `json:"isPaused" gorm:"not null"`
+	Deleted         bool        `json:"deleted" gorm:"not null;default:0"`
 	CreatedAt       time.Time   `json:"createdAt"`
 	Recordings      []Recording `json:"-" gorm:"table:recordings;foreignKey:channel_name;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
 	RecordingsCount uint        `json:"recordingsCount"`
@@ -115,7 +112,7 @@ func (channel *Channel) Start() error {
 	streamInfo[channel.ChannelName] = StreamInfo{IsOnline: url != "", StreamUrl: url}
 
 	if url != "" {
-		go ExtractFirstFrame(url, frameWidth, filepath.Join(conf.AbsoluteDataPath(channel.ChannelName), frameName))
+		go utils.ExtractFirstFrame(url, conf.FrameWidth, filepath.Join(conf.AbsoluteDataPath(channel.ChannelName), conf.FrameName))
 	}
 
 	if url == "" {
@@ -126,14 +123,10 @@ func (channel *Channel) Start() error {
 	return nil
 }
 
-func (channel *Channel) Terminate(updateModel bool) error {
-	return channel.terminateProcess(updateModel)
-}
-
 func TerminateAll() {
 	for channelName, _ := range streams {
 		channel := Channel{ChannelName: channelName}
-		if err := channel.Terminate(false); err != nil {
+		if err := channel.TerminateProcess(); err != nil {
 			log.Printf("Error terminating channel: '%s': %s", channelName, err.Error())
 		}
 	}
@@ -141,14 +134,7 @@ func TerminateAll() {
 
 // TerminateProcess Terminate the ffmpeg recording process
 // There's maximum one recording job per channel.
-func (channel *Channel) terminateProcess(pauseModel bool) error {
-	if pauseModel {
-		err := channel.Pause(true)
-		if err != nil {
-			return err
-		}
-	}
-
+func (channel *Channel) TerminateProcess() error {
 	// Is current recording at all?
 	if cmd, ok := streams[channel.ChannelName]; ok {
 		if err := cmd.Process.Signal(os.Interrupt); err != nil && !strings.Contains(err.Error(), "255") {
@@ -250,27 +236,31 @@ func (channel *Channel) UnFavChannel() error {
 		Update("fav", false).Error
 }
 
-func (channel *Channel) Destroy() error {
+// SoftDestroy Delete all recordings and mark channel to delete.
+// Often the folder is locked for multiple reasons and can only be deleted on restart.
+func (channel *Channel) SoftDestroy() error {
 	if err := channel.DestroyAllRecordings(); err != nil {
 		log.Printf("Error deleting recordings of channel '%s': %v", channel.ChannelName, err)
 		return err
 	}
 
+	if err := Db.Table("channels").Where("channel_name = ?", channel.ChannelName).Update("deleted", true).Error; err != nil {
+		log.Printf("[SoftDestroy] Error updating channels table: %s", err.Error())
+		return err
+	}
+
+	return nil
+}
+
+func (channel *Channel) Destroy() error {
+	// Channel folder
+	if err := os.RemoveAll(conf.AbsoluteRecordingsPath(channel.ChannelName)); err != nil && !os.IsNotExist(err) {
+		log.Printf("Error deleting channel folder: %v", err)
+		return err
+	}
 	if err := Db.Where("channel_name = ?", channel.ChannelName).Delete(Channel{}).Error; err != nil {
 		return err
 	}
-
-	// TODO: Cancel running jobs
-
-	if err := Db.Where("channel_name = ?", channel.ChannelName).Delete(Job{}).Error; err != nil {
-		return err
-	}
-
-	if errRemove := os.RemoveAll(conf.AbsoluteRecordingsPath(channel.ChannelName)); errRemove != nil && !os.IsNotExist(errRemove) {
-		log.Printf("Error deleting channel folder: %v", errRemove)
-		return errRemove
-	}
-
 	return nil
 }
 
@@ -280,6 +270,7 @@ func (channel *Channel) DestroyAllRecordings() error {
 		Find(&recordings).Error; err != nil {
 		return err
 	}
+	// TODO: Also Cancel running jobs from this channel
 
 	for _, recording := range recordings {
 		if err := recording.Destroy(); err != nil {
@@ -425,7 +416,7 @@ func (channel *Channel) SetStreamInfo(url string) {
 }
 
 func (streamInfo *StreamInfo) Screenshot() error {
-	return ExtractFirstFrame(streamInfo.StreamUrl, frameWidth, filepath.Join(conf.AbsoluteDataPath(streamInfo.ChannelName), frameName))
+	return utils.ExtractFirstFrame(streamInfo.StreamUrl, conf.FrameWidth, filepath.Join(conf.AbsoluteDataPath(streamInfo.ChannelName), conf.FrameName))
 }
 
 func GetStreamInfo() map[string]StreamInfo {

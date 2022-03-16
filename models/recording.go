@@ -2,8 +2,10 @@ package models
 
 import (
 	"fmt"
+	"github.com/srad/streamsink/utils"
 	"log"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/srad/streamsink/conf"
@@ -44,11 +46,11 @@ func FindByName(channelName string) ([]*Recording, error) {
 	return recordings, nil
 }
 
-func LatestList(limit int) ([]*Recording, error) {
+func SortBy(column, order string, limit int) ([]*Recording, error) {
 	var recordings []*Recording
 
 	err := Db.Model(Recording{}).
-		Order("recordings.created_at DESC").
+		Order(fmt.Sprintf("recordings.%s %s", column, order)).
 		Limit(limit).
 		Find(&recordings).Error
 
@@ -101,7 +103,7 @@ func BookmarkList() ([]*Recording, error) {
 }
 
 func (recording *Recording) Save(videoType string) error {
-	info, err := GetVideoInfo(conf.AbsoluteFilepath(recording.ChannelName, recording.Filename))
+	info, err := utils.GetVideoInfo(conf.AbsoluteFilepath(recording.ChannelName, recording.Filename))
 	if err != nil {
 		log.Printf("[AddRecord] Duration error %v for '%s'", err, conf.AbsoluteFilepath(recording.ChannelName, recording.Filename))
 		return err
@@ -131,6 +133,7 @@ func (recording *Recording) Destroy() error {
 		return err
 	}
 
+	// TODO: Also Cancel running jobs from this channel
 	// Remove associated jobs
 	if err := Db.Delete(&Job{}, "channel_name = ? AND filename = ?", recording.ChannelName, recording.Filename).Error; err != nil && err != gorm.ErrRecordNotFound {
 		log.Println(fmt.Sprintf("Error job for recording of file '%s' from channel '%s': %v", recording.Filename, recording.ChannelName, err))
@@ -204,7 +207,7 @@ func AddIfNotExistsRecording(channelName, filename string) (*Recording, error) {
 	}
 
 	file := conf.GetAbsoluteRecordingsPath(channelName, filename)
-	info, err := GetVideoInfo(file)
+	info, err := utils.GetVideoInfo(file)
 	if err != nil {
 		log.Printf("[AddIfNotExistsRecording] Error reading video information for file '%s': %v", file, err)
 	}
@@ -231,11 +234,11 @@ func AddIfNotExistsRecording(channelName, filename string) (*Recording, error) {
 	return newRec, nil
 }
 
-func (recording *Recording) GetVideoInfo() (*FFProbeInfo, error) {
-	return GetVideoInfo(conf.AbsoluteFilepath(recording.ChannelName, recording.Filename))
+func (recording *Recording) GetVideoInfo() (*utils.FFProbeInfo, error) {
+	return utils.GetVideoInfo(conf.AbsoluteFilepath(recording.ChannelName, recording.Filename))
 }
 
-func (recording *Recording) UpdateInfo(info *FFProbeInfo) error {
+func (recording *Recording) UpdateInfo(info *utils.FFProbeInfo) error {
 	return Db.Updates(&Recording{ChannelName: recording.ChannelName, Filename: recording.Filename, Duration: info.Duration, BitRate: info.BitRate, Size: info.Size, Width: info.Width, Height: info.Height}).Error
 }
 
@@ -245,4 +248,54 @@ func (recording *Recording) FilePath() string {
 
 func (recording *Recording) DataFolder() string {
 	return conf.AbsoluteDataPath(recording.ChannelName)
+}
+
+func UpdatePreview(channelName, filename string) (*Recording, error) {
+	rec, err := FindRecording(channelName, filename)
+	if err != nil {
+		return nil, err
+	}
+
+	paths := conf.GetRecordingsPaths(channelName, filename)
+
+	rec.PreviewVideo = filepath.Join("recordings", channelName, conf.AppCfg.DataPath, "videos", paths.MP4)
+	rec.PreviewStripe = filepath.Join("recordings", channelName, conf.AppCfg.DataPath, "stripes", paths.JPG)
+
+	if err := Db.
+		Table("recordings").
+		Where("channel_name = ? AND filename = ?", channelName, filename).
+		Save(&rec).Error; err != nil {
+		return nil, err
+	}
+
+	return rec, nil
+}
+
+func DestroyPreviews(channelName, filename string) error {
+	paths := conf.GetRecordingsPaths(channelName, filename)
+
+	if err := os.Remove(paths.VideosPath); err != nil && !os.IsNotExist(err) {
+		log.Println(fmt.Sprintf("Error deleting '%s' from channel '%s': %v", paths.VideosPath, channelName, err))
+	}
+	if err := os.Remove(paths.StripePath); err != nil && !os.IsNotExist(err) {
+		log.Println(fmt.Sprintf("Error deleting '%s' from channel '%s': %v", paths.StripePath, channelName, err))
+	}
+	if err := os.Remove(paths.CoverPath); err != nil && !os.IsNotExist(err) {
+		log.Println(fmt.Sprintf("Error deleting '%s' from channel '%s': %v", paths.StripePath, channelName, err))
+	}
+
+	rec, err := FindRecording(channelName, filename)
+	if err != nil {
+		return err
+	}
+
+	rec.PreviewVideo = ""
+	rec.PreviewStripe = ""
+	rec.PreviewCover = ""
+
+	if err := Db.Model(&rec).Save(&rec).Error; err != nil {
+		return err
+	}
+
+	return nil
 }

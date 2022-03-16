@@ -221,7 +221,7 @@ func CutRecording(c *gin.Context) {
 	appG.Response(http.StatusOK, job)
 }
 
-// GetLatestRecordings godoc
+// GetSorted godoc
 // @Summary     Get the top N the latest recordings
 // @Description Get the top N the latest recordings.
 // @Tags        recordings
@@ -232,7 +232,7 @@ func CutRecording(c *gin.Context) {
 // @Failure     400 {} string "Error message"
 // @Failure     500 {} string "Error message"
 // @Router      /recordings/latest/{limit} [get]
-func GetLatestRecordings(c *gin.Context) {
+func GetSorted(c *gin.Context) {
 	appG := app.Gin{C: c}
 
 	limit, err := strconv.Atoi(c.Param("limit"))
@@ -241,8 +241,10 @@ func GetLatestRecordings(c *gin.Context) {
 		return
 	}
 
-	recordings, err := models.LatestList(limit)
+	column := c.Param("column")
+	order := c.Param("order")
 
+	recordings, err := models.SortBy(column, order, limit)
 	if err != nil {
 		appG.Response(http.StatusInternalServerError, err.Error())
 		return

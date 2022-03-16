@@ -185,7 +185,7 @@ func GeneratePosters() error {
 		filepath := rec.FilePath()
 		log.Printf("[] %s (%d/%d)", filepath, i, count)
 
-		if err := models.CreatePreviewPoster(filepath, rec.DataFolder(), utils.FileNameWithoutExtension(rec.Filename)+".jpg"); err != nil {
+		if err := utils.CreatePreviewPoster(filepath, rec.DataFolder(), utils.FileNameWithoutExtension(rec.Filename)+".jpg"); err != nil {
 			log.Printf("[GeneratePosters] Error creating poster: %s", err.Error())
 		}
 		i++

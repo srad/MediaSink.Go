@@ -1,7 +1,7 @@
 package v1
 
 import (
-	"github.com/srad/streamsink/models"
+	"github.com/srad/streamsink/utils"
 	"net/http"
 	"strconv"
 
@@ -17,7 +17,7 @@ import (
 // @Accept      json
 // @Produce     json
 // @Param       seconds path int true "Number of seconds to measure"
-// @Success     200 {object} models.SysInfo
+// @Success     200 {object} utils.SysInfo
 // @Failure     500 {}  http.StatusInternalServerError
 // @Router      /info/{seconds} [get]
 func GetInfo(c *gin.Context) {
@@ -29,7 +29,7 @@ func GetInfo(c *gin.Context) {
 		appG.Response(http.StatusInternalServerError, err.Error())
 	}
 
-	data, err := models.Info(conf.AppCfg.DataDisk, conf.AppCfg.NetworkDev, val)
+	data, err := utils.Info(conf.AppCfg.DataDisk, conf.AppCfg.NetworkDev, val)
 
 	if err != nil {
 		appG.Response(http.StatusInternalServerError, err.Error())
@@ -45,13 +45,13 @@ func GetInfo(c *gin.Context) {
 // @Tags        info
 // @Accept      json
 // @Produce     json
-// @Success     200 {object} models.DiskInfo
+// @Success     200 {object} utils.DiskInfo
 // @Failure     500 {}  http.StatusInternalServerError
 // @Router      /info/disk [get]
 func GetDiskInfo(c *gin.Context) {
 	appG := app.Gin{C: c}
 
-	info, err := models.DiskUsage(conf.AppCfg.DataDisk)
+	info, err := utils.DiskUsage(conf.AppCfg.DataDisk)
 
 	if err != nil {
 		appG.Response(http.StatusInternalServerError, err.Error())

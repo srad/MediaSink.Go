@@ -3,6 +3,8 @@ package services
 import (
 	"errors"
 	"fmt"
+	"github.com/srad/streamsink/utils"
+	"github.com/srad/streamsink/workers"
 	"log"
 	"os"
 	"path/filepath"
@@ -31,7 +33,7 @@ func FixOrphanedRecordings() {
 	// Check for orphaned videos
 	for _, job := range jobs {
 		log.Printf("Handling Job #%d of '%s/%s'", job.JobId, job.Filepath, job.Filename)
-		err := models.CheckVideo(job.Filepath)
+		err := workers.CheckVideo(job.Filepath)
 		if err != nil {
 			log.Printf("The file '%s' is corrupted, deleting from disk and job queue: %v\n", job.Filename, err)
 			job.Destroy()
@@ -93,7 +95,7 @@ func ImportRecordings() error {
 			if isMp4File {
 				log.Printf(" + [Import] Checking file: %s, %s", channelName, file.Name())
 
-				if _, err := models.GetVideoInfo(conf.GetAbsoluteRecordingsPath(channelName, file.Name())); err != nil {
+				if _, err := utils.GetVideoInfo(conf.GetAbsoluteRecordingsPath(channelName, file.Name())); err != nil {
 					log.Printf(" + [Import] File '%s' seems corrupted, deleting ...", file.Name())
 					if err := channel.DeleteRecordingsFile(file.Name()); err != nil {
 						log.Printf(" + [Import] Error deleting '%s'", file.Name())
@@ -132,6 +134,22 @@ func ImportRecordings() error {
 		}
 	}
 	log.Println("######################################################################################")
+
+	return nil
+}
+
+func StartUpJobs() error {
+	channels, err := models.ChannelList()
+	if err != nil {
+		log.Printf("[StartUpJobs] ChannelList error: %s", err.Error())
+		return err
+	}
+
+	for _, channel := range channels {
+		if channel.Deleted {
+			channel.Destroy()
+		}
+	}
 
 	return nil
 }

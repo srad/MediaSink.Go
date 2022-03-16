@@ -38,7 +38,7 @@ func Subscribe(f func(message SocketMessage)) {
 }
 
 type JobMessage struct {
-	jobId       uint        `json:"jobId,omitempty"`
+	JobId       uint        `json:"jobId,omitempty"`
 	ChannelName string      `json:"channelName,omitempty"`
 	Filename    string      `json:"filename,omitempty"`
 	Type        string      `json:"type,omitempty"`
@@ -113,7 +113,7 @@ func addJob(channelName, filename, filepath, status string, args *string) (*Job,
 	}
 	log.Printf("[Job] Enqueued job: '%s/%s' -> %s", channelName, filename, status)
 
-	notify("job:create", JobMessage{jobId: job.JobId, Type: status, ChannelName: job.ChannelName, Filename: job.Filename})
+	notify("job:create", JobMessage{JobId: job.JobId, Type: status, ChannelName: job.ChannelName, Filename: job.Filename})
 
 	return &job, nil
 }
@@ -134,7 +134,7 @@ func (job *Job) Destroy() error {
 	}
 	log.Printf("[Job] Job id delete %d", job.JobId)
 
-	notify("job:destroy", JobMessage{jobId: job.JobId, ChannelName: job.ChannelName, Filename: job.Filename})
+	notify("job:destroy", JobMessage{JobId: job.JobId, ChannelName: job.ChannelName, Filename: job.Filename})
 
 	return nil
 }

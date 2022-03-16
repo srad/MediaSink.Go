@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 
@@ -28,9 +29,18 @@ const (
 	VideosFolder  = "videos"
 	StripesFolder = "stripes"
 	PostersFolder = "posters"
+	winFont       = "C\\\\:/Windows/Fonts/DMMono-Regular.ttf"
+	linuxFont     = "/usr/share/fonts/truetype/DMMono-Regular.ttf"
+	// FrameCount Number of extracted frames or timeline/preview
+	FrameCount = 96
+	FrameWidth = "480"
+	FrameName  = "live.jpg"
 )
 
-var AppCfg = &Cfg{}
+var (
+	AppCfg      = &Cfg{}
+	ThreadCount = uint(float32(runtime.NumCPU() / 2))
+)
 
 type VideoPaths struct {
 	Filepath string
@@ -148,4 +158,11 @@ func MakeChannelFolders(channelName string) {
 		fmt.Println("Creating folder: " + dataPath)
 		os.MkdirAll(dataPath, os.ModePerm)
 	}
+}
+
+func GetFontPath() string {
+	if runtime.GOOS == "windows" {
+		return winFont
+	}
+	return linuxFont
 }

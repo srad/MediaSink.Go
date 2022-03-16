@@ -170,7 +170,7 @@ func UpdateChannel(c *gin.Context) {
 	}
 
 	if channel.IsPaused {
-		if err := channel.Terminate(false); err != nil {
+		if err := channel.TerminateProcess(); err != nil {
 			log.Printf("[UpdateChannel] Error stopping stream: %s", err.Error())
 			appG.Response(http.StatusInternalServerError, err.Error())
 			return
@@ -200,12 +200,12 @@ func DeleteChannel(c *gin.Context) {
 
 	log.Printf("Deleting channel '%s'\n", channel.ChannelName)
 
-	if err := channel.Terminate(false); err != nil {
+	if err := channel.TerminateProcess(); err != nil {
 		appG.Response(http.StatusInternalServerError, fmt.Sprintf("Process cound not be terminated: %s", err.Error()))
 		return
 	}
 
-	if err := channel.Destroy(); err != nil {
+	if err := channel.SoftDestroy(); err != nil {
 		appG.Response(http.StatusInternalServerError, fmt.Sprintf("Channel could not be deleted: %s", err.Error()))
 		return
 	}
@@ -376,25 +376,23 @@ func UploadChannel(c *gin.Context) {
 // @Produce     json
 // @Param       channelName path string true "Channel name"
 // @Success     200 {} http.StatusOK
-// @Failure     400 {} http.StatusBadRequest
+// @Failure     500 {} http.StatusInternalServerError
 // @Router      /channels/{channelName}/pause [post]
 func PauseChannel(c *gin.Context) {
 	appG := app.Gin{C: c}
 
 	channelName := c.Param("channelName")
 
-	if len(channelName) == 0 {
-		appG.Response(http.StatusBadRequest, "invalid channel name")
-		return
-	}
-
 	log.Println("Pausing channel " + channelName)
 	channel, err := models.GetChannelByName(channelName)
 	if err != nil {
-		appG.Response(http.StatusBadRequest, err.Error())
+		appG.Response(http.StatusInternalServerError, err.Error())
 		return
 	}
-	channel.Terminate(true)
+	channel.TerminateProcess()
+	if err := channel.Pause(true); err != nil {
+		appG.Response(http.StatusInternalServerError, err.Error())
+	}
 
 	appG.Response(http.StatusOK, nil)
 }
