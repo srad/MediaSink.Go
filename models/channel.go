@@ -44,8 +44,8 @@ type Channel struct {
 }
 
 type StreamInfo struct {
-	IsOnline    bool   `json:"isOnline"`
-	StreamUrl   string `json:"streamUrl"`
+	IsOnline    bool `json:"isOnline"`
+	Url         string
 	ChannelName string `json:"channelName"`
 }
 
@@ -103,21 +103,22 @@ func prepareTags(tags []string) (string, error) {
 }
 
 func (channel *Channel) Start() error {
+	// Stop any previous recording, restart
 	if err := channel.Pause(false); err != nil {
 		return err
 	}
 
-	// Also no url raises an error via youtube-dl, ignore.
-	url, _ := channel.QueryStreamUrl()
-	streamInfo[channel.ChannelName] = StreamInfo{IsOnline: url != "", StreamUrl: url}
-
-	if url != "" {
-		go utils.ExtractFirstFrame(url, conf.FrameWidth, filepath.Join(conf.AbsoluteDataPath(channel.ChannelName), conf.FrameName))
+	url, err := channel.QueryStreamUrl()
+	streamInfo[channel.ChannelName] = StreamInfo{IsOnline: url != "", Url: url}
+	if err != nil {
+		return err
 	}
-
 	if url == "" {
-		return nil
+		return errors.New("channel offline")
 	}
+
+	log.Printf("[Start] Starting '%s' at '%s'", channel.ChannelName, url)
+	go utils.ExtractFirstFrame(url, conf.FrameWidth, filepath.Join(conf.AbsoluteDataPath(channel.ChannelName), conf.FrameName))
 	go channel.Capture(url, channel.SkipStart)
 
 	return nil
@@ -174,12 +175,12 @@ func (channel *Channel) QueryStreamUrl() (string, error) {
 	return output, nil
 }
 
-func (channel *Channel) GetStreamUrl() string {
-	if _, ok := streamInfo[channel.ChannelName]; ok {
-		return streamInfo[channel.ChannelName].StreamUrl
-	}
-	return ""
-}
+//func (channel *Channel) GetStreamUrl() string {
+//	if _, ok := streamInfo[channel.ChannelName]; ok {
+//		return streamInfo[channel.ChannelName].Data.Url
+//	}
+//	return ""
+//}
 
 func GetChannelByName(channelName string) (*Channel, error) {
 	var channel Channel
@@ -412,12 +413,8 @@ func (channel *Channel) Info() *Recording {
 	return recInfo[channel.ChannelName]
 }
 
-func (channel *Channel) SetStreamInfo(url string) {
-	streamInfo[channel.ChannelName] = StreamInfo{StreamUrl: url, IsOnline: url != ""}
-}
-
 func (streamInfo *StreamInfo) Screenshot() error {
-	return utils.ExtractFirstFrame(streamInfo.StreamUrl, conf.FrameWidth, filepath.Join(conf.AbsoluteDataPath(streamInfo.ChannelName), conf.FrameName))
+	return utils.ExtractFirstFrame(streamInfo.Url, conf.FrameWidth, filepath.Join(conf.AbsoluteDataPath(streamInfo.ChannelName), conf.FrameName))
 }
 
 func GetStreamInfo() map[string]StreamInfo {

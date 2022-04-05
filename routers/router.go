@@ -65,6 +65,9 @@ func Setup() http.Handler {
 	//}))
 	apiv1.Use()
 	{
+		apiv1.POST("/admin/import", v1.TriggerImport)
+		apiv1.GET("/admin/importing", v1.IsImporting)
+
 		apiv1.GET("/channels", v1.GetChannels)
 		apiv1.POST("/channels", v1.AddChannel)
 		apiv1.POST("/channels/:channelName/tags", v1.TagChannel)
@@ -78,6 +81,7 @@ func Setup() http.Handler {
 
 		apiv1.POST("/jobs/:channelName/:filename", v1.AddJob)
 		apiv1.POST("/jobs/stop/:pid", v1.StopJob)
+		apiv1.DELETE("/jobs/:id", v1.DestroyJob)
 		apiv1.GET("/jobs", v1.GetJobs)
 
 		//apiv1.POST("/recordings/updateinfo", v1.UpdateVideoInfo)

@@ -71,6 +71,37 @@ func StopJob(c *gin.Context) {
 	appG.Response(http.StatusOK, pid)
 }
 
+// DestroyJob godoc
+// @Summary     Terminate and delete job gracefully
+// @Description Terminate and delete job gracefully
+// @Tags        jobs
+// @Param       id path int  true  "Job id"
+// @Accept      json
+// @Produce     json
+// @Success     200
+// @Failure     400 {string} http.StatusBadRequest
+// @Failure     500 {string} http.StatusInternalServerError
+// @Router      /jobs/{pid} [delete]
+func DestroyJob(c *gin.Context) {
+	appG := app.Gin{C: c}
+
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		appG.Response(http.StatusBadRequest, err)
+		return
+	}
+
+	job, err := models.FindJobById(id)
+	if err != nil {
+		appG.Response(http.StatusBadRequest, err)
+		return
+	}
+
+	job.Destroy()
+
+	appG.Response(http.StatusOK, id)
+}
+
 // GetJobs godoc
 // @Summary     Return a list of jobs
 // @Description Return a list of jobs

@@ -128,6 +128,12 @@ func JobList() ([]*Job, error) {
 }
 
 func (job *Job) Destroy() error {
+	if job.Pid != 0 {
+		if err := utils.Terminate(job.Pid); err != nil {
+			return err
+		}
+	}
+
 	err := Db.Table("jobs").Where("job_id = ?", job.JobId).Delete(Job{}).Error
 	if err != nil {
 		return err
@@ -137,6 +143,15 @@ func (job *Job) Destroy() error {
 	notify("job:destroy", JobMessage{JobId: job.JobId, ChannelName: job.ChannelName, Filename: job.Filename})
 
 	return nil
+}
+
+func FindJobById(id int) (*Job, error) {
+	var job *Job
+	if err := Db.Where("job_id = ?", id).Find(&job).Error; err != nil {
+		return nil, err
+	}
+
+	return job, nil
 }
 
 func GetJobsByStatus(status string) ([]*Job, error) {

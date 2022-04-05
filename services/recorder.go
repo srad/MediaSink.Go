@@ -49,15 +49,15 @@ func notify(event string, data interface{}) {
 	}
 }
 
-func startScreenshotWorker(ctx context.Context) {
+func startThumbnailWorker(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			log.Println("[startScreenshotWorker] stopped")
+			log.Println("[startThumbnailWorker] stopped")
 			return
 		case <-time.After(screenshotInterval):
 			for channelName, info := range models.GetStreamInfo() {
-				if info.StreamUrl != "" {
+				if info.Url != "" {
 					if err := info.Screenshot(); err != nil {
 						log.Printf("[Recorder] Error extracting first frame of channel | file: %s", channelName)
 					} else {
@@ -92,25 +92,20 @@ func checkStreams() {
 		return
 	}
 	for _, channel := range channels {
-		if isPaused {
-			break
-		}
-		if channel.IsRecording() {
+		if channel.IsRecording() || channel.IsPaused {
+			//log.Printf("[checkStreams] Already recording or paused: %s", channel.ChannelName)
 			continue
 		}
 
-		url, _ := channel.QueryStreamUrl()
-		if url == "" || isPaused || channel.IsPaused {
+		err := channel.Start()
+		log.Printf("%v | %s\n\n", channel, err)
+
+		if err != nil {
 			notify("channel:offline", RecorderMessage{ChannelName: channel.ChannelName})
-			continue
+		} else {
+			notify("channel:online", RecorderMessage{ChannelName: channel.ChannelName})
+			notify("channel:start", RecorderMessage{ChannelName: channel.ChannelName})
 		}
-
-		channel.SetStreamInfo(url)
-		notify("channel:online", RecorderMessage{ChannelName: channel.ChannelName})
-		log.Println("[Recorder] Extracting first frame of ", channel.ChannelName)
-
-		go channel.Capture(url, channel.SkipStart)
-		notify("channel:start", RecorderMessage{ChannelName: channel.ChannelName})
 
 		// StopRecorder between each check
 		time.Sleep(requestInterval)
@@ -128,7 +123,7 @@ func StartRecorder() {
 	cancel = c
 
 	go startStreamWorker(ctx)
-	go startScreenshotWorker(ctx)
+	go startThumbnailWorker(ctx)
 
 	log.Printf("[Recorder] StartRecorder recording thread")
 }
