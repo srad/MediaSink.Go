@@ -38,11 +38,8 @@ func main() {
 		v1.SendMessage(v1.SocketMessage{Event: message.Event, Data: message.Data})
 	})
 
+	services.StartUpJobs()
 	services.StartRecorder()
-
-	go services.StartUpJobs()
-	go services.ImportRecordings()
-	go services.FixOrphanedRecordings()
 	go workers.StartWorker()
 
 	gin.SetMode("release")

@@ -16,7 +16,7 @@ import (
 )
 
 // FixOrphanedRecordings Go through all open jobs with status "recording" and complete them.
-func FixOrphanedRecordings() {
+func fixOrphanedRecordings() {
 	log.Println("Fixing orphaned recordings ...")
 	jobs, err := models.GetJobsByStatus(models.StatusRecording)
 
@@ -58,7 +58,7 @@ func FixOrphanedRecordings() {
 	}
 }
 
-func ImportRecordings() error {
+func importRecordings() error {
 	log.Println("################################## ImportRecordings ##################################")
 	log.Printf("[Import] Importing files from file system: %s", conf.AppCfg.RecordingsAbsolutePath)
 
@@ -139,6 +139,16 @@ func ImportRecordings() error {
 }
 
 func StartUpJobs() error {
+	log.Println("[StartUpJobs] Running startup job")
+
+	deleteChannels() // wait for this to complete
+	go importRecordings()
+	go fixOrphanedRecordings()
+
+	return nil
+}
+
+func deleteChannels() error {
 	channels, err := models.ChannelList()
 	if err != nil {
 		log.Printf("[StartUpJobs] ChannelList error: %s", err.Error())
@@ -147,6 +157,7 @@ func StartUpJobs() error {
 
 	for _, channel := range channels {
 		if channel.Deleted {
+			log.Printf("[StartUpJobs] Deleting channel : %s", channel.ChannelName)
 			channel.Destroy()
 		}
 	}
