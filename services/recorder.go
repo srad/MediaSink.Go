@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"github.com/srad/streamsink/patterns"
 	"github.com/srad/streamsink/utils"
 	"log"
 	"time"
@@ -10,9 +11,9 @@ import (
 )
 
 var (
-	isPaused = false
-	dispatch = dispatcher{}
-	cancel   context.CancelFunc
+	isPaused   = false
+	cancel     context.CancelFunc
+	Dispatcher = &patterns.Dispatcher[RecorderMessage]{}
 )
 
 const (
@@ -21,32 +22,8 @@ const (
 	screenshotInterval = 30 * time.Second
 )
 
-type SocketMessage struct {
-	Data  map[string]interface{} `json:"data"`
-	Event string                 `json:"event"`
-}
-
-func NewMessage(event string, data interface{}) SocketMessage {
-	return SocketMessage{Event: event, Data: utils.StructToDict(data)}
-}
-
-type dispatcher struct {
-	listeners []func(message SocketMessage)
-}
-
 type RecorderMessage struct {
 	ChannelName string `json:"channelName"`
-}
-
-func Subscribe(f func(message SocketMessage)) {
-	dispatch.listeners = append(dispatch.listeners, f)
-}
-
-func notify(event string, data interface{}) {
-	msg := NewMessage(event, data)
-	for _, f := range dispatch.listeners {
-		f(msg)
-	}
 }
 
 func startThumbnailWorker(ctx context.Context) {
@@ -61,7 +38,7 @@ func startThumbnailWorker(ctx context.Context) {
 					if err := info.Screenshot(); err != nil {
 						log.Printf("[Recorder] Error extracting first frame of channel | file: %s", channelName)
 					} else {
-						notify("channel:thumbnail", RecorderMessage{ChannelName: channelName})
+						Dispatcher.Notify("channel:thumbnail", RecorderMessage{ChannelName: channelName})
 					}
 				}
 			}
@@ -92,6 +69,9 @@ func checkStreams() {
 		return
 	}
 	for _, channel := range channels {
+		if isPaused {
+			return
+		}
 		if channel.IsRecording() || channel.IsPaused {
 			//log.Printf("[checkStreams] Already recording or paused: %s", channel.ChannelName)
 			continue
@@ -101,10 +81,10 @@ func checkStreams() {
 		log.Printf("%v | %s\n\n", channel, err)
 
 		if err != nil {
-			notify("channel:offline", RecorderMessage{ChannelName: channel.ChannelName})
+			Dispatcher.Notify("channel:offline", RecorderMessage{ChannelName: channel.ChannelName})
 		} else {
-			notify("channel:online", RecorderMessage{ChannelName: channel.ChannelName})
-			notify("channel:start", RecorderMessage{ChannelName: channel.ChannelName})
+			Dispatcher.Notify("channel:online", RecorderMessage{ChannelName: channel.ChannelName})
+			Dispatcher.Notify("channel:start", RecorderMessage{ChannelName: channel.ChannelName})
 		}
 
 		// StopRecorder between each check
@@ -134,34 +114,6 @@ func StopRecorder() error {
 	isPaused = true
 	cancel()
 	models.TerminateAll()
-
-	return nil
-}
-
-func UpdateVideoInfo() error {
-	log.Println("[Recorder] Updating all recordings info")
-	recordings, err := models.RecordingsList()
-	if err != nil {
-		log.Printf("Error %v", err)
-		return err
-	}
-	count := len(recordings)
-
-	i := 1
-	for _, rec := range recordings {
-		info, err := rec.GetVideoInfo()
-		if err != nil {
-			log.Printf("[UpdateVideoInfo] Error updating video info: %v", err)
-			continue
-		}
-
-		if err := rec.UpdateInfo(info); err != nil {
-			log.Printf("[Recorder] Error updating video info: %v", err.Error())
-			continue
-		}
-		log.Printf("[Recorder] Updated %s (%d/%d)", rec.Filename, i, count)
-		i++
-	}
 
 	return nil
 }

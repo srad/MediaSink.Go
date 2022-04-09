@@ -133,7 +133,7 @@ func TerminateAll() {
 	}
 }
 
-// TerminateProcess Terminate the ffmpeg recording process
+// TerminateProcess Interrupt the ffmpeg recording process
 // There's maximum one recording job per channel.
 func (channel *Channel) TerminateProcess() error {
 	// Is current recording at all?
@@ -196,6 +196,22 @@ func ChannelList() ([]*Channel, error) {
 	var result []*Channel
 
 	err := Db.Model(&Channel{}).
+		Select("channels.*", "(SELECT COUNT(*) FROM recordings WHERE recordings.channel_name = channels.channel_name) recordings_count", "(SELECT SUM(size) FROM recordings WHERE recordings.channel_name = channels.channel_name) recordings_size").
+		Find(&result).Error
+
+	if err != nil && err != gorm.ErrRecordNotFound {
+		log.Println(err)
+		return nil, err
+	}
+
+	return result, nil
+}
+
+func ChannelListNotDeleted() ([]*Channel, error) {
+	var result []*Channel
+
+	err := Db.Model(&Channel{}).
+		Where("deleted = ?", false).
 		Select("channels.*", "(SELECT COUNT(*) FROM recordings WHERE recordings.channel_name = channels.channel_name) recordings_count", "(SELECT SUM(size) FROM recordings WHERE recordings.channel_name = channels.channel_name) recordings_size").
 		Find(&result).Error
 
@@ -307,13 +323,11 @@ func (channel *Channel) DestroyData() {
 }
 
 func (channel *Channel) NewRecording() (Recording, string) {
-	now := time.Now()
-	stamp := now.Format("2006_01_02_15_04_05")
-	filename := fmt.Sprintf("%s_%s.mp4", channel.ChannelName, stamp)
+	filename, timestamp := utils.CreateRecordingName(channel.ChannelName)
 	relativePath := filepath.Join("recordings", channel.ChannelName, filename)
 	outputFile := filepath.Join(conf.AppCfg.RecordingsAbsolutePath, channel.ChannelName, filename)
 
-	return Recording{ChannelName: channel.ChannelName, Filename: filename, Duration: 0, Bookmark: false, CreatedAt: now, PathRelative: relativePath}, outputFile
+	return Recording{ChannelName: channel.ChannelName, Filename: filename, Duration: 0, Bookmark: false, CreatedAt: timestamp, PathRelative: relativePath}, outputFile
 }
 
 // Capture Starts and also waits for the stream to end or being killed

@@ -5,6 +5,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/srad/streamsink/conf"
 	"github.com/srad/streamsink/models"
+	"github.com/srad/streamsink/patterns"
 	"github.com/srad/streamsink/routers"
 	v1 "github.com/srad/streamsink/routers/api/v1"
 	"github.com/srad/streamsink/services"
@@ -31,11 +32,14 @@ func main() {
 	//model.StartMetrics(conf.AppCfg.NetworkDev)
 	setupFolders()
 
-	services.Subscribe(func(message services.SocketMessage) {
-		v1.SendMessage(v1.SocketMessage{Event: message.Event, Data: message.Data})
+	services.Dispatcher.Subscribe(func(event patterns.Event[services.RecorderMessage]) {
+		v1.SendMessage(v1.SocketEvent{Name: event.Name, Data: event.Data})
 	})
-	models.Subscribe(func(message models.SocketMessage) {
-		v1.SendMessage(v1.SocketMessage{Event: message.Event, Data: message.Data})
+	models.Dispatcher.Subscribe(func(event patterns.Event[models.JobMessage[any]]) {
+		v1.SendMessage(v1.SocketEvent{Name: event.Name, Data: event.Data})
+	})
+	workers.Dispatcher.Subscribe(func(event patterns.Event[models.JobMessage[workers.JobVideoInfo]]) {
+		v1.SendMessage(v1.SocketEvent{Name: event.Name, Data: event.Data})
 	})
 
 	services.StartUpJobs()

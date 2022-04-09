@@ -55,7 +55,7 @@ type TagChannelRequest struct {
 // @Router      /channels [get]
 func GetChannels(c *gin.Context) {
 	appG := app.Gin{C: c}
-	channels, err := models.EnabledChannelList()
+	channels, err := models.ChannelListNotDeleted()
 	response := make([]ChannelResponse, len(channels))
 
 	for index, channel := range channels {

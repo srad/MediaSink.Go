@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/srad/streamsink/conf"
 	"github.com/srad/streamsink/models"
+	"github.com/srad/streamsink/patterns"
 	"github.com/srad/streamsink/utils"
 	"gorm.io/gorm"
 	"log"
@@ -18,7 +19,13 @@ import (
 var (
 	sleepBetweenRounds = 1 * time.Second
 	cancelWorker       context.CancelFunc
+	Dispatcher         = &patterns.Dispatcher[models.JobMessage[JobVideoInfo]]{}
 )
+
+type JobVideoInfo struct {
+	Packets uint64 `json:"packets"`
+	Frame   uint64 `json:"frame"`
+}
 
 func StartWorker() {
 	ctx, c := context.WithCancel(context.Background())
@@ -37,9 +44,64 @@ func processJobs(ctx context.Context) {
 			log.Println("[processJobs] Worker stopped")
 			return
 		case <-time.After(sleepBetweenRounds):
+			conversionJobs()
 			cuttingJobs()
 			previewJobs()
 		}
+	}
+}
+
+func conversionJobs() {
+	job, err := models.GetNextJob(models.StatusConvert)
+	if job == nil {
+		return
+	}
+	if err != nil {
+		log.Printf("[Job] Error handlung job: %v", err)
+		job.Destroy()
+		return
+	}
+
+	job.Activate()
+
+	result, err := utils.ConvertVideo(&utils.VideoConversionArgs{
+		OnStart: func(info *utils.CommandInfo) {
+			_ = job.UpdateInfo(info.Pid, info.Command)
+		},
+		OnProgress: func(info *utils.ProcessInfo) {
+			job.UpdateProgress(fmt.Sprintf("%f", float32(info.Frame)/float32(job.Recording.Packets)*100))
+			Dispatcher.Notify("job:progress", models.JobMessage[JobVideoInfo]{JobId: job.JobId, Data: JobVideoInfo{Packets: job.Recording.Packets, Frame: info.Frame}, Type: job.Status, ChannelName: job.ChannelName, Filename: job.Filename})
+		},
+		ChannelName: job.ChannelName,
+		Filename:    job.Filename,
+	}, *job.Args)
+
+	if err != nil {
+		log.Printf("[conversionJobs] Error converting '%s' to '%s': %s", job.Filename, *job.Args, err.Error())
+		os.Remove(result.Filepath)
+		job.Destroy()
+		return
+	} else {
+		log.Printf("[conversionJobs] Completed conversion of '%s' with args '%s'", job.Filename, *job.Args)
+	}
+
+	if err := job.Destroy(); err != nil {
+		log.Printf("[conversionJobs] Error deleting job: %s", err.Error())
+	}
+
+	// All good now, save the record.
+	rec := &models.Recording{
+		ChannelName:  job.ChannelName,
+		Filename:     result.Filename,
+		PathRelative: result.PathRelative,
+		Bookmark:     false,
+		CreatedAt:    result.CreatedAt,
+	}
+	// Also, when fails, destroy it, some reason it is foul.
+	if err := rec.Save("recording"); err != nil {
+		os.Remove(result.Filepath)
+	} else {
+		models.EnqueuePreviewJob(result.ChannelName, result.Filename)
 	}
 }
 
@@ -62,21 +124,28 @@ func previewJobs() {
 	}
 
 	log.Printf("[Job] Generating preview for '%s'", job.Filename)
-	err = models.ActiveJob(job.JobId)
+	err = job.Activate()
 	if err != nil {
 		log.Printf("[Job] Error activating job: %d", job.JobId)
 	}
 
-	err = GeneratePreviews(&utils.PreviewJob{
+	err = GeneratePreviews(&utils.VideoConversionArgs{
 		OnStart: func(info *utils.CommandInfo) {
 			_ = job.UpdateInfo(info.Pid, info.Command)
-			//TODO
-			//services.notify("job:preview:start", models.JobMessage{JobId: job.JobId, ChannelName: job.ChannelName, Filename: job.Filename})
+			Dispatcher.Notify("job:start", models.JobMessage[JobVideoInfo]{
+				JobId:       job.JobId,
+				ChannelName: job.ChannelName,
+				Filename:    job.Filename,
+				Type:        job.Status,
+			})
 		},
 		OnProgress: func(info *utils.ProcessInfo) {
-			_ = job.UpdateProgress(fmt.Sprintf("%f", float32(info.Frame)/float32(info.Total)*100))
-			//TODO
-			//services.notify("job:preview:progress", models.JobMessage{JobId: job.JobId, ChannelName: job.ChannelName, Filename: job.Filename})
+			Dispatcher.Notify("job:progress", models.JobMessage[JobVideoInfo]{
+				JobId:       job.JobId,
+				ChannelName: job.ChannelName,
+				Filename:    job.Filename,
+				Data:        JobVideoInfo{Frame: info.Frame, Packets: job.Recording.Packets},
+			})
 		},
 		ChannelName: job.ChannelName,
 		Filename:    job.Filename,
@@ -129,7 +198,7 @@ func cuttingJobs() error {
 	}
 
 	log.Printf("[Job] Generating preview for '%s'", job.Filename)
-	err = models.ActiveJob(job.JobId)
+	err = job.Activate()
 	if err != nil {
 		log.Printf("[Job] Error activating job: %d", job.JobId)
 	}
@@ -237,6 +306,7 @@ func cuttingJobs() error {
 		Height:       info.Height,
 		Size:         info.Size,
 		BitRate:      info.BitRate,
+		Packets:      info.PacketCount,
 		CreatedAt:    time.Now(),
 		Bookmark:     false,
 	}
@@ -272,7 +342,7 @@ func CheckVideo(filepath string) error {
 	})
 }
 
-func GeneratePreviews(args *utils.PreviewJob) error {
+func GeneratePreviews(args *utils.VideoConversionArgs) error {
 	inputPath := filepath.Join(conf.AppCfg.RecordingsAbsolutePath, args.ChannelName, args.Filename)
 
 	log.Println("---------------------------------------------- Preview Job ----------------------------------------------")

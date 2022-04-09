@@ -49,4 +49,7 @@ func TestGetVideoInfo(t *testing.T) {
 	if info.Width != 640 {
 		t.Errorf("Width wrong: %d", info.Width)
 	}
+	if info.PacketCount != 1445 {
+		t.Errorf("Packet count wrong: %d", info.PacketCount)
+	}
 }

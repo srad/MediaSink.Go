@@ -33,8 +33,8 @@ type ExecArgs struct {
 }
 
 type PipeMessage struct {
-	Message string
-	Pid     int
+	Output string
+	Pid    int
 }
 
 type SysInfo struct {
@@ -110,7 +110,7 @@ func ExecSync(execArgs *ExecArgs) error {
 		scanner := bufio.NewScanner(sterr)
 		scanner.Split(bufio.ScanLines)
 		for scanner.Scan() {
-			execArgs.OnPipeErr(PipeMessage{Message: scanner.Text(), Pid: pid})
+			execArgs.OnPipeErr(PipeMessage{Output: scanner.Text(), Pid: pid})
 		}
 	}
 
@@ -133,7 +133,7 @@ func ExecSync(execArgs *ExecArgs) error {
 	return nil
 }
 
-func Terminate(pid int) error {
+func Interrupt(pid int) error {
 	if c, ok := cmd[pid]; ok {
 		err := c.Process.Signal(syscall.SIGINT)
 		delete(cmd, pid)

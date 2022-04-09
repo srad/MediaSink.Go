@@ -44,8 +44,8 @@ func AddJob(c *gin.Context) {
 }
 
 // StopJob godoc
-// @Summary     Terminate job gracefully
-// @Description Terminate job gracefully
+// @Summary     Interrupt job gracefully
+// @Description Interrupt job gracefully
 // @Tags        jobs
 // @Param       pid path int  true  "Channel name"
 // @Accept      json
@@ -63,7 +63,7 @@ func StopJob(c *gin.Context) {
 		return
 	}
 
-	if utils.Terminate(pid); err != nil {
+	if utils.Interrupt(pid); err != nil {
 		appG.Response(http.StatusInternalServerError, err)
 		return
 	}
@@ -72,8 +72,8 @@ func StopJob(c *gin.Context) {
 }
 
 // DestroyJob godoc
-// @Summary     Terminate and delete job gracefully
-// @Description Terminate and delete job gracefully
+// @Summary     Interrupt and delete job gracefully
+// @Description Interrupt and delete job gracefully
 // @Tags        jobs
 // @Param       id path int  true  "Job id"
 // @Accept      json

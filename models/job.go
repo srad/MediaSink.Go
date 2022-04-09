@@ -2,6 +2,7 @@ package models
 
 import (
 	"github.com/srad/streamsink/conf"
+	"github.com/srad/streamsink/patterns"
 	"github.com/srad/streamsink/utils"
 	"gorm.io/gorm"
 	"log"
@@ -11,45 +12,22 @@ import (
 const (
 	// StatusRecording Recording in progress
 	StatusRecording = "recording"
+	StatusConvert   = "convert"
 	// StatusPreview Generating preview currently
 	StatusPreview = "preview"
 	StatusCut     = "cut"
 )
 
 var (
-	dispatch = dispatcher{}
+	Dispatcher = patterns.Dispatcher[JobMessage[any]]{}
 )
 
-type SocketMessage struct {
-	Data  map[string]interface{} `json:"data"`
-	Event string                 `json:"event"`
-}
-
-func NewMessage(event string, data interface{}) SocketMessage {
-	return SocketMessage{Event: event, Data: utils.StructToDict(data)}
-}
-
-type dispatcher struct {
-	listeners []func(message SocketMessage)
-}
-
-func Subscribe(f func(message SocketMessage)) {
-	dispatch.listeners = append(dispatch.listeners, f)
-}
-
-type JobMessage struct {
-	JobId       uint        `json:"jobId,omitempty"`
-	ChannelName string      `json:"channelName,omitempty"`
-	Filename    string      `json:"filename,omitempty"`
-	Type        string      `json:"type,omitempty"`
-	Data        interface{} `json:"data,omitempty"`
-}
-
-func notify(event string, job JobMessage) {
-	msg := NewMessage(event, job)
-	for _, f := range dispatch.listeners {
-		f(msg)
-	}
+type JobMessage[T any] struct {
+	JobId       uint   `json:"jobId,omitempty"`
+	ChannelName string `json:"channelName,omitempty"`
+	Filename    string `json:"filename,omitempty"`
+	Type        string `json:"type,omitempty"`
+	Data        T      `json:"data,omitempty"`
 }
 
 type Job struct {
@@ -76,6 +54,10 @@ type Job struct {
 
 func EnqueueRecordingJob(channelName, filename, filepath string) (*Job, error) {
 	return addJob(channelName, filename, filepath, StatusRecording, nil)
+}
+
+func EnqueueConversionJob(channelName, filename, filepath, mediaType string) (*Job, error) {
+	return addJob(channelName, filename, filepath, StatusConvert, &mediaType)
 }
 
 func EnqueuePreviewJob(channelName, filename string) (*Job, error) {
@@ -113,14 +95,16 @@ func addJob(channelName, filename, filepath, status string, args *string) (*Job,
 	}
 	log.Printf("[Job] Enqueued job: '%s/%s' -> %s", channelName, filename, status)
 
-	notify("job:create", JobMessage{JobId: job.JobId, Type: status, ChannelName: job.ChannelName, Filename: job.Filename})
+	Dispatcher.Notify("job:create", JobMessage[any]{JobId: job.JobId, Type: status, ChannelName: job.ChannelName, Filename: job.Filename})
 
 	return &job, nil
 }
 
 func JobList() ([]*Job, error) {
 	var jobs []*Job
-	if err := Db.Find(&jobs).Error; err != nil && err != gorm.ErrRecordNotFound {
+	if err := Db.
+		Order("jobs.created_at ASC").
+		Find(&jobs).Error; err != nil && err != gorm.ErrRecordNotFound {
 		return nil, err
 	}
 
@@ -129,18 +113,17 @@ func JobList() ([]*Job, error) {
 
 func (job *Job) Destroy() error {
 	if job.Pid != 0 {
-		if err := utils.Terminate(job.Pid); err != nil {
-			return err
+		if err := utils.Interrupt(job.Pid); err != nil {
+			log.Printf("[Destroy] Error interrupting process: %s", err.Error())
 		}
 	}
 
-	err := Db.Table("jobs").Where("job_id = ?", job.JobId).Delete(Job{}).Error
-	if err != nil {
+	if err := Db.Table("jobs").Where("job_id = ?", job.JobId).Delete(Job{}).Error; err != nil {
 		return err
 	}
 	log.Printf("[Job] Job id delete %d", job.JobId)
 
-	notify("job:destroy", JobMessage{JobId: job.JobId, ChannelName: job.ChannelName, Filename: job.Filename})
+	Dispatcher.Notify("job:destroy", JobMessage[any]{JobId: job.JobId, ChannelName: job.ChannelName, Filename: job.Filename})
 
 	return nil
 }
@@ -166,7 +149,8 @@ func GetJobsByStatus(status string) ([]*Job, error) {
 func GetNextJob(status string) (*Job, error) {
 	var job *Job
 	err := Db.Where("status = ?", status).
-		Order("created_at asc").First(&job).Error
+		Joins("Recording").
+		Order("jobs.created_at asc").First(&job).Error
 	if err == gorm.ErrRecordNotFound {
 		return nil, nil
 	}
@@ -197,7 +181,7 @@ func UpdateJobInfo(jobId uint, info string) error {
 		Update("info", info).Error
 }
 
-func ActiveJob(jobId uint) error {
-	return Db.Model(&Job{}).Where("job_id = ?", jobId).
+func (job *Job) Activate() error {
+	return Db.Model(&Job{}).Where("job_id = ?", job.JobId).
 		Update("active", true).Error
 }

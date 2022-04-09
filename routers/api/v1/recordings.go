@@ -7,6 +7,7 @@ import (
 	"github.com/srad/streamsink/conf"
 	"github.com/srad/streamsink/models"
 	"github.com/srad/streamsink/services"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -46,7 +47,7 @@ func GetRecordings(c *gin.Context) {
 // @Produce     json
 // @Success     200
 // @Failure     500 {} string "Error message"
-// @Router      /recordings [post]
+// @Router      /recordings/generate/posters [post]
 func GeneratePosters(c *gin.Context) {
 	appG := app.Gin{C: c}
 
@@ -56,6 +57,37 @@ func GeneratePosters(c *gin.Context) {
 	}
 
 	appG.Response(http.StatusOK, nil)
+}
+
+// UpdateVideoInfo godoc
+// @Summary     Return a list of recordings
+// @Description Return a list of recordings.
+// @Tags        recordings
+// @Accept      json
+// @Produce     json
+// @Success     200
+// @Failure     500 {} string "Error message"
+// @Router      /recordings/updateinfo [post]
+func UpdateVideoInfo(c *gin.Context) {
+	appG := app.Gin{C: c}
+	// TODO Make into a cancelable job
+	models.UpdateVideoInfo()
+	appG.Response(http.StatusOK, nil)
+}
+
+// IsUpdatingVideoInfo godoc
+// @Summary     Returns if current the videos are updated.
+// @Description Returns if current the videos are updated.
+// @Tags        recordings
+// @Accept      json
+// @Produce     json
+// @Success     200
+// @Failure     500 {} string "Error message"
+// @Router      /recordings/isupdating [get]
+func IsUpdatingVideoInfo(c *gin.Context) {
+	appG := app.Gin{C: c}
+	log.Println("jjjjjjjjjjjjjjjjjjjjjjjjj")
+	appG.Response(http.StatusOK, true)
 }
 
 // GetRecording godoc
@@ -213,6 +245,35 @@ func CutRecording(c *gin.Context) {
 	}
 
 	job, err := models.EnqueueCuttingJob(channelName, filename, conf.AbsoluteFilepath(channelName, filename), string(cut))
+	if err != nil {
+		appG.Response(http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	appG.Response(http.StatusOK, job)
+}
+
+// Convert godoc
+// @Summary     Cut a video and merge all defined segments
+// @Description Cut a video and merge all defined segments
+// @Tags        recordings
+// @Param       channelName path string true "Channel name"
+// @Param       filename path string true "Filename in channel"
+// @Param       mediaType path string true "Media type to convert to: 720, 1080, mp3"
+// @Accept      json
+// @Produce     json
+// @Success     200 {object} models.Job
+// @Failure     400 {} string "Error message"
+// @Failure     500 {} string "Error message"
+// @Router      /recordings/:channelName/:filename/:mediaType/convert [post]
+func Convert(c *gin.Context) {
+	appG := app.Gin{C: c}
+
+	channelName := c.Param("channelName")
+	filename := c.Param("filename")
+	mediaType := c.Param("mediaType")
+
+	job, err := models.EnqueueConversionJob(channelName, filename, conf.AbsoluteFilepath(channelName, filename), mediaType)
 	if err != nil {
 		appG.Response(http.StatusInternalServerError, err.Error())
 		return

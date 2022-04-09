@@ -3,7 +3,6 @@ package v1
 import (
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
-	"github.com/srad/streamsink/utils"
 	"log"
 	"net/http"
 	"sync"
@@ -19,7 +18,7 @@ var (
 			return true
 		}}
 	dispatcher = wsDispatcher{}
-	msg        = make(chan SocketMessage)
+	msg        = make(chan SocketEvent)
 )
 
 type wsDispatcher struct {
@@ -30,7 +29,7 @@ func (d *wsDispatcher) addWs(ws wsConnection) {
 	d.listeners = append(d.listeners, ws)
 }
 
-func (d *wsDispatcher) notify(msg SocketMessage) {
+func (d *wsDispatcher) notify(msg SocketEvent) {
 	for _, l := range d.listeners {
 		if err := l.send(msg); err != nil {
 			log.Printf("[notify] %v", err)
@@ -53,13 +52,13 @@ func (d *wsDispatcher) rmWs(ws *websocket.Conn) {
 	}
 }
 
-type SocketMessage struct {
-	Data  map[string]interface{} `json:"data"`
-	Event string                 `json:"event"`
+type SocketEvent struct {
+	Data interface{} `json:"data"`
+	Name string      `json:"name"`
 }
 
-func NewMessage(event string, data interface{}) SocketMessage {
-	return SocketMessage{Event: event, Data: utils.StructToDict(data)}
+func NewSocketEvent(event string, data interface{}) SocketEvent {
+	return SocketEvent{Name: event, Data: data}
 }
 
 type wsConnection struct {
@@ -94,7 +93,7 @@ func WsHandler(c *gin.Context) {
 	})
 
 	for {
-		msg := &SocketMessage{}
+		msg := &SocketEvent{}
 		err := ws.ReadJSON(&msg)
 		if err != nil {
 			log.Printf("[WsHandler] error read message: %v", err)
@@ -104,6 +103,6 @@ func WsHandler(c *gin.Context) {
 	}
 }
 
-func SendMessage(message SocketMessage) {
-	msg <- message
+func SendMessage(event SocketEvent) {
+	msg <- event
 }

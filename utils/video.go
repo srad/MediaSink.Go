@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/astaxie/beego/utils"
 	"github.com/srad/streamsink/conf"
 	"log"
 	"os"
@@ -11,6 +12,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type CuttingJob struct {
@@ -23,7 +25,7 @@ type CutArgs struct {
 	Ends   []string `json:"ends"`
 }
 
-type PreviewJob struct {
+type VideoConversionArgs struct {
 	OnStart     func(*CommandInfo)
 	OnProgress  func(*ProcessInfo)
 	ChannelName string
@@ -32,16 +34,17 @@ type PreviewJob struct {
 
 type ProcessInfo struct {
 	JobType string
-	Frame   int
+	Frame   uint64
 	Total   int
 	Raw     string
 }
 
 type JsonFFProbeInfo struct {
 	Streams []struct {
-		Width      uint   `json:"width"`
-		Height     uint   `json:"height"`
-		RFrameRate string `json:"r_frame_rate"`
+		Width       uint   `json:"width"`
+		Height      uint   `json:"height"`
+		RFrameRate  string `json:"r_frame_rate"`
+		PacketCount string `json:"nb_read_packets"`
 	} `json:"streams"`
 	Format struct {
 		Duration string `json:"duration"`
@@ -51,12 +54,21 @@ type JsonFFProbeInfo struct {
 }
 
 type FFProbeInfo struct {
-	Fps      float64
-	Duration float64
-	Size     uint64
-	BitRate  uint64
-	Width    uint
-	Height   uint
+	Fps         float64
+	Duration    float64
+	Size        uint64
+	BitRate     uint64
+	Width       uint
+	Height      uint
+	PacketCount uint64
+}
+
+type ConversionResult struct {
+	ChannelName  string
+	Filename     string
+	PathRelative string
+	Filepath     string
+	CreatedAt    time.Time
 }
 
 func CreatePreviewStripe(errListener func(string), outputDir, outFile, absolutePath string, frameDistance, frameHeight uint, fps float64) error {
@@ -67,7 +79,7 @@ func CreatePreviewStripe(errListener func(string), outputDir, outFile, absoluteP
 
 	return ExecSync(&ExecArgs{
 		OnPipeErr: func(info PipeMessage) {
-			errListener(info.Message)
+			errListener(info.Output)
 		},
 		Command:     "ffmpeg",
 		CommandArgs: []string{"-i", absolutePath, "-y", "-progress", "pipe:2", "-frames:v", "1", "-q:v", "0", "-threads", fmt.Sprint(conf.ThreadCount), "-an", "-vf", fmt.Sprintf("select=not(mod(n\\,%d)),scale=-2:%d,drawtext=fontfile=%s: text='%%{pts\\:gmtime\\:0\\:%%H\\\\\\:%%M\\\\\\:%%S}': rate=%f: x=(w-tw)/2: y=h-(2*lh): fontsize=20: fontcolor=white: bordercolor=black: borderw=3: box=0: boxcolor=0x00000000@1,tile=%dx1", frameDistance, frameHeight, conf.GetFontPath(), fps, conf.FrameCount), "-hide_banner", "-loglevel", "error", "-stats", "-vsync", "vfr", filepath.Join(dir, outFile)},
@@ -132,7 +144,85 @@ func ExtractFirstFrame(input, height, output string) error {
 	return nil
 }
 
-func ExtractFrames(args *PreviewJob, inputPath, outputDir string, extractCount int, frameHeight, videoHeight uint) error {
+func ConvertVideo(args *VideoConversionArgs, mediaType string) (*ConversionResult, error) {
+	absoluteChannelFolder := conf.AbsoluteRecordingsPath(args.ChannelName)
+	input := filepath.Join(absoluteChannelFolder, args.Filename)
+	if !utils.FileExists(input) {
+		return nil, errors.New(fmt.Sprintf("File '%s' does not exit", input))
+	}
+
+	// Might seem redundant, but since we have no dependent types...
+	if mediaType == "mp3" {
+		mp3Filename := fmt.Sprintf("%s.mp3", FileNameWithoutExtension(args.Filename))
+		outputAbsoluteMp3 := filepath.Join(absoluteChannelFolder, mp3Filename)
+
+		result := &ConversionResult{
+			ChannelName:  args.ChannelName,
+			Filename:     mp3Filename,
+			PathRelative: conf.GetRelativeRecordingsPath(args.ChannelName, mp3Filename),
+			CreatedAt:    time.Now(),
+			Filepath:     outputAbsoluteMp3,
+		}
+
+		err := ExecSync(&ExecArgs{
+			OnPipeErr: func(info PipeMessage) {
+			},
+			OnStart: func(info CommandInfo) {
+				args.OnStart(&info)
+			},
+			Command:     "ffmpeg",
+			CommandArgs: []string{"-i", input, "-y", "-threads", fmt.Sprint(conf.ThreadCount), "-hide_banner", "-loglevel", "error", "-progress", "pipe:2", "-q:a", "0", "-map", "a", outputAbsoluteMp3},
+		})
+
+		return result, err
+	} else {
+		// video, anything else is a resolution
+		// Create new filename
+		name := fmt.Sprintf("%s_%s.mp4", FileNameWithoutExtension(args.Filename), mediaType)
+		output := filepath.Join(absoluteChannelFolder, name)
+
+		result := &ConversionResult{
+			ChannelName:  args.ChannelName,
+			Filename:     name,
+			PathRelative: conf.GetRelativeRecordingsPath(args.ChannelName, name),
+			CreatedAt:    time.Now(),
+			Filepath:     output,
+		}
+
+		err := ExecSync(&ExecArgs{
+			OnPipeErr: func(info PipeMessage) {
+				if strings.Contains(info.Output, "=") {
+					kv := strings.Split(info.Output, "=")
+					if len(kv) > 1 && kv[0] == "frame" {
+						frame, err := strconv.ParseUint(kv[1], 10, 64)
+						if err == nil {
+							args.OnProgress(&ProcessInfo{Frame: frame})
+						}
+					}
+				}
+			},
+			OnStart: func(info CommandInfo) {
+				args.OnStart(&info)
+			},
+			Command: "ffmpeg",
+			// Preset values: https://trac.ffmpeg.org/wiki/Encode/H.264
+			//ultrafast
+			//superfast
+			//veryfast
+			//faster
+			//fast
+			//medium – default preset
+			//slow
+			//slower
+			//veryslow
+			CommandArgs: []string{"-i", input, "-y", "-threads", fmt.Sprint(conf.ThreadCount), "-an", "-vf", fmt.Sprintf("scale=-1:%s", mediaType), "-hide_banner", "-loglevel", "error", "-progress", "pipe:2", "-movflags", "faststart", "-c:v", "libx264", "-crf", "18", "-preset", "medium", "-c:a", "copy", output},
+		})
+
+		return result, err
+	}
+}
+
+func ExtractFrames(args *VideoConversionArgs, inputPath, outputDir string, extractCount int, frameHeight, videoHeight uint) error {
 	totalFrameCount, err := GetFrameCount(inputPath)
 	if err != nil {
 		log.Printf("Error getting frame count for: '%s'\n", inputPath)
@@ -155,10 +245,10 @@ func ExtractFrames(args *PreviewJob, inputPath, outputDir string, extractCount i
 		return errors.New(fmt.Sprintf("error generating stripe for '%s': %s", inputPath, err.Error()))
 	}
 
-	i := 1
+	var i uint64 = 1
 	if err := CreatePreviewVideo(func(info PipeMessage) {
-		if strings.Contains(info.Message, "frame=") {
-			args.OnProgress(&ProcessInfo{Frame: i, Raw: info.Message, Total: extractCount})
+		if strings.Contains(info.Output, "frame=") {
+			args.OnProgress(&ProcessInfo{Frame: i, Raw: info.Output, Total: extractCount})
 			i++
 		}
 	}, outputDir, filename+".mp4", inputPath, frameDistance, videoHeight, info.Fps); err != nil {
@@ -191,8 +281,8 @@ func GetFrameCount(filepath string) (uint64, error) {
 }
 
 func GetVideoInfo(filepath string) (*FFProbeInfo, error) {
-	cmd := exec.Command("ffprobe", "-i", filepath, "-show_entries", "format=bit_rate,size,duration", "-show_entries", "stream=r_frame_rate,width,height", "-v", "error", "-select_streams", "v:0", "-of", "default=noprint_wrappers=1", "-print_format", "json")
-	stdout, err := cmd.Output()
+	cmd := exec.Command("ffprobe", "-i", filepath, "-show_entries", "format=bit_rate,size,duration", "-show_entries", "stream=r_frame_rate,width,height,nb_read_packets", "-v", "error", "-select_streams", "v:0", "-count_packets", "-of", "default=noprint_wrappers=1", "-print_format", "json")
+	stdout, err := cmd.CombinedOutput()
 	output := strings.TrimSpace(string(stdout))
 
 	if err != nil {
@@ -206,12 +296,13 @@ func GetVideoInfo(filepath string) (*FFProbeInfo, error) {
 	}
 
 	info := &FFProbeInfo{
-		BitRate:  0,
-		Size:     0,
-		Height:   0,
-		Width:    0,
-		Duration: 0,
-		Fps:      0,
+		BitRate:     0,
+		Size:        0,
+		Height:      0,
+		Width:       0,
+		Duration:    0,
+		Fps:         0,
+		PacketCount: 0,
 	}
 
 	duration, err := strconv.ParseFloat(parsed.Format.Duration, 64)
@@ -238,6 +329,12 @@ func GetVideoInfo(filepath string) (*FFProbeInfo, error) {
 	}
 	info.Fps = fps
 
+	packets, err := strconv.ParseUint(parsed.Streams[0].PacketCount, 10, 64)
+	if err != nil {
+		return info, err
+	}
+	info.PacketCount = packets
+
 	info.Width = parsed.Streams[0].Width
 	info.Height = parsed.Streams[0].Height
 
@@ -257,7 +354,7 @@ func MergeVideos(outputListener func(string), absoluteMergeTextfile, absoluteOut
 
 		},
 		OnPipeErr: func(info PipeMessage) {
-			outputListener(info.Message)
+			outputListener(info.Output)
 		},
 	})
 }
@@ -277,7 +374,21 @@ func CutVideo(args *CuttingJob, absoluteFilepath, absoluteOutputFilepath, startI
 			args.OnStart(&info)
 		},
 		OnPipeErr: func(info PipeMessage) {
-			args.OnProgress(info.Message)
+			args.OnProgress(info.Output)
 		},
 	})
+}
+
+func ParseFFmpegKVs(text string) map[string]string {
+	lines := strings.Split(text, "\n")
+
+	kvs := make(map[string]string)
+	for _, line := range lines {
+		kv := strings.Split(line, "=")
+		if len(kv) > 1 {
+			kvs[kv[0]] = kv[1]
+		}
+	}
+
+	return kvs
 }

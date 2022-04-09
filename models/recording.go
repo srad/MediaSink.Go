@@ -12,6 +12,10 @@ import (
 	"gorm.io/gorm"
 )
 
+var (
+	UpdatingVideoInfo bool = false
+)
+
 type Recording struct {
 	Channel     Channel   `json:"-" gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE;foreignKey:channel_name"`
 	ChannelName string    `json:"channelName" gorm:"primaryKey;not null;default:null"`
@@ -20,6 +24,7 @@ type Recording struct {
 	CreatedAt   time.Time `json:"createdAt" gorm:"not null"`
 	VideoType   string    `json:"videoType"`
 
+	Packets  uint64  `json:"packets" gorm:"default:0;not null"`
 	Duration float64 `json:"duration" gorm:"default:0;not null"`
 	Size     uint64  `json:"size" gorm:"default:0;not null"`
 	BitRate  uint64  `json:"bitRate" gorm:"default:0;not null"`
@@ -105,7 +110,7 @@ func BookmarkList() ([]*Recording, error) {
 func (recording *Recording) Save(videoType string) error {
 	info, err := utils.GetVideoInfo(conf.AbsoluteFilepath(recording.ChannelName, recording.Filename))
 	if err != nil {
-		log.Printf("[AddRecord] Duration error %v for '%s'", err, conf.AbsoluteFilepath(recording.ChannelName, recording.Filename))
+		log.Printf("[AddRecord] GetVideoInfo() error '%s' for '%s'", err.Error(), conf.AbsoluteFilepath(recording.ChannelName, recording.Filename))
 		return err
 	}
 
@@ -115,6 +120,7 @@ func (recording *Recording) Save(videoType string) error {
 	recording.Width = info.Width
 	recording.Height = info.Height
 	recording.VideoType = videoType
+	recording.Packets = info.PacketCount
 
 	log.Printf("[AddRecord] Creating %v", recording)
 	if err := Db.Create(&recording).Error; err != nil {
@@ -206,27 +212,15 @@ func AddIfNotExistsRecording(channelName, filename string) (*Recording, error) {
 		return nil, nil
 	}
 
-	file := conf.GetAbsoluteRecordingsPath(channelName, filename)
-	info, err := utils.GetVideoInfo(file)
-	if err != nil {
-		log.Printf("[AddIfNotExistsRecording] Error reading video information for file '%s': %v", file, err)
-	}
-
 	newRec := &Recording{
 		ChannelName:  channelName,
 		Filename:     filename,
 		PathRelative: conf.GetRelativeRecordingsPath(channelName, filename),
-		Duration:     info.Duration,
-		Width:        info.Width,
-		Height:       info.Height,
-		Size:         info.Size,
-		BitRate:      info.BitRate,
 		CreatedAt:    time.Now(),
 		Bookmark:     false,
 	}
 
-	err = newRec.Save("recording")
-	if err != nil {
+	if err := newRec.Save("recording"); err != nil {
 		log.Printf("[AddIfNotExistsRecording] Error creating: %v", rec.Error)
 		return nil, err
 	}
@@ -239,7 +233,7 @@ func (recording *Recording) GetVideoInfo() (*utils.FFProbeInfo, error) {
 }
 
 func (recording *Recording) UpdateInfo(info *utils.FFProbeInfo) error {
-	return Db.Updates(&Recording{ChannelName: recording.ChannelName, Filename: recording.Filename, Duration: info.Duration, BitRate: info.BitRate, Size: info.Size, Width: info.Width, Height: info.Height}).Error
+	return Db.Updates(&Recording{ChannelName: recording.ChannelName, Filename: recording.Filename, Duration: info.Duration, BitRate: info.BitRate, Size: info.Size, Width: info.Width, Height: info.Height, Packets: info.PacketCount}).Error
 }
 
 func (recording *Recording) FilePath() string {
@@ -296,6 +290,37 @@ func DestroyPreviews(channelName, filename string) error {
 	if err := Db.Model(&rec).Save(&rec).Error; err != nil {
 		return err
 	}
+
+	return nil
+}
+
+func UpdateVideoInfo() error {
+	log.Println("[Recorder] Updating all recordings info")
+	recordings, err := RecordingsList()
+	if err != nil {
+		log.Printf("Error %v", err)
+		return err
+	}
+	UpdatingVideoInfo = true
+	count := len(recordings)
+
+	i := 1
+	for _, rec := range recordings {
+		info, err := rec.GetVideoInfo()
+		if err != nil {
+			log.Printf("[UpdateVideoInfo] Error updating video info: %v", err)
+			continue
+		}
+
+		if err := rec.UpdateInfo(info); err != nil {
+			log.Printf("[Recorder] Error updating video info: %v", err.Error())
+			continue
+		}
+		log.Printf("[Recorder] Updated %s (%d/%d)", rec.Filename, i, count)
+		i++
+	}
+
+	UpdatingVideoInfo = false
 
 	return nil
 }

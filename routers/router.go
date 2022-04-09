@@ -84,7 +84,8 @@ func Setup() http.Handler {
 		apiv1.DELETE("/jobs/:id", v1.DestroyJob)
 		apiv1.GET("/jobs", v1.GetJobs)
 
-		//apiv1.POST("/recordings/updateinfo", v1.UpdateVideoInfo)
+		apiv1.POST("/recordings/updateinfo", v1.UpdateVideoInfo)
+		apiv1.POST("/recordings/isupdating", v1.IsUpdatingVideoInfo)
 		apiv1.POST("/recordings/generate/posters", v1.GeneratePosters)
 
 		apiv1.POST("/recorder/resume", v1.StartRecorder)
@@ -99,6 +100,7 @@ func Setup() http.Handler {
 		apiv1.GET("/recordings/:channelName/:filename/download", v1.DownloadRecording)
 
 		apiv1.POST("/recordings/:channelName/:filename/bookmark/:bookmark", v1.Bookmark)
+		apiv1.POST("/recordings/:channelName/:filename/:mediaType/convert", v1.Convert)
 		apiv1.POST("/recordings/:channelName/:filename/cut", v1.CutRecording)
 		apiv1.POST("/recordings/:channelName/:filename/preview", v1.GeneratePreview)
 
