@@ -59,6 +59,11 @@ func migrate() {
 		log.Panicf("[Migrate] Error updating empty display_name: %s", err.Error())
 	}
 
+	// Set is_paused when missing
+	if err := Db.Exec("UPDATE channels SET is_paused = CASE WHEN is_paused is null or is_paused = '' THEN 0 ELSE is_paused END;").Error; err != nil {
+		log.Panicf("[Migrate] Error updating empty display_name: %s", err.Error())
+	}
+
 	a := Setting{SettingKey: MinDuration, SettingValue: "15", SettingType: "int"}
 	a.Save()
 	b := Setting{SettingKey: ReqInterval, SettingValue: "2", SettingType: "int"}

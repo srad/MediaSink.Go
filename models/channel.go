@@ -35,7 +35,7 @@ type Channel struct {
 	Url             string      `json:"url" gorm:"unique;not null;default:null"`
 	Tags            string      `json:"tags" gorm:"not null;default:''"`
 	Fav             bool        `json:"fav" gorm:"not null;default:0"`
-	IsPaused        bool        `json:"isPaused" gorm:"not null;default:0"`
+	IsPaused        bool        `json:"isPaused" gorm:"default:0"`
 	Deleted         bool        `json:"deleted" gorm:"not null;default:0"`
 	CreatedAt       time.Time   `json:"createdAt"`
 	Recordings      []Recording `json:"-" gorm:"table:recordings;foreignKey:channel_name;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
