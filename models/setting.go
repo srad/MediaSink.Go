@@ -9,9 +9,9 @@ import (
 )
 
 type Setting struct {
-	SettingKey   string `json:"settingKey" gorm:"primaryKey;not null;default:null"`
-	SettingValue string `json:"settingValue" gorm:"not null;default:null"`
-	SettingType  string `json:"-" gorm:"not null;default:null"`
+	SettingKey   string `json:"settingKey" gorm:"primaryKey;"`
+	SettingValue string `json:"settingValue" gorm:"not null;"`
+	SettingType  string `json:"-" gorm:"not null;"`
 }
 
 const (

@@ -4,8 +4,6 @@ dirs:
   recordings: ''
   recordingsfolder: ''
   data: '.previews'
-  public: ''
-  scripts: ''
 sys:
   network: ''
   disk: ''

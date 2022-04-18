@@ -19,10 +19,10 @@ type Cfg struct {
 	DataDisk               string
 	NetworkDev             string
 	DataPath               string
-	PublicPath             string
-	ScriptPath             string
-	DefaulImportUrl        string
-	MinRecMin              int
+	//PublicPath             string
+	//ScriptPath             string
+	DefaulImportUrl string
+	MinRecMin       int
 }
 
 const (
@@ -138,7 +138,7 @@ func Read() {
 	AppCfg.RecordingsAbsolutePath = getConfString("dirs.recordingsfolder", "REC_PATH")
 	AppCfg.RecordingsFolder = getConfString("dirs.recordings", "REC_FOLDERNAME")
 	AppCfg.DataPath = getConfString("dirs.data", "DATA_DIR")
-	AppCfg.PublicPath = getConfString("dirs.public", "PUBLIC_PATH")
+	//AppCfg.PublicPath = getConfString("dirs.public", "PUBLIC_PATH")
 
 	AppCfg.DataDisk = getConfString("sys.disk", "DATA_DISK")
 	AppCfg.NetworkDev = getConfString("sys.network", "NET_ADAPTER")

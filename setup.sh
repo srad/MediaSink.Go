@@ -5,16 +5,17 @@ echo Installing youtube-dl and compiling ffmpeg
 echo ########################################################
 echo
 
-sudo apt update
-sudo apt install -y sqlite3 nasm python git gcc binutils
+apt update
+apt upgrade
+apt install -y sqlite3 nasm python git gcc binutils
 
 # youtube dl
-sudo wget https://yt-dl.org/downloads/latest/youtube-dl -O /usr/local/bin/youtube-dl
-sudo chmod a+rx /usr/local/bin/youtube-dl
+wget -q https://yt-dl.org/downloads/latest/youtube-dl -O /usr/local/bin/youtube-dl
+chmod a+rx /usr/local/bin/youtube-dl
 hash -r
 
 # ffmpeg
-sudo apt-get update -qq && sudo apt-get -y install \
+apt-get update -qq && apt-get -y install \
   autoconf \
   automake \
   build-essential \
@@ -39,12 +40,12 @@ sudo apt-get update -qq && sudo apt-get -y install \
   yasm \
   zlib1g-dev
 
-sudo apt-get install libunistring-dev libx264-dev libx265-dev libnuma-dev libvpx-dev libfdk-aac-dev libmp3lame-dev libopus-dev -y
+apt-get install libunistring-dev libx264-dev libx265-dev libnuma-dev libvpx-dev libfdk-aac-dev libmp3lame-dev libopus-dev -y
 
 # Font used by ffmpeg
-sudo cp ./assets/DMMono-Regular.ttf /usr/share/fonts/truetype/
+cp ./assets/DMMono-Regular.ttf /usr/share/fonts/truetype/
 
-mkdir -f bin
+mkdir -p bin
 cd bin
 git clone https://git.ffmpeg.org/ffmpeg.git ffmpeg
 cd ffmpeg
@@ -67,4 +68,5 @@ cd ffmpeg
   --enable-nonfree
 
 make
-sudo make install
+make install
+make distclean

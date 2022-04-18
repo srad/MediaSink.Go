@@ -1,6 +1,7 @@
 package models
 
 import (
+	"errors"
 	"github.com/srad/streamsink/conf"
 	"github.com/srad/streamsink/patterns"
 	"github.com/srad/streamsink/utils"
@@ -31,18 +32,18 @@ type JobMessage[T any] struct {
 }
 
 type Job struct {
-	Recording Recording `json:"-" gorm:"foreignKey:ChannelName,Filename;References:ChannelName,Filename;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
-	JobId     uint      `json:"jobId" gorm:"primaryKey;AUTO_INCREMENT"`
-	Channel   Channel   `json:"-" gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE;foreignKey:ChannelName"`
+	Recording Recording `json:"-" gorm:"foreignKey:ChannelName,Filename;references:channel_name,Filename;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
+	JobId     uint      `json:"jobId" gorm:"autoIncrement"`
+	Channel   Channel   `json:"-" gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE;foreignKey:channel_name;references:channel_name"`
 
 	// Unique entry, this is the actual primary key
-	ChannelName string `json:"channelName" gorm:"not null;default:null;index:unique_entry,unique"`
-	Filename    string `json:"filename" gorm:"not null;default:null;index:unique_entry,unique"`
-	Status      string `json:"status" gorm:"not null;default:null;index:idx_status;index:unique_entry,unique"`
+	ChannelName string `json:"channelName" gorm:"not null;;index:unique_entry,unique"`
+	Filename    string `json:"filename" gorm:"not null;;index:unique_entry,unique"`
+	Status      string `json:"status" gorm:"not null;;index:idx_status;index:unique_entry,unique"`
 
-	Filepath  string    `json:"pathRelative" gorm:"not null;default:null"`
+	Filepath  string    `json:"pathRelative" gorm:"not null;"`
 	Active    bool      `json:"active" gorm:"not null;default:false"`
-	CreatedAt time.Time `json:"createdAt" gorm:"not null;default:null;index:idx_create_at"`
+	CreatedAt time.Time `json:"createdAt" gorm:"not null;;index:idx_create_at"`
 
 	// Additional information
 	Pid      int     `json:"pid" gorm:"default:null"`
@@ -151,10 +152,11 @@ func GetNextJob(status string) (*Job, error) {
 	err := Db.Where("status = ?", status).
 		Joins("Recording").
 		Order("jobs.created_at asc").First(&job).Error
-	if err == gorm.ErrRecordNotFound {
+
+	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, nil
 	}
-	if err != nil && err != gorm.ErrRecordNotFound {
+	if err != nil {
 		return nil, err
 	}
 

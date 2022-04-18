@@ -28,19 +28,19 @@ var (
 )
 
 type Channel struct {
-	ChannelId       uint        `json:"channelId" gorm:"primaryKey;not null;default:null"`
-	ChannelName     string      `json:"channelName" gorm:"unique;not null;default:null"`
-	DisplayName     string      `json:"displayName" gorm:"not null;default:''"`
-	SkipStart       uint        `json:"skipStart" gorm:"not null;default:0"`
-	Url             string      `json:"url" gorm:"unique;not null;default:null"`
-	Tags            string      `json:"tags" gorm:"not null;default:''"`
-	Fav             bool        `json:"fav" gorm:"not null;default:0"`
-	IsPaused        bool        `json:"isPaused" gorm:"default:0"`
-	Deleted         bool        `json:"deleted" gorm:"not null;default:0"`
-	CreatedAt       time.Time   `json:"createdAt"`
-	Recordings      []Recording `json:"-" gorm:"table:recordings;foreignKey:channel_name;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
-	RecordingsCount uint        `json:"recordingsCount"`
-	RecordingsSize  uint        `json:"recordingsSize"`
+	ChannelId   uint      `json:"channelId" gorm:"autoIncrement;"`
+	ChannelName string    `json:"channelName" gorm:"unique;not null;"`
+	DisplayName string    `json:"displayName" gorm:"not null;default:''"`
+	SkipStart   uint      `json:"skipStart" gorm:"not null;default:0"`
+	Url         string    `json:"url" gorm:"not null;default:''"`
+	Tags        string    `json:"tags" gorm:"not null;default:''"`
+	Fav         bool      `json:"fav" gorm:"not null"`
+	IsPaused    bool      `json:"isPaused" gorm:"not null"`
+	Deleted     bool      `json:"deleted" gorm:"not null"`
+	CreatedAt   time.Time `json:"createdAt"`
+	//Recordings      []Recording `json:"-" gorm:"table:recordings;foreignKey:channel_name;references:channel_name;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
+	RecordingsCount uint `json:"recordingsCount" gorm:""`
+	RecordingsSize  uint `json:"recordingsSize" gorm:""`
 }
 
 type StreamInfo struct {
@@ -109,7 +109,7 @@ func (channel *Channel) Start() error {
 	}
 
 	url, err := channel.QueryStreamUrl()
-	streamInfo[channel.ChannelName] = StreamInfo{IsOnline: url != "", Url: url}
+	streamInfo[channel.ChannelName] = StreamInfo{IsOnline: url != "", Url: url, ChannelName: channel.ChannelName}
 	if err != nil {
 		return err
 	}
@@ -259,6 +259,10 @@ func (channel *Channel) UnFavChannel() error {
 func (channel *Channel) SoftDestroy() error {
 	if err := channel.DestroyAllRecordings(); err != nil {
 		log.Printf("Error deleting recordings of channel '%s': %v", channel.ChannelName, err)
+		return err
+	}
+	if err := os.RemoveAll(conf.AbsoluteRecordingsPath(channel.ChannelName)); err != nil && !os.IsNotExist(err) {
+		log.Printf("Error deleting channel folder: %v", err)
 		return err
 	}
 
@@ -427,8 +431,8 @@ func (channel *Channel) Info() *Recording {
 	return recInfo[channel.ChannelName]
 }
 
-func (streamInfo *StreamInfo) Screenshot() error {
-	return utils.ExtractFirstFrame(streamInfo.Url, conf.FrameWidth, filepath.Join(conf.AbsoluteDataPath(streamInfo.ChannelName), conf.FrameName))
+func (si *StreamInfo) Screenshot() error {
+	return utils.ExtractFirstFrame(si.Url, conf.FrameWidth, filepath.Join(conf.AbsoluteDataPath(si.ChannelName), conf.FrameName))
 }
 
 func GetStreamInfo() map[string]StreamInfo {

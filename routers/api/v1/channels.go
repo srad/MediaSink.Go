@@ -61,7 +61,7 @@ func GetChannels(c *gin.Context) {
 	for index, channel := range channels {
 		// Add to each channel current system information
 		response[index] = ChannelResponse{Channel: *channel,
-			Preview:      filepath.Join(conf.AppCfg.RecordingsFolder, channel.ChannelName, conf.AppCfg.DataPath, "live.jpg"),
+			Preview:      filepath.Join(conf.AppCfg.RecordingsFolder, channel.ChannelName, conf.AppCfg.DataPath, conf.FrameName),
 			IsOnline:     channel.IsOnline(),
 			IsRecording:  channel.IsRecording(),
 			MinRecording: channel.RecordingMinutes()}

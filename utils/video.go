@@ -28,6 +28,7 @@ type CutArgs struct {
 type VideoConversionArgs struct {
 	OnStart     func(*CommandInfo)
 	OnProgress  func(*ProcessInfo)
+	OnEnd       func()
 	ChannelName string
 	Filename    string
 }
@@ -137,8 +138,7 @@ func ExtractFirstFrame(input, height, output string) error {
 	})
 
 	if err != nil {
-		log.Printf("[Recorder] Error extracting frame: %v", err.Error())
-		return nil
+		return errors.New(fmt.Sprintf("[Recorder] Error extracting frame: %v", err.Error()))
 	}
 
 	return nil
@@ -240,7 +240,9 @@ func ExtractFrames(args *VideoConversionArgs, inputPath, outputDir string, extra
 	filename := FileNameWithoutExtension(basename)
 
 	if err := CreatePreviewStripe(func(s string) {
-		log.Printf("[createPreviewStripe] %s", s)
+		if strings.Contains(s, "frame") {
+			log.Printf("[createPreviewStripe] %s", s)
+		}
 	}, outputDir, filename+".jpg", inputPath, frameDistance, frameHeight, info.Fps); err != nil {
 		return errors.New(fmt.Sprintf("error generating stripe for '%s': %s", inputPath, err.Error()))
 	}

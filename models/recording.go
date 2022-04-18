@@ -17,9 +17,9 @@ var (
 )
 
 type Recording struct {
-	Channel     Channel   `json:"-" gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE;foreignKey:channel_name"`
-	ChannelName string    `json:"channelName" gorm:"primaryKey;not null;default:null"`
-	Filename    string    `json:"filename" gorm:"primaryKey;not null;default:null"`
+	Channel     Channel   `json:"-" gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE;foreignKey:channel_name;references:channel_name"`
+	ChannelName string    `json:"channelName" gorm:"primaryKey;"`
+	Filename    string    `json:"filename" gorm:"primaryKey;"`
 	Bookmark    bool      `json:"bookmark" gorm:"not null"`
 	CreatedAt   time.Time `json:"createdAt" gorm:"not null"`
 	VideoType   string    `json:"videoType"`
@@ -31,7 +31,7 @@ type Recording struct {
 	Width    uint    `json:"width" gorm:"default:0"`
 	Height   uint    `json:"height" gorm:"default 0"`
 
-	PathRelative string `json:"pathRelative" gorm:"not null;default:null"`
+	PathRelative string `json:"pathRelative" gorm:"not null;"`
 
 	PreviewStripe string `json:"previewStripe" gorm:"default:null"`
 	PreviewVideo  string `json:"previewVideo" gorm:"default:null"`

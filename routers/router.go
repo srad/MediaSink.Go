@@ -7,7 +7,6 @@ import (
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	socketio "github.com/googollee/go-socket.io"
-	"github.com/srad/streamsink/conf"
 	v1 "github.com/srad/streamsink/routers/api/v1"
 
 	docs "github.com/srad/streamsink/docs"
@@ -41,9 +40,9 @@ func Setup() http.Handler {
 	r := gin.New()
 	//r.Use(gin.Logger())
 	r.Use(gin.Recovery())
-	const rec = "./recordings"
-	r.Static("/recordings", conf.AppCfg.RecordingsAbsolutePath)
-	r.Static("/public", conf.AppCfg.PublicPath)
+	//const rec = "./recordings"
+	//r.Static("/recordings", conf.AppCfg.RecordingsAbsolutePath)
+	//r.Static("/public", conf.AppCfg.PublicPath)
 
 	docs.SwaggerInfo.BasePath = "/api/v1"
 	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
