@@ -23,10 +23,11 @@ var (
 
 type ChannelResponse struct {
 	models.Channel
-	IsRecording  bool    `json:"isRecording"`
-	IsOnline     bool    `json:"isOnline"`
-	Preview      string  `json:"preview"`
-	MinRecording float64 `json:"minRecording"`
+	IsRecording   bool    `json:"isRecording"`
+	IsOnline      bool    `json:"isOnline"`
+	IsTerminating bool    `json:"isTerminating"`
+	Preview       string  `json:"preview"`
+	MinRecording  float64 `json:"minRecording"`
 }
 
 type ChannelRequest struct {
@@ -56,15 +57,21 @@ type TagChannelRequest struct {
 func GetChannels(c *gin.Context) {
 	appG := app.Gin{C: c}
 	channels, err := models.ChannelListNotDeleted()
+	if err != nil {
+		appG.Response(http.StatusInternalServerError, nil)
+		return
+	}
+
 	response := make([]ChannelResponse, len(channels))
 
 	for index, channel := range channels {
 		// Add to each channel current system information
 		response[index] = ChannelResponse{Channel: *channel,
-			Preview:      filepath.Join(conf.AppCfg.RecordingsFolder, channel.ChannelName, conf.AppCfg.DataPath, conf.FrameName),
-			IsOnline:     channel.IsOnline(),
-			IsRecording:  channel.IsRecording(),
-			MinRecording: channel.RecordingMinutes()}
+			Preview:       filepath.Join(conf.AppCfg.RecordingsFolder, channel.ChannelName, conf.AppCfg.DataPath, conf.FrameName),
+			IsOnline:      channel.IsOnline(),
+			IsTerminating: channel.IsTerminating(),
+			IsRecording:   channel.IsRecording(),
+			MinRecording:  channel.RecordingMinutes()}
 	}
 
 	if err != nil {
@@ -169,7 +176,7 @@ func UpdateChannel(c *gin.Context) {
 		return
 	}
 
-	if channel.IsPaused {
+	if channel.IsPaused == true {
 		if err := channel.TerminateProcess(); err != nil {
 			log.Printf("[UpdateChannel] Error stopping stream: %s", err.Error())
 			appG.Response(http.StatusInternalServerError, err.Error())

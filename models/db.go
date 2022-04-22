@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/srad/streamsink/conf"
 	"gorm.io/driver/postgres"
+	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 	"log"
@@ -14,27 +15,31 @@ var Db *gorm.DB
 
 func Init() {
 	conf.Read()
-	// SQLite3
-	//db, err := gorm.Open(sqlite.Open(conf.AppCfg.DbFileName), &gorm.Config{
-	//	DisableForeignKeyConstraintWhenMigrating: true,
-	//	Logger:                                   logger.Default.LogMode(logger.Silent),
-	//})
-	// Mysql
-	//dsn := fmt.Sprintf("%s:%s@tcp(%s:3306)/streamsink?charset=utf8mb4&parseTime=true", os.Getenv("DB_USER"), os.Getenv("DB_PASS"), os.Getenv("DB_HOST"))
-	//db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{})
-	dsn := fmt.Sprintf("host=%s user=%s password=%s dbname=streamsink port=5432 sslmode=disable TimeZone=Europe/Berlin", os.Getenv("DB_HOST"), os.Getenv("DB_USER"), os.Getenv("DB_PASS"))
-	db, err := gorm.Open(postgres.New(postgres.Config{
-		DSN: dsn,
-		//PreferSimpleProtocol: true, // disables implicit prepared statement usage
-	}), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Silent),
-	})
-	if err != nil {
-		panic("failed to connect database")
-	}
 
-	//db.LogMode(true)
-	Db = db
+	// If no db host specified, then create a local sqlite3 database. Mainly for dev env.
+	if os.Getenv("DB_HOST") != "" {
+		dsn := fmt.Sprintf("host=%s user=%s password=%s dbname=streamsink port=5432 sslmode=disable TimeZone=Europe/Berlin", os.Getenv("DB_HOST"), os.Getenv("DB_USER"), os.Getenv("DB_PASS"))
+		db, err := gorm.Open(postgres.New(postgres.Config{
+			DSN: dsn,
+			//PreferSimpleProtocol: true, // disables implicit prepared statement usage
+		}), &gorm.Config{
+			Logger: logger.Default.LogMode(logger.Silent),
+		})
+		if err != nil {
+			panic("failed to connect database")
+		}
+		Db = db
+	} else {
+		// SQLite3
+		db, err := gorm.Open(sqlite.Open(conf.AppCfg.DbFileName), &gorm.Config{
+			DisableForeignKeyConstraintWhenMigrating: true,
+			Logger:                                   logger.Default.LogMode(logger.Silent),
+		})
+		if err != nil {
+			panic("failed to connect database")
+		}
+		Db = db
+	}
 
 	migrate()
 }

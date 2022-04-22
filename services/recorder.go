@@ -72,7 +72,7 @@ func checkStreams() {
 		if isPaused {
 			return
 		}
-		if channel.IsRecording() || channel.IsPaused {
+		if channel.IsRecording() || channel.IsPaused == true {
 			//log.Printf("[checkStreams] Already recording or paused: %s", channel.ChannelName)
 			continue
 		}

@@ -10,7 +10,6 @@ import (
 	"log"
 	"net/http"
 	"strconv"
-	"strings"
 )
 
 type CutRequest struct {
@@ -155,13 +154,8 @@ func GetBookmarks(c *gin.Context) {
 func GeneratePreview(c *gin.Context) {
 	appG := app.Gin{C: c}
 
-	channelName := strings.ToLower(strings.TrimSpace(c.Param("channelName")))
-	filename := strings.ToLower(strings.TrimSpace(c.Param("filename")))
-
-	if channelName == "" || filename == "" {
-		appG.Response(http.StatusBadRequest, "invalid params")
-		return
-	}
+	channelName := c.Param("channelName")
+	filename := c.Param("filename")
 
 	job, err := models.EnqueuePreviewJob(channelName, filename)
 	if err != nil {
@@ -172,43 +166,46 @@ func GeneratePreview(c *gin.Context) {
 	appG.Response(http.StatusOK, job)
 }
 
-//func UpdateVideoInfo(c *gin.Context) {
-//	appG := app.Gin{C: c}
-//
-//	log.Println("Starting updating video durations ...")
-//	go service.UpdateVideoInfo()
-//
-//	appG.Response(http.StatusOK, nil)
-//}
-
-// Bookmark godoc
+// FavRecording godoc
 // @Summary     Bookmark a certain video in a channel
 // @Description Bookmark a certain video in a channel.
 // @Tags        recordings
 // @Accept      json
 // @Produce     json
-// @Param       bookmark path int true "1 or 0 for bookmark or remove bookmark"
 // @Param       channelName path string true "Channel name"
 // @Param       filename    path string true "Filename to generate the preview for"
 // @Success     200
 // @Failure     400 {} string "Error message"
 // @Failure     500 {} string "Error message"
-// @Router      /recordings/{channelName}/{filename}/bookmark/{bookmark} [post]
-func Bookmark(c *gin.Context) {
+// @Router      /recordings/{channelName}/{filename}/fav [post]
+func FavRecording(c *gin.Context) {
 	appG := app.Gin{C: c}
 
-	channelName := strings.ToLower(strings.TrimSpace(c.Param("channelName")))
-	filename := strings.ToLower(strings.TrimSpace(c.Param("filename")))
-	bookmark, err := strconv.Atoi(c.Param("bookmark"))
-
-	if err != nil || channelName == "" || filename == "" {
-		appG.Response(http.StatusBadRequest, "invalid params")
+	if err := models.FavRecording(c.Param("channelName"), c.Param("filename"), true); err != nil {
+		appG.Response(http.StatusInternalServerError, err)
 		return
 	}
 
-	errUpdate := models.Db.Table("recordings").Where("channel_name = ? AND filename = ?", channelName, filename).Update("bookmark", bookmark).Error
-	if errUpdate != nil {
-		appG.Response(http.StatusInternalServerError, errUpdate)
+	appG.Response(http.StatusOK, nil)
+}
+
+// UnfavRecording godoc
+// @Summary     Bookmark a certain video in a channel
+// @Description Bookmark a certain video in a channel.
+// @Tags        recordings
+// @Accept      json
+// @Produce     json
+// @Param       channelName path string true "Channel name"
+// @Param       filename    path string true "Filename to generate the preview for"
+// @Success     200
+// @Failure     400 {} string "Error message"
+// @Failure     500 {} string "Error message"
+// @Router      /recordings/{channelName}/{filename}/unfav [post]
+func UnfavRecording(c *gin.Context) {
+	appG := app.Gin{C: c}
+
+	if err := models.FavRecording(c.Param("channelName"), c.Param("filename"), false); err != nil {
+		appG.Response(http.StatusInternalServerError, err)
 		return
 	}
 

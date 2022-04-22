@@ -28,25 +28,25 @@ var (
 )
 
 type Channel struct {
-	ChannelId   uint      `json:"channelId" gorm:"autoIncrement;"`
-	ChannelName string    `json:"channelName" gorm:"unique;not null;"`
-	DisplayName string    `json:"displayName" gorm:"not null;default:''"`
-	SkipStart   uint      `json:"skipStart" gorm:"not null;default:0"`
-	Url         string    `json:"url" gorm:"not null;default:''"`
-	Tags        string    `json:"tags" gorm:"not null;default:''"`
-	Fav         bool      `json:"fav" gorm:"not null"`
-	IsPaused    bool      `json:"isPaused" gorm:"not null"`
-	Deleted     bool      `json:"deleted" gorm:"not null"`
-	CreatedAt   time.Time `json:"createdAt"`
-	//Recordings      []Recording `json:"-" gorm:"table:recordings;foreignKey:channel_name;references:channel_name;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
-	RecordingsCount uint `json:"recordingsCount" gorm:""`
-	RecordingsSize  uint `json:"recordingsSize" gorm:""`
+	ChannelId       uint      `json:"channelId" gorm:"autoIncrement"`
+	ChannelName     string    `json:"channelName" gorm:"unique;not null;"`
+	DisplayName     string    `json:"displayName" gorm:"not null;default:''"`
+	SkipStart       uint      `json:"skipStart" gorm:"not null;default:0"`
+	Url             string    `json:"url" gorm:"not null;default:''"`
+	Tags            string    `json:"tags" gorm:"not null;default:''"`
+	Fav             bool      `json:"fav" gorm:"index:idx_fav,not null"`
+	IsPaused        bool      `json:"isPaused" gorm:"not null,default:false"`
+	Deleted         bool      `json:"deleted" gorm:"not null,default:false"`
+	CreatedAt       time.Time `json:"createdAt"`
+	RecordingsCount uint      `json:"recordingsCount" gorm:"-"`
+	RecordingsSize  uint      `json:"recordingsSize" gorm:"-"`
 }
 
 type StreamInfo struct {
-	IsOnline    bool `json:"isOnline"`
-	Url         string
-	ChannelName string `json:"channelName"`
+	IsOnline      bool `json:"isOnline"`
+	IsTerminating bool
+	Url           string
+	ChannelName   string `json:"channelName"`
 }
 
 func (channel *Channel) Create(tags *[]string) (*Channel, error) {
@@ -109,7 +109,7 @@ func (channel *Channel) Start() error {
 	}
 
 	url, err := channel.QueryStreamUrl()
-	streamInfo[channel.ChannelName] = StreamInfo{IsOnline: url != "", Url: url, ChannelName: channel.ChannelName}
+	streamInfo[channel.ChannelName] = StreamInfo{IsOnline: url != "", Url: url, ChannelName: channel.ChannelName, IsTerminating: false}
 	if err != nil {
 		return err
 	}
@@ -138,6 +138,14 @@ func TerminateAll() {
 func (channel *Channel) TerminateProcess() error {
 	// Is current recording at all?
 	if cmd, ok := streams[channel.ChannelName]; ok {
+		if info, ok2 := streamInfo[channel.ChannelName]; ok2 {
+			streamInfo[channel.ChannelName] = StreamInfo{
+				IsOnline:      info.IsOnline,
+				IsTerminating: true,
+				Url:           info.Url,
+				ChannelName:   info.ChannelName,
+			}
+		}
 		if err := cmd.Process.Signal(os.Interrupt); err != nil && !strings.Contains(err.Error(), "255") {
 			log.Printf("[TerminateProcess] Error killing process for '%s': %v", channel.ChannelName, err)
 			return err
@@ -152,6 +160,13 @@ func (channel *Channel) TerminateProcess() error {
 func (channel *Channel) IsOnline() bool {
 	if _, ok := streamInfo[channel.ChannelName]; ok {
 		return streamInfo[channel.ChannelName].IsOnline
+	}
+	return false
+}
+
+func (channel *Channel) IsTerminating() bool {
+	if _, ok := streamInfo[channel.ChannelName]; ok {
+		return streamInfo[channel.ChannelName].IsTerminating
 	}
 	return false
 }
@@ -174,13 +189,6 @@ func (channel *Channel) QueryStreamUrl() (string, error) {
 
 	return output, nil
 }
-
-//func (channel *Channel) GetStreamUrl() string {
-//	if _, ok := streamInfo[channel.ChannelName]; ok {
-//		return streamInfo[channel.ChannelName].Data.Url
-//	}
-//	return ""
-//}
 
 func GetChannelByName(channelName string) (*Channel, error) {
 	var channel Channel
@@ -211,7 +219,7 @@ func ChannelListNotDeleted() ([]*Channel, error) {
 	var result []*Channel
 
 	err := Db.Model(&Channel{}).
-		Where("deleted = ?", false).
+		Where("channels.deleted = ?", false).
 		Select("channels.*", "(SELECT COUNT(*) FROM recordings WHERE recordings.channel_name = channels.channel_name) recordings_count", "(SELECT SUM(size) FROM recordings WHERE recordings.channel_name = channels.channel_name) recordings_size").
 		Find(&result).Error
 

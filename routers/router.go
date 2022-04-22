@@ -1,6 +1,7 @@
 package routers
 
 import (
+	"github.com/srad/streamsink/conf"
 	"net/http"
 	"time"
 
@@ -14,22 +15,17 @@ import (
 	"github.com/swaggo/gin-swagger/swaggerFiles"
 )
 
-// @title           Swagger Example API
+// @title           StreamSink API
 // @version         1.0
-// @description     This is a sample server celler server.
-// @termsOfService  http://swagger.io/terms/
-
+// @description     The rest API of the StreamSink server.
+//
 // @contact.name   API Support
-// @contact.url    http://www.swagger.io/support
-// @contact.email  support@swagger.io
-
-// @license.name  Apache 2.0
-// @license.url   http://www.apache.org/licenses/LICENSE-2.0.html
-
+// @contact.url    https://github.com/srad
+//
+// @license.name  Dual license, non-commercial, but free for open-source educational uses.
+//
 // @host      localhost:3000
 // @BasePath  /api/v1
-
-// @securityDefinitions.basic  BasicAuth
 
 var (
 	server *socketio.Server
@@ -40,8 +36,11 @@ func Setup() http.Handler {
 	r := gin.New()
 	//r.Use(gin.Logger())
 	r.Use(gin.Recovery())
-	//const rec = "./recordings"
-	//r.Static("/recordings", conf.AppCfg.RecordingsAbsolutePath)
+
+	// You can use the internal static path, but it is recommended that you use a seperate
+	// nginx instance or container to serve the static content more efficiently.
+	// This is more suited for dev environments.
+	r.Static("/recordings", conf.AppCfg.RecordingsAbsolutePath)
 	//r.Static("/public", conf.AppCfg.PublicPath)
 
 	docs.SwaggerInfo.BasePath = "/api/v1"
@@ -98,7 +97,9 @@ func Setup() http.Handler {
 		apiv1.GET("/recordings/:channelName", v1.GetRecording)
 		apiv1.GET("/recordings/:channelName/:filename/download", v1.DownloadRecording)
 
-		apiv1.POST("/recordings/:channelName/:filename/bookmark/:bookmark", v1.Bookmark)
+		apiv1.POST("/recordings/:channelName/:filename/fav", v1.FavRecording)
+		apiv1.POST("/recordings/:channelName/:filename/unfav", v1.UnfavRecording)
+
 		apiv1.POST("/recordings/:channelName/:filename/:mediaType/convert", v1.Convert)
 		apiv1.POST("/recordings/:channelName/:filename/cut", v1.CutRecording)
 		apiv1.POST("/recordings/:channelName/:filename/preview", v1.GeneratePreview)

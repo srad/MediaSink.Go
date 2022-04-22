@@ -20,8 +20,9 @@ type Recording struct {
 	Channel     Channel   `json:"-" gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE;foreignKey:channel_name;references:channel_name"`
 	ChannelName string    `json:"channelName" gorm:"primaryKey;"`
 	Filename    string    `json:"filename" gorm:"primaryKey;"`
-	Bookmark    bool      `json:"bookmark" gorm:"not null"`
+	Bookmark    bool      `json:"bookmark" gorm:"index:idx_bookmark,not null"`
 	CreatedAt   time.Time `json:"createdAt" gorm:"not null"`
+	LastAccess  time.Time `json:"lastAccess"`
 	VideoType   string    `json:"videoType"`
 
 	Packets  uint64  `json:"packets" gorm:"default:0;not null"`
@@ -29,10 +30,9 @@ type Recording struct {
 	Size     uint64  `json:"size" gorm:"default:0;not null"`
 	BitRate  uint64  `json:"bitRate" gorm:"default:0;not null"`
 	Width    uint    `json:"width" gorm:"default:0"`
-	Height   uint    `json:"height" gorm:"default 0"`
+	Height   uint    `json:"height" gorm:"default:0"`
 
-	PathRelative string `json:"pathRelative" gorm:"not null;"`
-
+	PathRelative  string `json:"pathRelative" gorm:"not null;"`
 	PreviewStripe string `json:"previewStripe" gorm:"default:null"`
 	PreviewVideo  string `json:"previewVideo" gorm:"default:null"`
 	PreviewCover  string `json:"previewCover" gorm:"default:null"`
@@ -40,7 +40,8 @@ type Recording struct {
 
 func FindByName(channelName string) ([]*Recording, error) {
 	var recordings []*Recording
-	err := Db.Table("recordings").Select("recordings.*").
+	err := Db.Model(Recording{}).
+		Select("recordings.*").
 		Where("recordings.channel_name = ?", channelName).
 		Order("recordings.created_at DESC").
 		Find(&recordings).Error
@@ -49,6 +50,25 @@ func FindByName(channelName string) ([]*Recording, error) {
 	}
 
 	return recordings, nil
+}
+
+func FavRecording(channelName, filename string, fav bool) error {
+	return Db.Model(Recording{}).
+		Where("channel_name = ? AND filename = ?", channelName, filename).
+		Update("bookmark", fav).Error
+}
+
+func ExitsRecord(channelName, filename string) (bool, error) {
+	var exists bool
+	if err := Db.Model(Recording{}).
+		Select("count(*) > 0").
+		Where("channel_name = ? AND filename = ?", channelName, filename).
+		Find(&exists).
+		Error; err != nil {
+		return false, err
+	}
+
+	return exists, nil
 }
 
 func SortBy(column, order string, limit int) ([]*Recording, error) {
@@ -84,7 +104,7 @@ func FindRandom(limit int) ([]*Recording, error) {
 func RecordingsList() ([]*Recording, error) {
 	var recordings []*Recording
 
-	err := Db.Table("recordings").
+	err := Db.Model(Recording{}).
 		Select("recordings.*").
 		Find(&recordings).Error
 
@@ -97,7 +117,8 @@ func RecordingsList() ([]*Recording, error) {
 
 func BookmarkList() ([]*Recording, error) {
 	var recordings []*Recording
-	err := Db.Table("recordings").Where("bookmark = 1").
+	err := Db.Model(Recording{}).
+		Where("bookmark = ?", true).
 		Select("recordings.*").Order("recordings.channel_name asc").
 		Find(&recordings).Error
 	if err != nil && err != gorm.ErrRecordNotFound {

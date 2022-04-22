@@ -55,12 +55,21 @@ func importRecordings() error {
 
 	channelFolders, _ := file.Readdirnames(0)
 	for _, channelName := range channelFolders {
+		if dir, err := os.Stat(conf.AbsoluteRecordingsPath(channelName)); err != nil || !dir.IsDir() {
+			continue
+		}
+
 		log.Printf("[Import] Reading folder: %s\n", channelName)
 
 		channel := &models.Channel{
 			ChannelName: channelName,
 			DisplayName: channelName,
+			SkipStart:   0,
 			Url:         fmt.Sprintf(conf.AppCfg.DefaulImportUrl, channelName),
+			Tags:        "",
+			Fav:         false,
+			IsPaused:    false,
+			Deleted:     false,
 		}
 
 		if _, err := channel.Create(nil); err != nil {
