@@ -65,7 +65,7 @@ func importRecordings() error {
 			ChannelName: channelName,
 			DisplayName: channelName,
 			SkipStart:   0,
-			Url:         fmt.Sprintf(conf.AppCfg.DefaulImportUrl, channelName),
+			Url:         fmt.Sprintf(conf.AppCfg.DefaultImportUrl, channelName),
 			Tags:        "",
 			Fav:         false,
 			IsPaused:    false,

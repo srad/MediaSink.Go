@@ -110,15 +110,16 @@ func (channel *Channel) Start() error {
 
 	url, err := channel.QueryStreamUrl()
 	streamInfo[channel.ChannelName] = StreamInfo{IsOnline: url != "", Url: url, ChannelName: channel.ChannelName, IsTerminating: false}
+	if url == "" {
+		// Channel offline
+		return nil
+	}
 	if err != nil {
 		return err
 	}
-	if url == "" {
-		return errors.New("channel offline")
-	}
 
 	log.Printf("[Start] Starting '%s' at '%s'", channel.ChannelName, url)
-	go utils.ExtractFirstFrame(url, conf.FrameWidth, filepath.Join(conf.AbsoluteDataPath(channel.ChannelName), conf.FrameName))
+	go utils.ExtractFirstFrame(url, conf.FrameWidth, filepath.Join(conf.AbsoluteDataPath(channel.ChannelName), conf.SnapshotFilename))
 	go channel.Capture(url, channel.SkipStart)
 
 	return nil
@@ -440,7 +441,7 @@ func (channel *Channel) Info() *Recording {
 }
 
 func (si *StreamInfo) Screenshot() error {
-	return utils.ExtractFirstFrame(si.Url, conf.FrameWidth, filepath.Join(conf.AbsoluteDataPath(si.ChannelName), conf.FrameName))
+	return utils.ExtractFirstFrame(si.Url, conf.FrameWidth, filepath.Join(conf.AbsoluteDataPath(si.ChannelName), conf.SnapshotFilename))
 }
 
 func GetStreamInfo() map[string]StreamInfo {

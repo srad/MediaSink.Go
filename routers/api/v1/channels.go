@@ -67,7 +67,7 @@ func GetChannels(c *gin.Context) {
 	for index, channel := range channels {
 		// Add to each channel current system information
 		response[index] = ChannelResponse{Channel: *channel,
-			Preview:       filepath.Join(conf.AppCfg.RecordingsFolder, channel.ChannelName, conf.AppCfg.DataPath, conf.FrameName),
+			Preview:       filepath.Join(conf.AppCfg.RecordingsFolder, channel.ChannelName, conf.AppCfg.DataPath, conf.SnapshotFilename),
 			IsOnline:      channel.IsOnline(),
 			IsTerminating: channel.IsTerminating(),
 			IsRecording:   channel.IsRecording(),
@@ -131,7 +131,7 @@ func AddChannel(c *gin.Context) {
 		Channel:      *newChannel,
 		IsRecording:  false,
 		IsOnline:     false,
-		Preview:      "",
+		Preview:      filepath.Join(conf.AppCfg.RecordingsFolder, channel.ChannelName, conf.AppCfg.DataPath, conf.SnapshotFilename),
 		MinRecording: 0,
 	}
 
@@ -169,7 +169,12 @@ func UpdateChannel(c *gin.Context) {
 		return
 	}
 
-	channel := models.Channel{ChannelId: *data.ChannelId, ChannelName: data.ChannelName, DisplayName: data.DisplayName, SkipStart: data.SkipStart, Url: url}
+	channel := models.Channel{
+		ChannelId:   *data.ChannelId,
+		ChannelName: data.ChannelName,
+		DisplayName: data.DisplayName,
+		SkipStart:   data.SkipStart,
+		Url:         url}
 	if err := channel.Update(); err != nil {
 		log.Printf("[UpdateChannel] Error creating record: %s", err.Error())
 		appG.Response(http.StatusInternalServerError, err.Error())

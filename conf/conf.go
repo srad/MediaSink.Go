@@ -2,6 +2,7 @@ package conf
 
 import (
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"path/filepath"
@@ -21,8 +22,8 @@ type Cfg struct {
 	DataPath               string
 	//PublicPath             string
 	//ScriptPath             string
-	DefaulImportUrl string
-	MinRecMin       int
+	DefaultImportUrl string
+	MinRecMin        int
 }
 
 const (
@@ -32,9 +33,9 @@ const (
 	winFont       = "C\\\\:/Windows/Fonts/DMMono-Regular.ttf"
 	linuxFont     = "/usr/share/fonts/truetype/DMMono-Regular.ttf"
 	// FrameCount Number of extracted frames or timeline/preview
-	FrameCount = 96
-	FrameWidth = "480"
-	FrameName  = "live.jpg"
+	FrameCount       = 96
+	FrameWidth       = "480"
+	SnapshotFilename = "live.jpg"
 )
 
 var (
@@ -120,7 +121,10 @@ func getConfInt(key, envKey string) int {
 func getConfString(key, envKey string) string {
 	val := os.Getenv(envKey)
 	if val == "" {
-		return viper.GetString(key)
+		val = viper.GetString(key)
+	}
+	if val == "" {
+		log.Panicf("Missing config file value for key %s", key)
 	}
 	return val
 }
@@ -143,7 +147,7 @@ func Read() {
 	AppCfg.DataDisk = getConfString("sys.disk", "DATA_DISK")
 	AppCfg.NetworkDev = getConfString("sys.network", "NET_ADAPTER")
 
-	AppCfg.DefaulImportUrl = getConfString("default.importurl", "DEFAULT_IMPORT_URL")
+	AppCfg.DefaultImportUrl = getConfString("default.importurl", "DEFAULT_IMPORT_URL")
 	AppCfg.MinRecMin = getConfInt("settings.minrecmin", "MIN_REC_MIN")
 }
 
@@ -157,6 +161,37 @@ func MakeChannelFolders(channelName string) {
 	if _, err := os.Stat(dataPath); os.IsNotExist(err) {
 		fmt.Println("Creating folder: " + dataPath)
 		os.MkdirAll(dataPath, os.ModePerm)
+		if err := copyDefaultSnapshotTo(dataPath); err != nil {
+			log.Println(err)
+		}
+	}
+}
+
+func copyDefaultSnapshotTo(dataPath string) error {
+	pwd, err := os.Getwd()
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	srcFile, err := os.Open(filepath.Join(pwd, "assets", "live.jpg"))
+	check(err)
+	defer srcFile.Close()
+
+	destFile, err := os.Create(filepath.Join(dataPath, SnapshotFilename)) // creates if file doesn't exist
+	check(err)
+	defer destFile.Close()
+
+	_, err = io.Copy(destFile, srcFile) // check first var for number of bytes copied
+	check(err)
+
+	return destFile.Sync()
+
+}
+
+func check(err error) {
+	if err != nil {
+		fmt.Println("Error : %s", err.Error())
+		os.Exit(1)
 	}
 }
 
