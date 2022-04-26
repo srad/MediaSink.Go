@@ -265,29 +265,30 @@ func cuttingJobs() error {
 				log.Printf("[Job] Error deleting %s: %v", file, err)
 			}
 		}
+		_ = os.RemoveAll(mergeTextfile)
 		_ = job.Destroy()
 		return err
 	}
 
-	err = utils.MergeVideos(func(s string) {
-		log.Printf("[MergeVideos] %s", s)
-	}, mergeTextfile, outputFile)
+	err = utils.MergeVideos(func(s string) { log.Printf("[MergeVideos] %s", s) }, mergeTextfile, outputFile)
 	if err != nil {
+		// Job failed, destroy all files.
 		log.Printf("[Job] Error merging file '%s': %s", mergeTextfile, err.Error())
 		for _, file := range segFiles {
 			if err := os.RemoveAll(file); err != nil {
 				log.Printf("[Job] Error deleting %s: %s", file, err.Error())
 			}
 		}
+		_ = os.RemoveAll(mergeTextfile)
 		_ = job.Destroy()
 		return err
 	}
+
 	_ = os.RemoveAll(mergeTextfile)
 	for _, file := range segFiles {
+		log.Printf("[MergeJob] Deleting segment %s", file)
 		if err := os.Remove(file); err != nil {
 			log.Printf("[Job] Error deleting segment '%s': %s", file, err.Error())
-		} else {
-			log.Printf("[Job] Deleted segment '%s': %s", file, err.Error())
 		}
 	}
 
