@@ -78,7 +78,7 @@ func checkStreams() {
 		}
 
 		err := channel.Start()
-		log.Printf("%v | %s\n\n", channel, err)
+		//log.Printf("%v | %s\n\n", channel, err)
 
 		if err != nil {
 			Dispatcher.Notify("channel:offline", RecorderMessage{ChannelName: channel.ChannelName})

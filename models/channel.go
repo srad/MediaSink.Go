@@ -38,8 +38,8 @@ type Channel struct {
 	IsPaused        bool      `json:"isPaused" gorm:"not null,default:false"`
 	Deleted         bool      `json:"deleted" gorm:"not null,default:false"`
 	CreatedAt       time.Time `json:"createdAt"`
-	RecordingsCount uint      `json:"recordingsCount" gorm:"-"`
-	RecordingsSize  uint      `json:"recordingsSize" gorm:"-"`
+	RecordingsCount uint      `json:"recordingsCount" gorm:"default:(-);"`
+	RecordingsSize  uint      `json:"recordingsSize" gorm:"default:(-);"`
 }
 
 type StreamInfo struct {
@@ -112,7 +112,7 @@ func (channel *Channel) Start() error {
 	streamInfo[channel.ChannelName] = StreamInfo{IsOnline: url != "", Url: url, ChannelName: channel.ChannelName, IsTerminating: false}
 	if url == "" {
 		// Channel offline
-		return nil
+		return errors.New(fmt.Sprintf("no url found for for channel '%s'", channel.ChannelName))
 	}
 	if err != nil {
 		return err
