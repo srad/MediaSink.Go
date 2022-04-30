@@ -71,6 +71,7 @@ RUN apt autoremove -y
 # End ffmpeg build
 
 RUN mkdir -p /recordings
+RUN mkdir -p /disk
 
 WORKDIR /app
 RUN mkdir -p docs

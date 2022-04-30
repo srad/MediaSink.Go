@@ -6,7 +6,7 @@ dirs:
   data: '.previews'
 sys:
   network: 'eth0'
-  disk: '/'
+  disk: '/disk'
 default:
   importurl: 'https://%s'
 settings:
