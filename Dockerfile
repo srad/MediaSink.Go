@@ -87,9 +87,9 @@ RUN chmod a+x wait-for-it.sh
 COPY conf/app.docker.yml conf/app.yml
 COPY ./assets/DMMono-Regular.ttf /usr/share/fonts/truetype/
 
-# https://github.com/mattn/go-sqlite3/issues/803
-RUN go install github.com/swaggo/swag/cmd/swag
+RUN go install github.com/swaggo/swag/cmd/swag@latest
 RUN swag init
+# https://github.com/mattn/go-sqlite3/issues/803
 RUN GOFLAGS="-g -O2 -Wno-return-local-addr"
 RUN go build -o ./streamsink
 
