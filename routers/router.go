@@ -2,17 +2,17 @@ package routers
 
 import (
 	"github.com/srad/streamsink/conf"
+	"github.com/srad/streamsink/docs"
 	"net/http"
 	"time"
 
 	"github.com/gin-contrib/cors"
-	"github.com/gin-gonic/gin"
 	socketio "github.com/googollee/go-socket.io"
 	v1 "github.com/srad/streamsink/routers/api/v1"
 
-	docs "github.com/srad/streamsink/docs"
+	"github.com/gin-gonic/gin"
+	"github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
-	"github.com/swaggo/gin-swagger/swaggerFiles"
 )
 
 // @title           StreamSink API

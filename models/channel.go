@@ -112,7 +112,7 @@ func (channel *Channel) Start() error {
 	streamInfo[channel.ChannelName] = StreamInfo{IsOnline: url != "", Url: url, ChannelName: channel.ChannelName, IsTerminating: false}
 	if url == "" {
 		// Channel offline
-		return errors.New(fmt.Sprintf("no url found for for channel '%s'", channel.ChannelName))
+		return errors.New(fmt.Sprintf("no url found for channel '%s'", channel.ChannelName))
 	}
 	if err != nil {
 		return err

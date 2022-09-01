@@ -2,6 +2,7 @@ package conf
 
 import (
 	"fmt"
+	"github.com/spf13/viper"
 	"io"
 	"log"
 	"os"
@@ -9,8 +10,6 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
-
-	"github.com/spf13/viper"
 )
 
 type Cfg struct {

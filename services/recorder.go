@@ -72,15 +72,22 @@ func checkStreams() {
 		if isPaused {
 			return
 		}
-		if channel.IsRecording() || channel.IsPaused == true {
-			//log.Printf("[checkStreams] Already recording or paused: %s", channel.ChannelName)
+
+		// Get the current database value, in case it case been updated meanwhile.
+		currentChannel, err := models.GetChannelByName(channel.ChannelName)
+
+		if err != nil {
+			log.Printf("[checkStreams] Error channel %s: %s, %v", channel.ChannelName, err)
 			continue
 		}
 
-		err := channel.Start()
-		//log.Printf("%v | %s\n\n", channel, err)
+		if currentChannel.IsRecording() || currentChannel.IsPaused {
+			log.Printf("[checkStreams] Already recording or paused: %s", channel.ChannelName)
+			continue
+		}
 
-		if err != nil {
+		if err := channel.Start(); err != nil {
+			//log.Printf("[checkStreams] Start error: %v | %s\n", channel, err)
 			Dispatcher.Notify("channel:offline", RecorderMessage{ChannelName: channel.ChannelName})
 		} else {
 			Dispatcher.Notify("channel:online", RecorderMessage{ChannelName: channel.ChannelName})
