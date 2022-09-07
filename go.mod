@@ -8,11 +8,11 @@ require (
 	github.com/gin-gonic/gin v1.8.1
 	github.com/googollee/go-socket.io v1.6.2
 	github.com/gorilla/websocket v1.5.0
-	github.com/spf13/viper v1.12.0
+	github.com/spf13/viper v1.13.0
 	github.com/swaggo/files v0.0.0-20220728132757-551d4a08d97a
-	github.com/swaggo/gin-swagger v1.5.2
+	github.com/swaggo/gin-swagger v1.5.3
 	github.com/swaggo/swag v1.8.5
-	golang.org/x/sys v0.0.0-20220829200755-d48e67d00261
+	golang.org/x/sys v0.0.0-20220907062415-87db552b00fd
 	gorm.io/driver/postgres v1.3.9
 	gorm.io/driver/sqlite v1.3.6
 	gorm.io/gorm v1.23.8
@@ -40,7 +40,7 @@ require (
 	github.com/jackc/pgproto3/v2 v2.3.1 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20200714003250-2b9c44734f2b // indirect
 	github.com/jackc/pgtype v1.12.0 // indirect
-	github.com/jackc/pgx/v4 v4.17.1 // indirect
+	github.com/jackc/pgx/v4 v4.17.2 // indirect
 	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/jinzhu/now v1.1.5 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
@@ -63,7 +63,7 @@ require (
 	github.com/subosito/gotenv v1.4.1 // indirect
 	github.com/ugorji/go/codec v1.2.7 // indirect
 	golang.org/x/crypto v0.0.0-20220829220503-c86fa9a7ed90 // indirect
-	golang.org/x/net v0.0.0-20220826154423-83b083e8dc8b // indirect
+	golang.org/x/net v0.0.0-20220906165146-f3363e06e74c // indirect
 	golang.org/x/text v0.3.7 // indirect
 	golang.org/x/tools v0.1.12 // indirect
 	google.golang.org/protobuf v1.28.1 // indirect
