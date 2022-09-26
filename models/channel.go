@@ -38,8 +38,8 @@ type Channel struct {
 	IsPaused        bool      `json:"isPaused" gorm:"not null,default:false"`
 	Deleted         bool      `json:"deleted" gorm:"not null,default:false"`
 	CreatedAt       time.Time `json:"createdAt"`
-	RecordingsCount uint      `json:"recordingsCount" gorm:"default:(-);"`
-	RecordingsSize  uint      `json:"recordingsSize" gorm:"default:(-);"`
+	RecordingsCount uint      `json:"recordingsCount" gorm:""`
+	RecordingsSize  uint      `json:"recordingsSize" gorm:""`
 }
 
 type StreamInfo struct {
