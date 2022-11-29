@@ -119,7 +119,7 @@ func importRecordings() error {
 					log.Printf(" + [Import] Adding job for %s\n", file.Name())
 					models.EnqueuePreviewJob(channelName, file.Name())
 				} else {
-					// Schrodinger: file may or may not exist. See err for details.
+					// Schrödinger: file may or may not exist. See err for details.
 					// Therefore, do *NOT* use !os.IsNotExist(err) to test for file existence
 					log.Printf(" + [Import] Error: %v, %v", err1, err2)
 				}
