@@ -62,7 +62,8 @@ RUN ./configure \
   --enable-libvpx \
   --enable-libx264 \
   --enable-libx265 \
-  --enable-nonfree
+  --enable-nonfree \
+  --disable-doc
 
 RUN make
 RUN make install
