@@ -16,14 +16,15 @@ ENV LANG en_US.UTF-8
 
 RUN wget https://bootstrap.pypa.io/pip/2.7/get-pip.py
 RUN python2 get-pip.py
+RUN pip install youtube-dl
 
 # YDL Build
-RUN pip install distribute
-RUN pip install nose
-RUN pip install virtualenv
-RUN apt -y install pandoc
-RUN git clone https://github.com/ytdl-org/youtube-dl.git /youtube-dl
-WORKDIR /youtube-dl
+#RUN pip install distribute
+#RUN pip install nose
+#RUN pip install virtualenv
+#RUN apt -y install pandoc
+#RUN git clone https://github.com/ytdl-org/youtube-dl.git /youtube-dl
+#WORKDIR /youtube-dl
 RUN make
 RUN make install
 RUN make distclean
