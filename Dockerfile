@@ -8,16 +8,16 @@ RUN echo "deb-src http://ftp.de.debian.org/debian/ bullseye main contrib non-fre
 
 RUN apt-get update
 RUN apt-get upgrade -y
-RUN DEBIAN_FRONTEND=noninteractive apt-get install sqlite3 python3 python3-pip locales -y
+RUN DEBIAN_FRONTEND=noninteractive apt-get install sqlite3 python2 python2-pip locales -y
 RUN sed -i -e 's/# en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen && \
     dpkg-reconfigure --frontend=noninteractive locales && \
     update-locale LANG=en_US.UTF-8
 ENV LANG en_US.UTF-8
 
 # YDL Build
-RUN pip3 install distribute
-RUN pip3 install nose
-RUN pip3 install virtualenv
+RUN pip2 install distribute
+RUN pip2 install nose
+RUN pip2 install virtualenv
 RUN apt -y install pandoc
 RUN git clone https://github.com/ytdl-org/youtube-dl.git /youtube-dl
 WORKDIR /youtube-dl
