@@ -14,8 +14,8 @@ RUN sed -i -e 's/# en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen && \
     update-locale LANG=en_US.UTF-8
 ENV LANG en_US.UTF-8
 
-RUN wget https://bootstrap.pypa.io/pip/2.7/get-pip.py
-RUN python2 get-pip.py
+#RUN wget https://bootstrap.pypa.io/pip/2.7/get-pip.py
+#RUN python2 get-pip.py
 RUN pip install youtube-dl
 
 # YDL Build
