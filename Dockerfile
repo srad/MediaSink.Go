@@ -14,21 +14,7 @@ RUN sed -i -e 's/# en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen && \
     update-locale LANG=en_US.UTF-8
 ENV LANG en_US.UTF-8
 
-#RUN wget https://bootstrap.pypa.io/pip/2.7/get-pip.py
-#RUN python2 get-pip.py
 RUN pip install youtube-dl
-
-# YDL Build
-#RUN pip install distribute
-#RUN pip install nose
-#RUN pip install virtualenv
-#RUN apt -y install pandoc
-#RUN git clone https://github.com/ytdl-org/youtube-dl.git /youtube-dl
-#WORKDIR /youtube-dl
-RUN make
-RUN make install
-RUN make distclean
-RUN apt autoremove -y
 
 #RUN wget -q https://yt-dl.org/downloads/latest/youtube-dl -O /usr/local/bin/youtube-dl
 #RUN chmod a+rx /usr/local/bin/youtube-dl
