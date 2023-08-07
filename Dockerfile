@@ -14,8 +14,18 @@ RUN sed -i -e 's/# en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen && \
     update-locale LANG=en_US.UTF-8
 ENV LANG en_US.UTF-8
 
-RUN wget -q https://yt-dl.org/downloads/latest/youtube-dl -O /usr/local/bin/youtube-dl
-RUN chmod a+rx /usr/local/bin/youtube-dl
+# YDL Build
+RUN apt -y install pandoc nosetests
+RUN git clone https://github.com/ytdl-org/youtube-dl.git /youtube-dl
+WORKDIR /youtube-dl
+RUN ./configure
+RUN make
+RUN make install
+RUN make distclean
+RUN apt autoremove -y
+
+#RUN wget -q https://yt-dl.org/downloads/latest/youtube-dl -O /usr/local/bin/youtube-dl
+#RUN chmod a+rx /usr/local/bin/youtube-dl
 
 # Start ffmpeg build
 RUN apt install -y nasm git gcc binutils libunistring-dev libx264-dev libx265-dev libnuma-dev libvpx-dev libfaac-dev libfdk-aac-dev libmp3lame-dev libopus-dev
