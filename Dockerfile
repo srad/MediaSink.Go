@@ -24,7 +24,6 @@ RUN pip install virtualenv
 RUN apt -y install pandoc
 RUN git clone https://github.com/ytdl-org/youtube-dl.git /youtube-dl
 WORKDIR /youtube-dl
-RUN ./configure
 RUN make
 RUN make install
 RUN make distclean
