@@ -15,7 +15,10 @@ RUN sed -i -e 's/# en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen && \
 ENV LANG en_US.UTF-8
 
 # YDL Build
-RUN apt -y install pandoc nosetests
+RUN pip install distribute
+RUN pip install nose
+RUN pip install virtualenv
+RUN apt -y install pandoc
 RUN git clone https://github.com/ytdl-org/youtube-dl.git /youtube-dl
 WORKDIR /youtube-dl
 RUN ./configure
