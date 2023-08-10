@@ -189,7 +189,7 @@ func copyDefaultSnapshotTo(dataPath string) error {
 
 func check(err error) {
 	if err != nil {
-		fmt.Println("Error : %s", err.Error())
+		fmt.Printf("Error : %s\n", err.Error())
 		os.Exit(1)
 	}
 }
