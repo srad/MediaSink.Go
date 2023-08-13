@@ -1,4 +1,4 @@
-FROM golang:1-bullseye
+FROM --platform=$BUILDPLATFORM golang:1-bullseye
 
 ENV TZ=Europe/Berlin
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
@@ -98,7 +98,9 @@ RUN go mod vendor
 
 # https://github.com/mattn/go-sqlite3/issues/803
 RUN GOFLAGS="-g -O2 -Wno-return-local-addr"
-RUN go build -o ./streamsink
+
+ARG TARGETOS TARGETARCH
+RUN GOOS=$TARGETOS GOARCH=$TARGETARCH go build -o ./streamsink
 
 EXPOSE 3000
 
