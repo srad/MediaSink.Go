@@ -1,20 +1,19 @@
-FROM --platform=$BUILDPLATFORM golang:1-bullseye
+FROM --platform=$BUILDPLATFORM golang:1-bookworm
 
 ENV TZ=Europe/Berlin
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
-RUN echo "deb http://ftp.de.debian.org/debian/ bullseye main contrib non-free" | tee -a /etc/apt/sources.list
-RUN echo "deb-src http://ftp.de.debian.org/debian/ bullseye main contrib non-free" | tee -a /etc/apt/sources.list
+RUN echo "deb http://ftp.de.debian.org/debian/ bookworm main contrib non-free" | tee -a /etc/apt/sources.list
+RUN echo "deb-src http://ftp.de.debian.org/debian/ bookworm main contrib non-free" | tee -a /etc/apt/sources.list
 
-RUN apt-get update
-RUN apt-get upgrade -y
+RUN apt-get update && apt-get upgrade -y
 RUN DEBIAN_FRONTEND=noninteractive apt-get install sqlite3 python3 python3-pip locales -y
 RUN sed -i -e 's/# en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen && \
     dpkg-reconfigure --frontend=noninteractive locales && \
     update-locale LANG=en_US.UTF-8
 ENV LANG en_US.UTF-8
 
-RUN pip install youtube-dl
+RUN pip install youtube-dl --break-system-packages
 
 #RUN wget -q https://yt-dl.org/downloads/latest/youtube-dl -O /usr/local/bin/youtube-dl
 #RUN chmod a+rx /usr/local/bin/youtube-dl
