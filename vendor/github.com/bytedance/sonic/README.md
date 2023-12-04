@@ -5,7 +5,7 @@ English | [中文](README_ZH_CN.md)
 A blazingly fast JSON serializing &amp; deserializing library, accelerated by JIT (just-in-time compiling) and SIMD (single-instruction-multiple-data).
 
 ## Requirement
-- Go 1.16~1.20
+- Go 1.16~1.21
 - Linux / MacOS / Windows(need go1.17 above)
 - Amd64 ARCH
 
@@ -86,7 +86,7 @@ BenchmarkLoadNode_Parallel/Interface()-16              10330 ns/op        1260.7
 - [Large](https://github.com/bytedance/sonic/blob/main/testdata/twitter.json) (635KB, 10000+ key, 6 layers)
 ![large benchmarks](./docs/imgs/bench-large.png)
 
-See [bench.sh](https://github.com/bytedance/sonic/blob/main/bench.sh) for benchmark codes.
+See [bench.sh](https://github.com/bytedance/sonic/blob/main/scripts/bench.sh) for benchmark codes.
 
 ## How it works
 See [INTRODUCTION.md](./docs/INTRODUCTION.md).
@@ -107,7 +107,7 @@ err := sonic.Unmarshal(output, &data)
  ```
 
 ### Streaming IO
-Sonic supports decoding json from `io.Reader` or encoding objects into `io.`Writer`, aims at handling multiple values as well as reducing memory consumption.
+Sonic supports decoding json from `io.Reader` or encoding objects into `io.Writer`, aims at handling multiple values as well as reducing memory consumption.
 - encoder
 ```go
 var o1 = map[string]interface{}{

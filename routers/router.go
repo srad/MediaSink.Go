@@ -67,6 +67,7 @@ func Setup() http.Handler {
 		apiv1.GET("/admin/importing", v1.IsImporting)
 
 		apiv1.GET("/channels", v1.GetChannels)
+		apiv1.GET("/channels/:channelName", v1.GetChannel)
 		apiv1.POST("/channels", v1.AddChannel)
 		apiv1.POST("/channels/:channelName/tags", v1.TagChannel)
 		apiv1.POST("/channels/:channelName", v1.UpdateChannel)

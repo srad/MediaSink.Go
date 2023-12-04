@@ -21,18 +21,9 @@ import (
     `fmt`
     `strconv`
     `unsafe`
-    `reflect`
     
     `github.com/bytedance/sonic/internal/native/types`
     `github.com/bytedance/sonic/internal/rt`
-)
-
-const (
-    _CAP_BITS          = 32
-    _LEN_MASK          = 1 << _CAP_BITS - 1
-
-    _NODE_SIZE = unsafe.Sizeof(Node{})
-    _PAIR_SIZE = unsafe.Sizeof(Pair{})
 )
 
 const (
@@ -61,10 +52,6 @@ const (
     V_ANY    = int(_V_ANY)
 )
 
-var (
-    byteType = rt.UnpackType(reflect.TypeOf(byte(0)))
-)
-
 type Node struct {
     t types.ValueType
     l uint
@@ -74,17 +61,17 @@ type Node struct {
 // UnmarshalJSON is just an adapter to json.Unmarshaler.
 // If you want better performance, use Searcher.GetByPath() directly
 func (self *Node) UnmarshalJSON(data []byte) (err error) {
-    *self, err = NewSearcher(string(data)).GetByPath()
-    return 
+    *self = NewRaw(string(data))
+    return self.Check()
 }
 
 /** Node Type Accessor **/
 
 // Type returns json type represented by the node
 // It will be one of belows:
-//    V_NONE   = 0 (empty node)
+//    V_NONE   = 0 (empty node, key not exists)
 //    V_ERROR  = 1 (error node)
-//    V_NULL   = 2 (json value `null`)
+//    V_NULL   = 2 (json value `null`, key exists)
 //    V_TRUE   = 3 (json value `true`)
 //    V_FALSE  = 4 (json value `false`)
 //    V_ARRAY  = 5 (json value array)
@@ -102,7 +89,7 @@ func (self Node) itype() types.ValueType {
 
 // Exists returns false only if the self is nil or empty node V_NONE
 func (self *Node) Exists() bool {
-    return self != nil && self.t != _V_NONE
+    return self.Valid() && self.t != _V_NONE
 }
 
 // Valid reports if self is NOT V_ERROR or nil
@@ -114,7 +101,7 @@ func (self *Node) Valid() bool {
 }
 
 // Check checks if the node itself is valid, and return:
-//   - ErrNotFound If the node is nil
+//   - ErrNotExist If the node is nil
 //   - Its underlying error If the node is V_ERROR
 func (self *Node)  Check() error {
     if self == nil {
@@ -143,6 +130,9 @@ func (self *Node) isAny() bool {
 
 // Raw returns json representation of the node,
 func (self *Node) Raw() (string, error) {
+    if self == nil {
+        return "", ErrNotExist
+    }
     if !self.IsRaw() {
         buf, err := self.MarshalJSON()
         return rt.Mem2Str(buf), err
@@ -157,7 +147,7 @@ func (self *Node) checkRaw() error {
     if self.IsRaw() {
         self.parseRaw(false)
     }
-    return nil
+    return self.Check()
 }
 
 // Bool returns bool value represented by this node, 
@@ -538,13 +528,16 @@ func (self *Node) Cap() (int, error) {
 //
 // If self is V_NONE or V_NULL, it becomes V_OBJECT and sets the node at the key.
 func (self *Node) Set(key string, node Node) (bool, error) {
-    if self != nil && (self.t == _V_NONE || self.t == types.V_NULL) {
-        *self = NewObject([]Pair{{key, node}})
-        return false, nil
+    if err := self.Check(); err != nil {
+        return false, err
     }
-
     if err := node.Check(); err != nil {
         return false, err 
+    }
+
+    if self.t == _V_NONE || self.t == types.V_NULL {
+        *self = NewObject([]Pair{{key, node}})
+        return false, nil
     }
 
     p := self.Get(key)
@@ -572,10 +565,12 @@ func (self *Node) SetAny(key string, val interface{}) (bool, error) {
     return self.Set(key, NewAny(val))
 }
 
-// Unset remove the node of given key under object parent, and reports if the key has existed.
+// Unset RESET the node of given key under object parent, and reports if the key has existed.
 // WARN: After conducting `UnsetXX()`, the node's length WON'T change
 func (self *Node) Unset(key string) (bool, error) {
-    self.must(types.V_OBJECT, "an object")
+    if err := self.should(types.V_OBJECT, "an object"); err != nil {
+        return false, err
+    }
     p, i := self.skipKey(key)
     if !p.Exists() {
         return false, nil
@@ -591,8 +586,16 @@ func (self *Node) Unset(key string) (bool, error) {
 //
 // The index must be within self's children.
 func (self *Node) SetByIndex(index int, node Node) (bool, error) {
+    if err := self.Check(); err != nil {
+        return false, err 
+    }
     if err := node.Check(); err != nil {
         return false, err 
+    }
+
+    if index == 0 && (self.t == _V_NONE || self.t == types.V_NULL) {
+        *self = NewArray([]Node{node})
+        return false, nil
     }
 
     p := self.Index(index)
@@ -614,11 +617,18 @@ func (self *Node) SetAnyByIndex(index int, val interface{}) (bool, error) {
 // UnsetByIndex remove the node of given index
 // WARN: After conducting `UnsetXX()`, the node's length WON'T change
 func (self *Node) UnsetByIndex(index int) (bool, error) {
+    if err := self.Check(); err != nil {
+        return false, err
+    }
+
     var p *Node
     it := self.itype()
     if it == types.V_ARRAY {
         p = self.Index(index)
     }else if it == types.V_OBJECT {
+        if err := self.checkRaw(); err != nil {
+            return false, err
+        }
         pr := self.skipIndexPair(index)
         if pr == nil {
            return false, ErrNotExist
@@ -644,11 +654,17 @@ func (self *Node) UnsetByIndex(index int) (bool, error) {
 //
 // If self is V_NONE or V_NULL, it becomes V_ARRAY and sets the node at index 0.
 func (self *Node) Add(node Node) error {
+    if err := self.Check(); err != nil {
+        return err
+    }
+
     if self != nil && (self.t == _V_NONE || self.t == types.V_NULL) {
         *self = NewArray([]Node{node})
         return nil
     }
-
+    if err := self.should(types.V_ARRAY, "an array"); err != nil {
+        return err
+    }
     s, err := self.unsafeArray()
     if err != nil {
         return err
@@ -818,20 +834,18 @@ func (self *Node) MapUseNode() (map[string]Node, error) {
 // WARN: don't use it unless you know what you are doing
 //
 // Deprecated:  this API now returns copied nodes instead of directly reference, 
-func (self *Node) UnsafeMap() ([]Pair, error) {
-    if err := self.should(types.V_OBJECT, "an object"); err != nil {
-        return nil, err
-    }
-    if err := self.skipAllKey(); err != nil {
-        return nil, err
-    }
-    return self.toGenericObjectUsePair()
-}
+// func (self *Node) UnsafeMap() ([]Pair, error) {
+//     if err := self.should(types.V_OBJECT, "an object"); err != nil {
+//         return nil, err
+//     }
+//     if err := self.skipAllKey(); err != nil {
+//         return nil, err
+//     }
+//     return self.toGenericObjectUsePair()
+// }
 
+//go:nocheckptr
 func (self *Node) unsafeMap() (*linkedPairs, error) {
-    if err := self.should(types.V_OBJECT, "an object"); err != nil {
-        return nil, err
-    }
     if err := self.skipAllKey(); err != nil {
         return nil, err
     }
@@ -843,7 +857,33 @@ func (self *Node) unsafeMap() (*linkedPairs, error) {
 
 // SortKeys sorts children of a V_OBJECT node in ascending key-order.
 // If recurse is true, it recursively sorts children's children as long as a V_OBJECT node is found.
-func (self *Node) SortKeys(recurse bool) (err error) {
+func (self *Node) SortKeys(recurse bool) error {
+    // check raw node first
+    if err := self.checkRaw(); err != nil {
+        return err
+    }
+    if self.itype() == types.V_OBJECT {
+        return self.sortKeys(recurse)
+    } else {
+        var err error
+        err2 := self.ForEach(func(path Sequence, node *Node) bool {
+            it := node.itype()
+            if it == types.V_ARRAY || it == types.V_OBJECT {
+                err = node.SortKeys(recurse)
+                if err != nil {
+                    return false
+                }
+            }
+            return true
+        })
+        if err != nil {
+            return err
+        }
+        return err2
+    }
+}
+
+func (self *Node) sortKeys(recurse bool) (err error) {
     ps, err := self.unsafeMap()
     if err != nil {
         return err
@@ -853,7 +893,7 @@ func (self *Node) SortKeys(recurse bool) (err error) {
         var sc Scanner
         sc = func(path Sequence, node *Node) bool {
             if node.itype() == types.V_OBJECT {
-                if err := node.SortKeys(recurse); err != nil {
+                if err := node.sortKeys(recurse); err != nil {
                     return false
                 }
             }
@@ -864,7 +904,9 @@ func (self *Node) SortKeys(recurse bool) (err error) {
             }
             return true
         }
-        self.ForEach(sc)
+        if err := self.ForEach(sc); err != nil {
+            return err
+        }
     }
     return nil
 }
@@ -932,20 +974,17 @@ func (self *Node) ArrayUseNode() ([]Node, error) {
 //
 // Deprecated:  this API now returns copied nodes instead of directly reference, 
 // which has no difference with ArrayUseNode
-func (self *Node) UnsafeArray() ([]Node, error) {
-    if err := self.should(types.V_ARRAY, "an array"); err != nil {
-        return nil, err
-    }
-    if err := self.skipAllIndex(); err != nil {
-        return nil, err
-    }
-    return self.toGenericArrayUseNode()
-}
+// func (self *Node) UnsafeArray() ([]Node, error) {
+//     if err := self.should(types.V_ARRAY, "an array"); err != nil {
+//         return nil, err
+//     }
+//     if err := self.skipAllIndex(); err != nil {
+//         return nil, err
+//     }
+//     return self.toGenericArrayUseNode()
+// }
 
 func (self *Node) unsafeArray() (*linkedNodes, error) {
-    if err := self.should(types.V_ARRAY, "an array"); err != nil {
-        return nil, err
-    }
     if err := self.skipAllIndex(); err != nil {
         return nil, err
     }
@@ -1100,9 +1139,8 @@ func (self *Node) LoadAll() error {
 // Load loads the node's children as parsed.
 // After calling it, only the node itself can be used on concurrency (not include its children)
 func (self *Node) Load() error {
-    if self.IsRaw() {
-        self.parseRaw(false)
-        return self.Load()
+    if err := self.checkRaw(); err != nil {
+        return err
     }
 
     switch self.t {
@@ -1116,40 +1154,6 @@ func (self *Node) Load() error {
 }
 
 /**---------------------------------- Internal Helper Methods ----------------------------------**/
-
-var (
-    _NODE_TYPE = rt.UnpackEface(Node{}).Type
-    _PAIR_TYPE = rt.UnpackEface(Pair{}).Type
-)
-
-// func (self *Node) setCapAndLen(cap int, len int) {
-//     if self.t == types.V_ARRAY || self.t == types.V_OBJECT || self.t == _V_ARRAY_LAZY || self.t == _V_OBJECT_LAZY {
-//         self.l = uint32(len)
-//         self.c = uint32(cap)
-//     } else {
-//         panic("value does not have a length")
-//     }
-// }
-
-func (self *Node) unsafe_next() *Node {
-    return (*Node)(unsafe.Pointer(uintptr(unsafe.Pointer(self)) + _NODE_SIZE))
-}
-
-func (self *Pair) unsafe_next() *Pair {
-    return (*Pair)(unsafe.Pointer(uintptr(unsafe.Pointer(self)) + _PAIR_SIZE))
-}
-
-func (self *Node) must(t types.ValueType, s string) {
-    if err := self.checkRaw(); err != nil {
-        panic(err)
-    }
-    if err := self.Check(); err != nil {
-        panic(err)
-    }
-    if  self.itype() != t {
-        panic("value cannot be represented as " + s)
-    }
-}
 
 func (self *Node) should(t types.ValueType, s string) error {
     if err := self.checkRaw(); err != nil {
@@ -1455,20 +1459,6 @@ func (self *Node) toGenericObjectUseNode() (map[string]Node, error) {
     var s = (*linkedPairs)(self.p)
     var out = make(map[string]Node, nb)
     s.ToMap(out)
-
-    /* all done */
-    return out, nil
-}
-
-func (self *Node) toGenericObjectUsePair() ([]Pair, error) {
-    var nb = self.len()
-    if nb == 0 {
-        return []Pair{}, nil
-    }
-
-    var s = (*linkedPairs)(self.p)
-    var out = make([]Pair, nb)
-    s.ToSlice(out)
 
     /* all done */
     return out, nil

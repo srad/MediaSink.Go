@@ -82,6 +82,36 @@ func GetChannels(c *gin.Context) {
 	appG.Response(http.StatusOK, &response)
 }
 
+// GetChannel godoc
+// @Summary     Return the data of one channel
+// @Schemes
+// @Description Return the data of one channel
+// @Tags        channels
+// @Produce     json
+// @Success     200 {object} []ChannelResponse
+// @Failure     500 {}  http.StatusInternalServerError
+// @Router      /channels/{channelName} [get]
+func GetChannel(c *gin.Context) {
+	appG := app.Gin{C: c}
+	channelName := c.Param("channelName")
+	if channel, err := models.GetChannelByName(channelName); err != nil {
+		log.Printf("[GetChannel] Error getting channel: %s", err.Error())
+		appG.Response(http.StatusInternalServerError, err.Error())
+		return
+	} else {
+		res := &ChannelResponse{
+			Channel:       *channel,
+			IsOnline:      channel.IsOnline(),
+			IsTerminating: channel.IsTerminating(),
+			IsRecording:   channel.IsRecording(),
+			MinRecording:  channel.RecordingMinutes()}
+
+		log.Printf("%s", channelName)
+		appG.Response(http.StatusOK, &res)
+		return
+	}
+}
+
 // AddChannel godoc
 // @Summary     Add a new channel
 // @Description Add a new channel
