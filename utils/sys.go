@@ -5,8 +5,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"log"
+	"os"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -115,7 +115,8 @@ func ExecSync(execArgs *ExecArgs) error {
 	}
 
 	if err := cmd[pid].Wait(); err != nil {
-		if exiterr, ok := err.(*exec.ExitError); ok {
+		var exiterr *exec.ExitError
+		if errors.As(err, &exiterr) {
 			// The program has exited with an exit code != 0
 
 			// This works on both Unix and Windows. Although package
@@ -168,7 +169,7 @@ func CpuUsage(waitSeconds uint64) (*CPUInfo, error) {
 
 func cpuMeasures() ([]CPUMeasure, error) {
 	// Documentation of values: https://www.linuxhowtos.org/System/procstat.htm
-	//The very first "cpu" line aggregates the numbers in all of the other "cpuN" lines.
+	//The very first "cpu" line aggregates the numbers in all the other "cpuN" lines.
 	//
 	//These numbers identify the amount of time the CPU has spent performing different kinds of work. Time units are in USER_HZ or Jiffies (typically hundredths of a second).
 	//
@@ -182,7 +183,7 @@ func cpuMeasures() ([]CPUMeasure, error) {
 	//irq: servicing interrupts
 	//softirq: servicing softirqs
 
-	out, err := ioutil.ReadFile("/proc/stat")
+	out, err := os.ReadFile("/proc/stat")
 	if err != nil {
 		return nil, err
 	}
@@ -213,7 +214,8 @@ func cpuMeasures() ([]CPUMeasure, error) {
 }
 
 // OUTPUT: | CPUx | user | nice | system | idle | iowait | irq | softirq |
-//            0      1      2       3       4       5       6       7
+//
+//	0      1      2       3       4       5       6       7
 func parseCpuStats(cols []string) (float64, float64, error) {
 	var vals []uint64
 	sum := uint64(0)
@@ -291,7 +293,7 @@ func Info(path, networkDev string, measureSeconds uint64) (*SysInfo, error) {
 }
 
 func networkTraffic(device string) (*NetInfo, error) {
-	out, err := ioutil.ReadFile("/proc/net/dev")
+	out, err := os.ReadFile("/proc/net/dev")
 	if err != nil {
 		return nil, err
 	}

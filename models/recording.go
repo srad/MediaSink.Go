@@ -1,6 +1,7 @@
 package models
 
 import (
+	"errors"
 	"fmt"
 	"github.com/srad/streamsink/utils"
 	"log"
@@ -45,7 +46,7 @@ func FindByName(channelName string) ([]*Recording, error) {
 		Where("recordings.channel_name = ?", channelName).
 		Order("recordings.created_at DESC").
 		Find(&recordings).Error
-	if err != nil && err != gorm.ErrRecordNotFound {
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, err
 	}
 
@@ -108,7 +109,7 @@ func RecordingsList() ([]*Recording, error) {
 		Select("recordings.*").
 		Find(&recordings).Error
 
-	if err != nil && err != gorm.ErrRecordNotFound {
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, err
 	}
 
@@ -121,7 +122,7 @@ func BookmarkList() ([]*Recording, error) {
 		Where("bookmark = ?", true).
 		Select("recordings.*").Order("recordings.channel_name asc").
 		Find(&recordings).Error
-	if err != nil && err != gorm.ErrRecordNotFound {
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, err
 	}
 
@@ -162,7 +163,7 @@ func (recording *Recording) Destroy() error {
 
 	// TODO: Also Cancel running jobs from this channel
 	// Remove associated jobs
-	if err := Db.Delete(&Job{}, "channel_name = ? AND filename = ?", recording.ChannelName, recording.Filename).Error; err != nil && err != gorm.ErrRecordNotFound {
+	if err := Db.Delete(&Job{}, "channel_name = ? AND filename = ?", recording.ChannelName, recording.Filename).Error; err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		log.Println(fmt.Sprintf("Error job for recording of file '%s' from channel '%s': %v", recording.Filename, recording.ChannelName, err))
 		return err
 	}
@@ -197,7 +198,7 @@ func FindRecording(channelName, filename string) (*Recording, error) {
 	err := Db.Table("recordings").
 		Where("channel_name = ? AND filename = ?", channelName, filename).
 		First(&recording).Error
-	if err != nil && err != gorm.ErrRecordNotFound {
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, err
 	}
 
@@ -209,7 +210,7 @@ func (recording *Recording) FindJobs() (*[]Job, error) {
 	err := Db.Model(&Job{}).
 		Where("channel_name = ? AND filename = ?", recording.ChannelName, recording.Filename).
 		Find(&jobs).Error
-	if err != nil && err != gorm.ErrRecordNotFound {
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, err
 	}
 
@@ -222,7 +223,7 @@ func (recording *Recording) DestroyJobs() error {
 
 func AddIfNotExistsRecording(channelName, filename string) (*Recording, error) {
 	rec := Db.First(&Recording{ChannelName: channelName, Filename: filename})
-	if rec.Error != nil && rec.Error != gorm.ErrRecordNotFound {
+	if rec.Error != nil && !errors.Is(rec.Error, gorm.ErrRecordNotFound) {
 		log.Printf("[AddIfNotExistsRecording] Error %v", rec.Error)
 		return nil, rec.Error
 	}

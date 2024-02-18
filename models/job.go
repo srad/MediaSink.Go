@@ -37,9 +37,9 @@ type Job struct {
 	Channel   Channel   `json:"-" gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE;foreignKey:channel_name;references:channel_name"`
 
 	// Unique entry, this is the actual primary key
-	ChannelName string `json:"channelName" gorm:"not null;;index:unique_entry,unique"`
-	Filename    string `json:"filename" gorm:"not null;;index:unique_entry,unique"`
-	Status      string `json:"status" gorm:"not null;;index:idx_status;index:unique_entry,unique"`
+	ChannelName string `json:"channelName" gorm:"not null"`
+	Filename    string `json:"filename" gorm:"not null"`
+	Status      string `json:"status" gorm:"not null"`
 
 	Filepath  string    `json:"pathRelative" gorm:"not null;"`
 	Active    bool      `json:"active" gorm:"not null;default:false"`
@@ -105,7 +105,7 @@ func JobList() ([]*Job, error) {
 	var jobs []*Job
 	if err := Db.
 		Order("jobs.created_at ASC").
-		Find(&jobs).Error; err != nil && err != gorm.ErrRecordNotFound {
+		Find(&jobs).Error; err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, err
 	}
 

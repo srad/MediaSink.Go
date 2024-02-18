@@ -77,7 +77,7 @@ func checkStreams() {
 		currentChannel, err := models.GetChannelByName(channel.ChannelName)
 
 		if err != nil {
-			log.Printf("[checkStreams] Error channel %s: %s, %v", channel.ChannelName, err)
+			log.Printf("[checkStreams] Error channel %s: %s", channel.ChannelName, err)
 			continue
 		}
 

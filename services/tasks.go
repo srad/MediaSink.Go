@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"github.com/srad/streamsink/workers"
 	"log"
@@ -23,7 +24,7 @@ func fixOrphanedRecordings() {
 	log.Println("Fixing orphaned recordings ...")
 	jobs, err := models.GetJobsByStatus(models.StatusRecording)
 
-	if err == gorm.ErrRecordNotFound {
+	if errors.Is(err, gorm.ErrRecordNotFound) {
 		log.Printf("No jobs with status '%s' found\n", models.StatusRecording)
 		return
 	}
@@ -40,7 +41,7 @@ func fixOrphanedRecordings() {
 		if err != nil {
 			log.Printf("The file '%s' is corrupted, deleting from disk and job queue: %v\n", job.Filename, err)
 			job.Destroy()
-			if err := os.Remove(job.Filepath); err != nil && err != os.ErrNotExist {
+			if err := os.Remove(job.Filepath); err != nil && !errors.Is(err, os.ErrNotExist) {
 				log.Println(fmt.Sprintf("Error deleting recording: %v", err))
 				continue
 			}

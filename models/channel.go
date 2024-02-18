@@ -119,14 +119,24 @@ func (channel *Channel) Start() error {
 	}
 
 	log.Printf("[Start] Starting '%s' at '%s'", channel.ChannelName, url)
-	go utils.ExtractFirstFrame(url, conf.FrameWidth, filepath.Join(conf.AbsoluteDataPath(channel.ChannelName), conf.SnapshotFilename))
-	go channel.Capture(url, channel.SkipStart)
+
+	go func() {
+		if err := utils.ExtractFirstFrame(url, conf.FrameWidth, filepath.Join(conf.AbsoluteDataPath(channel.ChannelName), conf.SnapshotFilename)); err != nil {
+			log.Printf("Error: %s", err.Error())
+		}
+	}()
+
+	go func() {
+		if err := channel.Capture(url, channel.SkipStart); err != nil {
+			log.Printf("Error capting video: %s", err.Error())
+		}
+	}()
 
 	return nil
 }
 
 func TerminateAll() {
-	for channelName, _ := range streams {
+	for channelName := range streams {
 		channel := Channel{ChannelName: channelName}
 		if err := channel.TerminateProcess(); err != nil {
 			log.Printf("Error terminating channel: '%s': %s", channelName, err.Error())
@@ -194,7 +204,7 @@ func (channel *Channel) QueryStreamUrl() (string, error) {
 func GetChannelByName(channelName string) (*Channel, error) {
 	var channel Channel
 	err := Db.Where("channel_name = ?", channelName).First(&channel).Error
-	if err != nil && err != gorm.ErrRecordNotFound {
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, err
 	}
 
@@ -208,7 +218,7 @@ func ChannelList() ([]*Channel, error) {
 		Select("channels.*", "(SELECT COUNT(*) FROM recordings WHERE recordings.channel_name = channels.channel_name) recordings_count", "(SELECT SUM(size) FROM recordings WHERE recordings.channel_name = channels.channel_name) recordings_size").
 		Find(&result).Error
 
-	if err != nil && err != gorm.ErrRecordNotFound {
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		log.Println(err)
 		return nil, err
 	}
@@ -224,7 +234,7 @@ func ChannelListNotDeleted() ([]*Channel, error) {
 		Select("channels.*", "(SELECT COUNT(*) FROM recordings WHERE recordings.channel_name = channels.channel_name) recordings_count", "(SELECT SUM(size) FROM recordings WHERE recordings.channel_name = channels.channel_name) recordings_size").
 		Find(&result).Error
 
-	if err != nil && err != gorm.ErrRecordNotFound {
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		log.Println(err)
 		return nil, err
 	}
@@ -243,7 +253,7 @@ func EnabledChannelList() ([]*Channel, error) {
 		Order("fav desc").
 		Find(&result).Error
 
-	if err != nil && err != gorm.ErrRecordNotFound {
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		log.Println(err)
 		return nil, err
 	}
@@ -371,9 +381,12 @@ func (channel *Channel) Capture(url string, skip uint) error {
 
 	// Before recording store that the process has started, for recovery
 	recJob, err := EnqueueRecordingJob(channel.ChannelName, recording.Filename, outputPath)
-	recJob.UpdateInfo(streams[channel.ChannelName].Process.Pid, str)
 	if err != nil {
 		log.Printf("[Capture] Error enqueuing reccording for: %s/%s: %v", channel.ChannelName, recording.Filename, err)
+	}
+
+	if err := recJob.UpdateInfo(streams[channel.ChannelName].Process.Pid, str); err != nil {
+		log.Printf("[recJob.UpdateInfo]: %s / %v", channel.ChannelName, err)
 	}
 
 	if b, err := io.ReadAll(sterr); err != nil {
@@ -384,9 +397,14 @@ func (channel *Channel) Capture(url string, skip uint) error {
 	if err := streams[channel.ChannelName].Wait(); err != nil && !strings.Contains(err.Error(), "255") {
 		log.Printf("[Capture] Wait for process exit '%s' error: %v", channel.ChannelName, err)
 		channel.DestroyData()
-		channel.DeleteRecordingsFile(recording.Filename)
-		recJob.Destroy()
-		if exiterr, ok := err.(*exec.ExitError); ok {
+		if err := channel.DeleteRecordingsFile(recording.Filename); err != nil {
+			log.Printf("[Capture] Error deleting recordings file: '%s' error: %v", channel.ChannelName, err)
+		}
+		if err := recJob.Destroy(); err != nil {
+			log.Printf("[Capture] Error destroying recording: '%s' error: %v", channel.ChannelName, err)
+		}
+		var exiterr *exec.ExitError
+		if errors.As(err, &exiterr) {
 			log.Printf("[Capture] Exec error: %v", err)
 			// The program has exited with an exit code != 0
 
@@ -413,7 +431,9 @@ func (channel *Channel) Capture(url string, skip uint) error {
 
 		// No access to info after this!
 		channel.DestroyData()
-		recJob.Destroy()
+		if err := recJob.Destroy(); err != nil {
+			log.Printf("[Capture] Error destroying recording: %v\n", err)
+		}
 
 		if job, err := EnqueuePreviewJob(channel.ChannelName, recording.Filename); err != nil {
 			log.Printf("[FinishRecording] Error enqueuing job for %v\n", err)

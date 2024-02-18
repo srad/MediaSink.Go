@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"errors"
 	"golang.org/x/sys/windows"
 	"syscall"
 )
@@ -20,7 +21,7 @@ func TerminateProc(channelName string) error {
 		return err
 	}
 	r1, _, err := f.Call(uintptr(pid))
-	if r1 == 0 && err != syscall.ERROR_ACCESS_DENIED {
+	if r1 == 0 && !errors.Is(err, syscall.ERROR_ACCESS_DENIED) {
 		return err
 	}
 

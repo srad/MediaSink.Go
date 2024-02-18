@@ -3,6 +3,7 @@ package workers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/srad/streamsink/conf"
 	"github.com/srad/streamsink/models"
@@ -45,7 +46,9 @@ func processJobs(ctx context.Context) {
 			return
 		case <-time.After(sleepBetweenRounds):
 			conversionJobs()
-			cuttingJobs()
+			if err := cuttingJobs(); err != nil {
+				log.Printf("Error current job: %s", err.Error())
+			}
 			previewJobs()
 		}
 	}
@@ -58,18 +61,25 @@ func conversionJobs() {
 	}
 	if err != nil {
 		log.Printf("[Job] Error handlung job: %v", err)
-		job.Destroy()
+		if err := job.Destroy(); err != nil {
+			log.Printf("Error destroying job: %s", err.Error())
+		}
 		return
 	}
 
-	job.Activate()
+	if err := job.Activate(); err != nil {
+		log.Printf("Error activating job: %s", err.Error())
+	}
 
 	result, err := utils.ConvertVideo(&utils.VideoConversionArgs{
 		OnStart: func(info *utils.CommandInfo) {
 			_ = job.UpdateInfo(info.Pid, info.Command)
 		},
 		OnProgress: func(info *utils.ProcessInfo) {
-			job.UpdateProgress(fmt.Sprintf("%f", float32(info.Frame)/float32(job.Recording.Packets)*100))
+			if err := job.UpdateProgress(fmt.Sprintf("%f", float32(info.Frame)/float32(job.Recording.Packets)*100)); err != nil {
+				log.Printf("Error updating job progress: %s", err.Error())
+			}
+
 			Dispatcher.Notify("job:progress", models.JobMessage[JobVideoInfo]{JobId: job.JobId, Data: JobVideoInfo{Packets: job.Recording.Packets, Frame: info.Frame}, Type: job.Status, ChannelName: job.ChannelName, Filename: job.Filename})
 		},
 		ChannelName: job.ChannelName,
@@ -78,8 +88,12 @@ func conversionJobs() {
 
 	if err != nil {
 		log.Printf("[conversionJobs] Error converting '%s' to '%s': %s", job.Filename, *job.Args, err.Error())
-		os.Remove(result.Filepath)
-		job.Destroy()
+		if err := os.Remove(result.Filepath); err != nil {
+			log.Printf("Error deleting file '%s': %s", result.Filepath, err.Error())
+		}
+		if err := job.Destroy(); err != nil {
+			log.Printf("Error destroying job: %s", err.Error())
+		}
 		return
 	} else {
 		log.Printf("[conversionJobs] Completed conversion of '%s' with args '%s'", job.Filename, *job.Args)
@@ -99,9 +113,13 @@ func conversionJobs() {
 	}
 	// Also, when fails, destroy it, some reason it is foul.
 	if err := rec.Save("recording"); err != nil {
-		os.Remove(result.Filepath)
+		if err := os.Remove(result.Filepath); err != nil {
+			log.Printf("Error deleting file '%s': %s", result.Filepath, err.Error())
+		}
 	} else {
-		models.EnqueuePreviewJob(result.ChannelName, result.Filename)
+		if _, err := models.EnqueuePreviewJob(result.ChannelName, result.Filename); err != nil {
+			log.Printf("Error enqueing preview job: %s", err.Error())
+		}
 	}
 }
 
@@ -119,7 +137,7 @@ func previewJobs() {
 
 	// Delete any old previews first
 	errDelete := models.DestroyPreviews(job.ChannelName, job.Filename)
-	if errDelete != nil && errDelete != gorm.ErrRecordNotFound {
+	if errDelete != nil && !errors.Is(errDelete, gorm.ErrRecordNotFound) {
 		log.Printf("[Job] Error deleting existing previews: %v", errDelete)
 	}
 
@@ -188,7 +206,7 @@ func previewJobs() {
 // This action is intrinsically procedural, keep it together locally.
 func cuttingJobs() error {
 	job, err := models.GetNextJob(models.StatusCut)
-	if err == gorm.ErrRecordNotFound || job == nil {
+	if errors.Is(err, gorm.ErrRecordNotFound) || job == nil {
 		return err
 	}
 
@@ -256,35 +274,35 @@ func cuttingJobs() error {
 	for i, file := range segFiles {
 		mergeFileContent[i] = fmt.Sprintf("file '%s'", file)
 	}
-	mergeTextfile := conf.AbsoluteFilepath(job.ChannelName, fmt.Sprintf("%s.txt", segmentFilename))
-	err = os.WriteFile(mergeTextfile, []byte(strings.Join(mergeFileContent, "\n")), 0644)
+	mergeTextFile := conf.AbsoluteFilepath(job.ChannelName, fmt.Sprintf("%s.txt", segmentFilename))
+	err = os.WriteFile(mergeTextFile, []byte(strings.Join(mergeFileContent, "\n")), 0644)
 	if err != nil {
-		log.Printf("[Job] Error writing concat text file '%s': %v", mergeTextfile, err)
+		log.Printf("[Job] Error writing concat text file '%s': %v", mergeTextFile, err)
 		for _, file := range segFiles {
 			if err := os.RemoveAll(file); err != nil {
 				log.Printf("[Job] Error deleting %s: %v", file, err)
 			}
 		}
-		_ = os.RemoveAll(mergeTextfile)
+		_ = os.RemoveAll(mergeTextFile)
 		_ = job.Destroy()
 		return err
 	}
 
-	err = utils.MergeVideos(func(s string) { log.Printf("[MergeVideos] %s", s) }, mergeTextfile, outputFile)
+	err = utils.MergeVideos(func(s string) { log.Printf("[MergeVideos] %s", s) }, mergeTextFile, outputFile)
 	if err != nil {
 		// Job failed, destroy all files.
-		log.Printf("[Job] Error merging file '%s': %s", mergeTextfile, err.Error())
+		log.Printf("[Job] Error merging file '%s': %s", mergeTextFile, err.Error())
 		for _, file := range segFiles {
 			if err := os.RemoveAll(file); err != nil {
 				log.Printf("[Job] Error deleting %s: %s", file, err.Error())
 			}
 		}
-		_ = os.RemoveAll(mergeTextfile)
+		_ = os.RemoveAll(mergeTextFile)
 		_ = job.Destroy()
 		return err
 	}
 
-	_ = os.RemoveAll(mergeTextfile)
+	_ = os.RemoveAll(mergeTextFile)
 	for _, file := range segFiles {
 		log.Printf("[MergeJob] Deleting segment %s", file)
 		if err := os.Remove(file); err != nil {

@@ -138,7 +138,7 @@ func ExtractFirstFrame(input, height, output string) error {
 	})
 
 	if err != nil {
-		return errors.New(fmt.Sprintf("[Recorder] Error extracting frame: %v", err.Error()))
+		return errors.New(fmt.Sprintf("[ExtractFirstFrame] Error extracting frame: %v", err.Error()))
 	}
 
 	return nil

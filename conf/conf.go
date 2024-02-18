@@ -154,12 +154,16 @@ func MakeChannelFolders(channelName string) {
 	dir := AbsoluteRecordingsPath(channelName)
 	if _, err := os.Stat(dir); os.IsNotExist(err) {
 		fmt.Println("Creating folder: " + dir)
-		os.MkdirAll(dir, os.ModePerm)
+		if err := os.MkdirAll(dir, os.ModePerm); err != nil {
+			log.Printf("Error creating folder: '%s': %s", dir, err.Error())
+		}
 	}
 	dataPath := AbsoluteDataPath(channelName)
 	if _, err := os.Stat(dataPath); os.IsNotExist(err) {
 		fmt.Println("Creating folder: " + dataPath)
-		os.MkdirAll(dataPath, os.ModePerm)
+		if err := os.MkdirAll(dataPath, os.ModePerm); err != nil {
+			log.Printf("Error creating data path '%s': %s", dataPath, err.Error())
+		}
 		if err := copyDefaultSnapshotTo(dataPath); err != nil {
 			log.Println(err)
 		}
@@ -172,19 +176,27 @@ func copyDefaultSnapshotTo(dataPath string) error {
 		fmt.Println(err)
 	}
 
-	srcFile, err := os.Open(filepath.Join(pwd, "assets", "live.jpg"))
+	filePath := filepath.Join(pwd, "assets", "live.jpg")
+	srcFile, err := os.Open(filePath)
 	check(err)
-	defer srcFile.Close()
+	defer func(srcFile *os.File) {
+		if err := srcFile.Close(); err != nil {
+			log.Printf("Error copying default live.jpg image to folder '%s': %s", filePath, err.Error())
+		}
+	}(srcFile)
 
 	destFile, err := os.Create(filepath.Join(dataPath, SnapshotFilename)) // creates if file doesn't exist
 	check(err)
-	defer destFile.Close()
+	defer func(destFile *os.File) {
+		if err := destFile.Close(); err != nil {
+			log.Printf("Error creating snapshot file: %s", err.Error())
+		}
+	}(destFile)
 
 	_, err = io.Copy(destFile, srcFile) // check first var for number of bytes copied
 	check(err)
 
 	return destFile.Sync()
-
 }
 
 func check(err error) {
