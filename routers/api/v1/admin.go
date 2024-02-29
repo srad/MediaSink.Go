@@ -33,8 +33,8 @@ func TriggerImport(c *gin.Context) {
 // @Tags        admin
 // @Accept      json
 // @Produce     json
-// @Success     200 {bool} Importing flag
-// @Router      /admin/importing [post]
+// @Success     200 {boolean} Importing flag
+// @Router      /admin/importing [get]
 func IsImporting(c *gin.Context) {
 	appG := app.Gin{C: c}
 

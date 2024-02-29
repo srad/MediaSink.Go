@@ -152,7 +152,7 @@ func (channel *Channel) TerminateProcess() error {
 		if info, ok2 := streamInfo[channel.ChannelName]; ok2 {
 			streamInfo[channel.ChannelName] = StreamInfo{
 				IsOnline:      info.IsOnline,
-				IsTerminating: true,
+				IsTerminating: true, // <---------------- only update.
 				Url:           info.Url,
 				ChannelName:   info.ChannelName,
 			}

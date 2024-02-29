@@ -44,6 +44,26 @@ type TagChannelRequest struct {
 	Tags []string `json:"tags"`
 }
 
+// https://github.com/swaggo/swag/blob/master/README.md#declarative-comments-format
+// Parameters that separated by spaces: | param name | param type | data type | is mandatory? | comment attribute(optional) |
+//
+// Param Type
+// ----------------------------
+// query
+// path
+// header
+// body
+// formData
+//
+// Data Type
+// ----------------------------
+// string (string)
+// integer (int, uint, uint32, uint64)
+// number (float32)
+// boolean (bool)
+// file (param data type when uploading)
+// user defined struct
+
 // GetChannels godoc
 // @Summary     Return a list of channels
 // @Schemes
@@ -174,13 +194,13 @@ func AddChannel(c *gin.Context) {
 // @Summary     Add a new channel
 // @Description Add a new channel
 // @Tags        channels
-// @Param       ChannelRequest body ChannelRequest true "Channel data"
+// @Param       body formData ChannelRequest true "Channel data to update"
 // @Accept      json
 // @Produce     json
 // @Success     200 {object} models.Channel
 // @Failure     400 {} http.StatusBadRequest
 // @Failure     500 {} http.StatusInternalServerError
-// @Router      /channels/{channelName} [post]
+// @Router      /channels/{channelName} [patch]
 func UpdateChannel(c *gin.Context) {
 	appG := app.Gin{C: c}
 	data := &ChannelRequest{}
@@ -368,11 +388,13 @@ func UnFavChannel(c *gin.Context) {
 	appG.Response(http.StatusOK, nil)
 }
 
+// Parameters that separated by spaces: | param name | param type | data type | is mandatory? | comment attribute(optional) |
+
 // UploadChannel godoc
 // @Summary     Add a new channel
 // @Description Add a new channel
 // @Tags        channels
-// @Param       []byte body []byte true "Uploaded file chunk"
+// @Param       file formData []byte true "Uploaded file chunk"
 // @Param       channelName path string true "Channel name"
 // @Accept      json
 // @Produce     json
@@ -431,7 +453,10 @@ func PauseChannel(c *gin.Context) {
 		appG.Response(http.StatusInternalServerError, err.Error())
 		return
 	}
-	channel.TerminateProcess()
+	if err := channel.TerminateProcess(); err != nil {
+
+	}
+
 	if err := channel.Pause(true); err != nil {
 		appG.Response(http.StatusInternalServerError, err.Error())
 	}

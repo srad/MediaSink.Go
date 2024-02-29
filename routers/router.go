@@ -63,34 +63,45 @@ func Setup() http.Handler {
 	//}))
 	apiv1.Use()
 	{
+		// Admin
 		apiv1.POST("/admin/import", v1.TriggerImport)
 		apiv1.GET("/admin/importing", v1.IsImporting)
 
+		// Channels
 		apiv1.GET("/channels", v1.GetChannels)
-		apiv1.GET("/channels/:channelName", v1.GetChannel)
 		apiv1.POST("/channels", v1.AddChannel)
-		apiv1.POST("/channels/:channelName/tags", v1.TagChannel)
-		apiv1.POST("/channels/:channelName", v1.UpdateChannel)
+
+		apiv1.GET("/channels/:channelName", v1.GetChannel)
+		apiv1.DELETE("/channels/:channelName", v1.DeleteChannel)
+		apiv1.PATCH("/channels/:channelName", v1.UpdateChannel)
+
 		apiv1.POST("/channels/:channelName/resume", v1.ResumeChannel)
 		apiv1.POST("/channels/:channelName/pause", v1.PauseChannel)
+
 		apiv1.POST("/channels/:channelName/fav", v1.FavChannel)
 		apiv1.POST("/channels/:channelName/unfav", v1.UnFavChannel)
-		apiv1.POST("/channels/:channelName/upload", v1.UploadChannel)
-		apiv1.DELETE("/channels/:channelName", v1.DeleteChannel)
 
+		apiv1.POST("/channels/:channelName/upload", v1.UploadChannel)
+
+		apiv1.POST("/channels/:channelName/tags", v1.TagChannel)
+
+		// Jobs
 		apiv1.POST("/jobs/:channelName/:filename", v1.AddJob)
 		apiv1.POST("/jobs/stop/:pid", v1.StopJob)
 		apiv1.DELETE("/jobs/:id", v1.DestroyJob)
 		apiv1.GET("/jobs", v1.GetJobs)
 
-		apiv1.POST("/recordings/updateinfo", v1.UpdateVideoInfo)
-		apiv1.POST("/recordings/isupdating", v1.IsUpdatingVideoInfo)
-		apiv1.POST("/recordings/generate/posters", v1.GeneratePosters)
-
+		// recorder
 		apiv1.POST("/recorder/resume", v1.StartRecorder)
 		apiv1.POST("/recorder/pause", v1.StopRecorder)
 		apiv1.GET("/recorder", v1.IsRecording)
 
+		// Channels
+		apiv1.POST("/recordings/updateinfo", v1.UpdateVideoInfo)
+		apiv1.POST("/recordings/isupdating", v1.IsUpdatingVideoInfo)
+		apiv1.POST("/recordings/generate/posters", v1.GeneratePosters)
+
+		// recordings
 		apiv1.GET("/recordings", v1.GetRecordings)
 		apiv1.GET("/recordings/sorted/:column/:order/:limit", v1.GetSorted)
 		apiv1.GET("/recordings/random/:limit", v1.GetRandomRecordings)

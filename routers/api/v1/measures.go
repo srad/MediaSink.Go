@@ -8,8 +8,8 @@ import (
 )
 
 // GetCpu godoc
-// @Summary     Get system metrics
-// @Description Get system metrics
+// @Summary     Get CPU metrics
+// @Description Get CPU metrics
 // @Tags        metric
 // @Accept      json
 // @Produce     json
@@ -28,8 +28,8 @@ func GetCpu(c *gin.Context) {
 }
 
 // GetNet godoc
-// @Summary     Get system metrics
-// @Description Get system metrics
+// @Summary     Get network metrics
+// @Description Get network metrics
 // @Tags        metric
 // @Accept      json
 // @Produce     json
