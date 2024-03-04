@@ -1,11 +1,12 @@
 package v1
 
 import (
+	"log"
+	"net/http"
+
 	"github.com/gin-gonic/gin"
 	"github.com/srad/streamsink/app"
 	"github.com/srad/streamsink/services"
-	"log"
-	"net/http"
 )
 
 // IsRecording godoc

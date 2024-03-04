@@ -3,11 +3,12 @@ package models
 import (
 	"errors"
 	"fmt"
-	"github.com/srad/streamsink/utils"
 	"log"
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/srad/streamsink/utils"
 
 	"github.com/srad/streamsink/conf"
 	"gorm.io/gorm"
@@ -150,7 +151,7 @@ func (recording *Recording) Save(videoType string) error {
 		return err
 	}
 
-	//EnqueuePreviewJob(recording.ChannelName, recording.Filename)
+	// EnqueuePreviewJob(recording.ChannelName, recording.Filename)
 
 	return nil
 }

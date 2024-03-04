@@ -2,20 +2,19 @@ package main
 
 import (
 	"fmt"
-	"github.com/gin-gonic/gin"
-	"github.com/srad/streamsink/conf"
-	"github.com/srad/streamsink/models"
-	"github.com/srad/streamsink/patterns"
-	"github.com/srad/streamsink/routers"
-	v1 "github.com/srad/streamsink/routers/api/v1"
-	"github.com/srad/streamsink/services"
-	"github.com/srad/streamsink/workers"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
+
+	"github.com/gin-gonic/gin"
+	"github.com/srad/streamsink/conf"
+	"github.com/srad/streamsink/models"
+	"github.com/srad/streamsink/routers"
+	"github.com/srad/streamsink/services"
+	"github.com/srad/streamsink/workers"
 )
 
 func main() {
@@ -29,19 +28,10 @@ func main() {
 
 	conf.Read()
 	models.Init()
-	//model.StartMetrics(conf.AppCfg.NetworkDev)
+	// model.StartMetrics(conf.AppCfg.NetworkDev)
 	setupFolders()
 
-	services.Dispatcher.Subscribe(func(event patterns.Event[services.RecorderMessage]) {
-		v1.SendMessage(v1.SocketEvent{Name: event.Name, Data: event.Data})
-	})
-	models.Dispatcher.Subscribe(func(event patterns.Event[models.JobMessage[any]]) {
-		v1.SendMessage(v1.SocketEvent{Name: event.Name, Data: event.Data})
-	})
-	workers.Dispatcher.Subscribe(func(event patterns.Event[models.JobMessage[workers.JobVideoInfo]]) {
-		v1.SendMessage(v1.SocketEvent{Name: event.Name, Data: event.Data})
-	})
-
+	services.StartDispatch()
 	services.StartUpJobs()
 	services.StartRecorder()
 	go workers.StartWorker()
@@ -74,6 +64,7 @@ func cleanup() {
 	log.Println("cleanup ...")
 	workers.StopWorker()
 	services.StopRecorder()
+	services.StopDispatch()
 	log.Println("cleanup complete")
 }
 

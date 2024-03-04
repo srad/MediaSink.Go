@@ -5,22 +5,23 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/srad/streamsink/conf"
-	"github.com/srad/streamsink/models"
-	"github.com/srad/streamsink/patterns"
-	"github.com/srad/streamsink/utils"
-	"gorm.io/gorm"
 	"log"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/srad/streamsink/conf"
+	"github.com/srad/streamsink/entities"
+	"github.com/srad/streamsink/models"
+	"github.com/srad/streamsink/utils"
+	"gorm.io/gorm"
 )
 
 var (
 	sleepBetweenRounds = 1 * time.Second
 	cancelWorker       context.CancelFunc
-	Dispatcher         = &patterns.Dispatcher[models.JobMessage[JobVideoInfo]]{}
+	JobInfoChannel     = make(chan entities.EventMessage)
 )
 
 type JobVideoInfo struct {
@@ -80,7 +81,7 @@ func conversionJobs() {
 				log.Printf("Error updating job progress: %s", err.Error())
 			}
 
-			Dispatcher.Notify("job:progress", models.JobMessage[JobVideoInfo]{JobId: job.JobId, Data: JobVideoInfo{Packets: job.Recording.Packets, Frame: info.Frame}, Type: job.Status, ChannelName: job.ChannelName, Filename: job.Filename})
+			JobInfoChannel <- entities.EventMessage{Name: "job:progress", Message: models.JobMessage{JobId: job.JobId, Data: JobVideoInfo{Packets: job.Recording.Packets, Frame: info.Frame}, Type: job.Status, ChannelName: job.ChannelName, Filename: job.Filename}}
 		},
 		ChannelName: job.ChannelName,
 		Filename:    job.Filename,
@@ -150,24 +151,25 @@ func previewJobs() {
 	err = GeneratePreviews(&utils.VideoConversionArgs{
 		OnStart: func(info *utils.CommandInfo) {
 			_ = job.UpdateInfo(info.Pid, info.Command)
-			Dispatcher.Notify("job:start", models.JobMessage[JobVideoInfo]{
+			JobInfoChannel <- entities.EventMessage{Name: "job:start", Message: models.JobMessage{
 				JobId:       job.JobId,
 				ChannelName: job.ChannelName,
 				Filename:    job.Filename,
 				Type:        job.Status,
-			})
+			}}
 		},
 		OnProgress: func(info *utils.ProcessInfo) {
-			Dispatcher.Notify("job:progress", models.JobMessage[JobVideoInfo]{
+			JobInfoChannel <- entities.EventMessage{Name: "job:progress", Message: models.JobMessage{
 				JobId:       job.JobId,
 				ChannelName: job.ChannelName,
 				Filename:    job.Filename,
 				Data:        JobVideoInfo{Frame: info.Frame, Packets: job.Recording.Packets},
-			})
+			}}
 		},
 		ChannelName: job.ChannelName,
 		Filename:    job.Filename,
 	})
+
 	if err != nil {
 		// Delete the file if it is corrupted
 		checkFileErr := CheckVideo(conf.GetRecordingsPaths(job.ChannelName, job.Filename).Filepath)
@@ -190,8 +192,8 @@ func previewJobs() {
 	}
 
 	if _, err := job.FindRecording(); err != nil {
-		//TODO
-		//services.notify("job:preview:done", models.JobMessage{JobId: job.JobId, ChannelName: job.ChannelName, Filename: job.Filename, Data: rec})
+		// TODO
+		// services.notify("job:preview:done", models.JobMessage{JobId: job.JobId, ChannelName: job.ChannelName, Filename: job.Filename, Data: rec})
 	}
 	err3 := job.Destroy()
 	if err3 != nil {
@@ -368,5 +370,5 @@ func GeneratePreviews(args *utils.VideoConversionArgs) error {
 	log.Println(inputPath)
 	log.Println("---------------------------------------------------------------------------------------------------------")
 
-	return utils.ExtractFrames(args, inputPath, conf.AbsoluteDataPath(args.ChannelName), conf.FrameCount, 128, 256)
+	return utils.CreatePreview(args, inputPath, conf.AbsoluteDataPath(args.ChannelName), conf.FrameCount, 128, 256)
 }

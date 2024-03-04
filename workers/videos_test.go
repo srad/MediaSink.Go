@@ -1,10 +1,11 @@
 package workers
 
 import (
-	"github.com/srad/streamsink/utils"
 	"path/filepath"
 	"runtime"
 	"testing"
+
+	"github.com/srad/streamsink/utils"
 )
 
 var (

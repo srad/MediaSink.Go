@@ -2,13 +2,14 @@ package models
 
 import (
 	"fmt"
+	"log"
+	"os"
+
 	"github.com/srad/streamsink/conf"
 	"gorm.io/driver/postgres"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
-	"log"
-	"os"
 )
 
 var Db *gorm.DB
@@ -21,7 +22,7 @@ func Init() {
 		dsn := fmt.Sprintf("host=%s user=%s password=%s dbname=streamsink port=5432 sslmode=disable TimeZone=Europe/Berlin", os.Getenv("DB_HOST"), os.Getenv("DB_USER"), os.Getenv("DB_PASS"))
 		db, err := gorm.Open(postgres.New(postgres.Config{
 			DSN: dsn,
-			//PreferSimpleProtocol: true, // disables implicit prepared statement usage
+			// PreferSimpleProtocol: true, // disables implicit prepared statement usage
 		}), &gorm.Config{
 			Logger: logger.Default.LogMode(logger.Silent),
 		})
@@ -60,16 +61,16 @@ func migrate() {
 	}
 
 	// No temp tables for SQLite3, just delete on start.
-	//if err := db.AutoMigrate(&NetInfo{}); err != nil {
+	// if err := db.AutoMigrate(&NetInfo{}); err != nil {
 	//	panic(fmt.Sprintf("[Migrate] Error NetInfo: %v", err))
-	//} else {
+	// } else {
 	//	db.Delete(&NetInfo{}, "1=1")
-	//}
-	//if err := db.AutoMigrate(&CPULoad{}); err != nil {
+	// }
+	// if err := db.AutoMigrate(&CPULoad{}); err != nil {
 	//	panic(fmt.Sprintf("[Migrate] Error CPULoad: %v", err))
-	//} else {
+	// } else {
 	//	db.Delete(&CPULoad{}, "1=1")
-	//}
+	// }
 
 	// Update added display_name
 	if err := Db.Exec("UPDATE channels SET display_name = CASE WHEN display_name is null or display_name = '' THEN channel_name ELSE display_name END;").Error; err != nil {

@@ -1,11 +1,13 @@
 package v1
 
 import (
-	"github.com/gin-gonic/gin"
-	"github.com/gorilla/websocket"
 	"log"
 	"net/http"
 	"sync"
+
+	"github.com/gin-gonic/gin"
+	"github.com/gorilla/websocket"
+	"github.com/srad/streamsink/entities"
 )
 
 // --------------------------------------------------------------------------------------
@@ -13,12 +15,10 @@ import (
 // --------------------------------------------------------------------------------------
 
 var (
-	upGrader = websocket.Upgrader{
-		CheckOrigin: func(r *http.Request) bool {
-			return true
-		}}
+	upGrader = websocket.Upgrader{CheckOrigin: func(r *http.Request) bool {
+		return true
+	}}
 	dispatcher = wsDispatcher{}
-	msg        = make(chan SocketEvent)
 )
 
 type wsDispatcher struct {
@@ -29,7 +29,7 @@ func (d *wsDispatcher) addWs(ws wsConnection) {
 	d.listeners = append(d.listeners, ws)
 }
 
-func (d *wsDispatcher) notify(msg SocketEvent) {
+func (d *wsDispatcher) notify(msg entities.SocketEvent) {
 	for _, l := range d.listeners {
 		if err := l.send(msg); err != nil {
 			log.Printf("[notify] %v", err)
@@ -52,13 +52,8 @@ func (d *wsDispatcher) rmWs(ws *websocket.Conn) {
 	}
 }
 
-type SocketEvent struct {
-	Data interface{} `json:"data"`
-	Name string      `json:"name"`
-}
-
-func NewSocketEvent(event string, data interface{}) SocketEvent {
-	return SocketEvent{Name: event, Data: data}
+func NewSocketEvent(event string, data interface{}) entities.SocketEvent {
+	return entities.SocketEvent{Name: event, Data: data}
 }
 
 type wsConnection struct {
@@ -69,7 +64,7 @@ type wsConnection struct {
 func WsListen() {
 	for {
 		select {
-		case m := <-msg:
+		case m := <-entities.SocketChannel:
 			dispatcher.notify(m)
 		}
 	}
@@ -93,7 +88,7 @@ func WsHandler(c *gin.Context) {
 	})
 
 	for {
-		msg := &SocketEvent{}
+		msg := &entities.SocketEvent{}
 		err := ws.ReadJSON(&msg)
 		if err != nil {
 			log.Printf("[WsHandler] error read message: %v", err)
@@ -101,8 +96,4 @@ func WsHandler(c *gin.Context) {
 		}
 		log.Printf("[Socket] %v", msg)
 	}
-}
-
-func SendMessage(event SocketEvent) {
-	msg <- event
 }

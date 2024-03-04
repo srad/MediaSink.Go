@@ -2,14 +2,15 @@ package v1
 
 import (
 	"encoding/json"
+	"log"
+	"net/http"
+	"strconv"
+
 	"github.com/gin-gonic/gin"
 	"github.com/srad/streamsink/app"
 	"github.com/srad/streamsink/conf"
 	"github.com/srad/streamsink/models"
 	"github.com/srad/streamsink/services"
-	"log"
-	"net/http"
-	"strconv"
 )
 
 type CutRequest struct {
@@ -222,7 +223,7 @@ func UnfavRecording(c *gin.Context) {
 // @Success     200 {object} models.Job
 // @Failure     400 {} string "Error message"
 // @Failure     500 {} string "Error message"
-// @Router      /recordings/:channelName/:filename/cut [post]
+// @Router      /recordings/{channelName}/{filename}/cut [post]
 func CutRecording(c *gin.Context) {
 	appG := app.Gin{C: c}
 
@@ -262,7 +263,7 @@ func CutRecording(c *gin.Context) {
 // @Success     200 {object} models.Job
 // @Failure     400 {} string "Error message"
 // @Failure     500 {} string "Error message"
-// @Router      /recordings/:channelName/:filename/:mediaType/convert [post]
+// @Router      /recordings/{channelName}/{filename}/{mediaType}/convert [post]
 func Convert(c *gin.Context) {
 	appG := app.Gin{C: c}
 

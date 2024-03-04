@@ -1,10 +1,11 @@
 package routers
 
 import (
-	"github.com/srad/streamsink/conf"
-	"github.com/srad/streamsink/docs"
 	"net/http"
 	"time"
+
+	"github.com/srad/streamsink/conf"
+	"github.com/srad/streamsink/docs"
 
 	"github.com/gin-contrib/cors"
 	socketio "github.com/googollee/go-socket.io"
@@ -34,14 +35,14 @@ var (
 // Setup InitRouter initialize routing information
 func Setup() http.Handler {
 	r := gin.New()
-	//r.Use(gin.Logger())
+	// r.Use(gin.Logger())
 	r.Use(gin.Recovery())
 
 	// You can use the internal static path, but it is recommended that you use a seperate
 	// nginx instance or container to serve the static content more efficiently.
 	// This is more suited for dev environments.
 	r.Static("/recordings", conf.AppCfg.RecordingsAbsolutePath)
-	//r.Static("/public", conf.AppCfg.PublicPath)
+	// r.Static("/public", conf.AppCfg.PublicPath)
 
 	docs.SwaggerInfo.BasePath = "/api/v1"
 	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
@@ -58,9 +59,9 @@ func Setup() http.Handler {
 	}))
 
 	apiv1 := r.Group("/api/v1")
-	//apiv1 := r.Group("/api/v1", gin.BasicAuth(gin.Accounts{
+	// apiv1 := r.Group("/api/v1", gin.BasicAuth(gin.Accounts{
 	//	"user": "barcode",
-	//}))
+	// }))
 	apiv1.Use()
 	{
 		// Admin

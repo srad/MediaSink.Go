@@ -2,8 +2,9 @@ package utils
 
 import (
 	"errors"
-	"golang.org/x/sys/windows"
 	"syscall"
+
+	"golang.org/x/sys/windows"
 )
 
 // For windows, process kill, see: https://github.com/mattn/goreman/blob/e9150e84f13c37dff0a79b8faed5b86522f3eb8e/proc_windows.go#L16-L51
@@ -14,7 +15,7 @@ func TerminateProc(channelName string) error {
 	}
 	defer dll.Release()
 
-	pid := 0 //recorded[channelName].Process.Pid
+	pid := 0 // recorded[channelName].Process.Pid
 
 	f, err := dll.FindProc("AttachConsole")
 	if err != nil {

@@ -4,12 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/srad/streamsink/conf"
-	"github.com/srad/streamsink/models"
-	"github.com/srad/streamsink/utils"
 	"log"
 	"os"
 	"path/filepath"
+
+	"github.com/srad/streamsink/conf"
+	"github.com/srad/streamsink/models"
+	"github.com/srad/streamsink/utils"
 )
 
 func StartImport() {

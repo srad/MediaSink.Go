@@ -4,10 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/srad/streamsink/workers"
 	"log"
 	"os"
 	"time"
+
+	"github.com/srad/streamsink/workers"
 
 	"github.com/srad/streamsink/conf"
 	"github.com/srad/streamsink/models"

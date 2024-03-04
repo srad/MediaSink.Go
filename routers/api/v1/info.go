@@ -1,9 +1,10 @@
 package v1
 
 import (
-	"github.com/srad/streamsink/utils"
 	"net/http"
 	"strconv"
+
+	"github.com/srad/streamsink/utils"
 
 	"github.com/gin-gonic/gin"
 	"github.com/srad/streamsink/app"

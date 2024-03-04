@@ -2,7 +2,6 @@ package conf
 
 import (
 	"fmt"
-	"github.com/spf13/viper"
 	"io"
 	"log"
 	"os"
@@ -10,6 +9,8 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+
+	"github.com/spf13/viper"
 )
 
 type Cfg struct {
@@ -19,18 +20,19 @@ type Cfg struct {
 	DataDisk               string
 	NetworkDev             string
 	DataPath               string
-	//PublicPath             string
-	//ScriptPath             string
+	// PublicPath             string
+	// ScriptPath             string
 	DefaultImportUrl string
 	MinRecMin        int
 }
 
 const (
-	VideosFolder  = "videos"
-	StripesFolder = "stripes"
-	PostersFolder = "posters"
-	winFont       = "C\\\\:/Windows/Fonts/DMMono-Regular.ttf"
-	linuxFont     = "/usr/share/fonts/truetype/DMMono-Regular.ttf"
+	VideosFolder   = "videos"
+	StripesFolder  = "stripes"
+	PostersFolder  = "posters"
+	PreviewsFolder = "previews"
+	winFont        = "C\\\\:/Windows/Fonts/DMMono-Regular.ttf"
+	linuxFont      = "/usr/share/fonts/truetype/DMMono-Regular.ttf"
 	// FrameCount Number of extracted frames or timeline/preview
 	FrameCount       = 96
 	FrameWidth       = "480"
@@ -141,7 +143,7 @@ func Read() {
 	AppCfg.RecordingsAbsolutePath = getConfString("dirs.recordingsfolder", "REC_PATH")
 	AppCfg.RecordingsFolder = getConfString("dirs.recordings", "REC_FOLDERNAME")
 	AppCfg.DataPath = getConfString("dirs.data", "DATA_DIR")
-	//AppCfg.PublicPath = getConfString("dirs.public", "PUBLIC_PATH")
+	// AppCfg.PublicPath = getConfString("dirs.public", "PUBLIC_PATH")
 
 	AppCfg.DataDisk = getConfString("sys.disk", "DATA_DISK")
 	AppCfg.NetworkDev = getConfString("sys.network", "NET_ADAPTER")

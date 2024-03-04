@@ -2,9 +2,10 @@ package workers
 
 import (
 	"context"
+	"log"
+
 	"github.com/srad/streamsink/models"
 	"github.com/srad/streamsink/utils"
-	"log"
 )
 
 var (

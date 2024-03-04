@@ -2,29 +2,25 @@ package services
 
 import (
 	"context"
-	"github.com/srad/streamsink/patterns"
-	"github.com/srad/streamsink/utils"
 	"log"
 	"time"
 
+	"github.com/srad/streamsink/entities"
 	"github.com/srad/streamsink/models"
+	"github.com/srad/streamsink/utils"
 )
 
 var (
-	isPaused   = false
-	cancel     context.CancelFunc
-	Dispatcher = &patterns.Dispatcher[RecorderMessage]{}
+	isPaused         = false
+	cancel           context.CancelFunc
+	RecorderMessages = make(chan entities.EventMessage)
 )
 
 const (
-	requestInterval    = 2 * time.Second
-	roundsInterval     = 10 * time.Second
-	screenshotInterval = 30 * time.Second
+	streamCheckBreak         = 2 * time.Second
+	breakBetweenCheckStreams = 10 * time.Second
+	captureThumbInterval     = 30 * time.Second
 )
-
-type RecorderMessage struct {
-	ChannelName string `json:"channelName"`
-}
 
 func startThumbnailWorker(ctx context.Context) {
 	for {
@@ -32,13 +28,13 @@ func startThumbnailWorker(ctx context.Context) {
 		case <-ctx.Done():
 			log.Println("[startThumbnailWorker] stopped")
 			return
-		case <-time.After(screenshotInterval):
+		case <-time.After(captureThumbInterval):
 			for channelName, info := range models.GetStreamInfo() {
 				if info.Url != "" {
 					if err := info.Screenshot(); err != nil {
 						log.Printf("[Recorder] Error extracting first frame of channel | file: %s", channelName)
 					} else {
-						Dispatcher.Notify("channel:thumbnail", RecorderMessage{ChannelName: channelName})
+						RecorderMessages <- entities.EventMessage{Name: "channel:thumbnail", Message: channelName}
 					}
 				}
 			}
@@ -52,7 +48,7 @@ func startStreamWorker(ctx context.Context) {
 		case <-ctx.Done():
 			log.Println("[startStreamWorker] stopped")
 			return
-		case <-time.After(roundsInterval):
+		case <-time.After(breakBetweenCheckStreams):
 			checkStreams()
 		}
 	}
@@ -87,15 +83,15 @@ func checkStreams() {
 		}
 
 		if err := channel.Start(); err != nil {
-			//log.Printf("[checkStreams] Start error: %v | %s\n", channel, err)
-			Dispatcher.Notify("channel:offline", RecorderMessage{ChannelName: channel.ChannelName})
+			// log.Printf("[checkStreams] Start error: %v | %s\n", channel, err)
+			RecorderMessages <- entities.EventMessage{Name: "channel:offline", Message: channel.ChannelName}
 		} else {
-			Dispatcher.Notify("channel:online", RecorderMessage{ChannelName: channel.ChannelName})
-			Dispatcher.Notify("channel:start", RecorderMessage{ChannelName: channel.ChannelName})
+			RecorderMessages <- entities.EventMessage{Name: "channel:online", Message: channel.ChannelName}
+			RecorderMessages <- entities.EventMessage{Name: "channel:start", Message: channel.ChannelName}
 		}
 
 		// StopRecorder between each check
-		time.Sleep(requestInterval)
+		time.Sleep(streamCheckBreak)
 	}
 }
 

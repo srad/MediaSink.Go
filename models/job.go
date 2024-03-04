@@ -2,12 +2,13 @@ package models
 
 import (
 	"errors"
-	"github.com/srad/streamsink/conf"
-	"github.com/srad/streamsink/patterns"
-	"github.com/srad/streamsink/utils"
-	"gorm.io/gorm"
 	"log"
 	"time"
+
+	"github.com/srad/streamsink/conf"
+	"github.com/srad/streamsink/entities"
+	"github.com/srad/streamsink/utils"
+	"gorm.io/gorm"
 )
 
 const (
@@ -20,15 +21,15 @@ const (
 )
 
 var (
-	Dispatcher = patterns.Dispatcher[JobMessage[any]]{}
+	JobChannel = make(chan entities.EventMessage)
 )
 
-type JobMessage[T any] struct {
-	JobId       uint   `json:"jobId,omitempty"`
-	ChannelName string `json:"channelName,omitempty"`
-	Filename    string `json:"filename,omitempty"`
-	Type        string `json:"type,omitempty"`
-	Data        T      `json:"data,omitempty"`
+type JobMessage struct {
+	JobId       uint        `json:"jobId,omitempty"`
+	ChannelName string      `json:"channelName,omitempty"`
+	Filename    string      `json:"filename,omitempty"`
+	Type        string      `json:"type,omitempty"`
+	Data        interface{} `json:"data,omitempty"`
 }
 
 type Job struct {
@@ -96,7 +97,7 @@ func addJob(channelName, filename, filepath, status string, args *string) (*Job,
 	}
 	log.Printf("[Job] Enqueued job: '%s/%s' -> %s", channelName, filename, status)
 
-	Dispatcher.Notify("job:create", JobMessage[any]{JobId: job.JobId, Type: status, ChannelName: job.ChannelName, Filename: job.Filename})
+	JobChannel <- entities.EventMessage{Name: "job:create", Message: JobMessage{JobId: job.JobId, Type: status, ChannelName: job.ChannelName, Filename: job.Filename}}
 
 	return &job, nil
 }
@@ -112,10 +113,20 @@ func JobList() ([]*Job, error) {
 	return jobs, nil
 }
 
+func (channel *Channel) Jobs() ([]*Job, error) {
+	var jobs []*Job
+	if err := Db.Where("channel_name = ?", channel.ChannelName).Find(&jobs).Error; err != nil {
+		return nil, err
+	}
+
+	return jobs, nil
+}
+
 func (job *Job) Destroy() error {
 	if job.Pid != 0 {
 		if err := utils.Interrupt(job.Pid); err != nil {
 			log.Printf("[Destroy] Error interrupting process: %s", err.Error())
+			return err
 		}
 	}
 
@@ -124,7 +135,7 @@ func (job *Job) Destroy() error {
 	}
 	log.Printf("[Job] Job id delete %d", job.JobId)
 
-	Dispatcher.Notify("job:destroy", JobMessage[any]{JobId: job.JobId, ChannelName: job.ChannelName, Filename: job.Filename})
+	JobChannel <- entities.EventMessage{Name: "job:destroy", Message: JobMessage{JobId: job.JobId, ChannelName: job.ChannelName, Filename: job.Filename}}
 
 	return nil
 }

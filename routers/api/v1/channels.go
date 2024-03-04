@@ -352,7 +352,7 @@ func ResumeChannel(c *gin.Context) {
 // @Param       channelName path string true "Channel name"
 // @Success     200 {} http.StatusOK
 // @Failure     500 {} http.StatusInternalServerError
-// @Router      /channels/{channelName}/fav [post]
+// @Router       /channels/{channelName}/fav [patch]
 func FavChannel(c *gin.Context) {
 	appG := app.Gin{C: c}
 
@@ -375,7 +375,7 @@ func FavChannel(c *gin.Context) {
 // @Param       channelName path string true "Channel name"
 // @Success     200 {} http.StatusOK
 // @Failure     500 {} http.StatusInternalServerError
-// @Router      /channels/{channelName}/unfav [post]
+// @Router      /channels/{channelName}/unfav [patch]
 func UnFavChannel(c *gin.Context) {
 	appG := app.Gin{C: c}
 

@@ -90,7 +90,7 @@ func ExecSync(execArgs *ExecArgs) error {
 	c := exec.Command(execArgs.Command, execArgs.CommandArgs...)
 	log.Println("Executing: ", execArgs.ToString())
 
-	//stdout, _ := cmd.StdoutPipe()
+	// stdout, _ := cmd.StdoutPipe()
 	sterr, _ := c.StderrPipe()
 
 	if err := c.Start(); err != nil {
@@ -125,7 +125,7 @@ func ExecSync(execArgs *ExecArgs) error {
 			// an ExitStatus() method with the same signature.
 			if _, ok := exiterr.Sys().(syscall.WaitStatus); ok {
 				return err
-				//return status.ExitStatus()
+				// return status.ExitStatus()
 			}
 		}
 		return err
@@ -169,19 +169,19 @@ func CpuUsage(waitSeconds uint64) (*CPUInfo, error) {
 
 func cpuMeasures() ([]CPUMeasure, error) {
 	// Documentation of values: https://www.linuxhowtos.org/System/procstat.htm
-	//The very first "cpu" line aggregates the numbers in all the other "cpuN" lines.
+	// The very first "cpu" line aggregates the numbers in all the other "cpuN" lines.
 	//
-	//These numbers identify the amount of time the CPU has spent performing different kinds of work. Time units are in USER_HZ or Jiffies (typically hundredths of a second).
+	// These numbers identify the amount of time the CPU has spent performing different kinds of work. Time units are in USER_HZ or Jiffies (typically hundredths of a second).
 	//
-	//The meanings of the columns are as follows, from left to right:
+	// The meanings of the columns are as follows, from left to right:
 	//
-	//user: normal processes executing in user mode
-	//nice: niced processes executing in user mode
-	//system: processes executing in kernel mode
-	//idle: twiddling thumbs
-	//iowait: waiting for I/O to complete
-	//irq: servicing interrupts
-	//softirq: servicing softirqs
+	// user: normal processes executing in user mode
+	// nice: niced processes executing in user mode
+	// system: processes executing in kernel mode
+	// idle: twiddling thumbs
+	// iowait: waiting for I/O to complete
+	// irq: servicing interrupts
+	// softirq: servicing softirqs
 
 	out, err := os.ReadFile("/proc/stat")
 	if err != nil {

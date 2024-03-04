@@ -3,7 +3,6 @@ package models
 import (
 	"errors"
 	"fmt"
-	"github.com/srad/streamsink/utils"
 	"io"
 	"log"
 	"os"
@@ -13,6 +12,8 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/srad/streamsink/utils"
 
 	"github.com/srad/streamsink/conf"
 	"gorm.io/gorm"
@@ -307,12 +308,20 @@ func (channel *Channel) Destroy() error {
 
 func (channel *Channel) DestroyAllRecordings() error {
 	var recordings []*Recording
-	if err := Db.Where("channel_name = ?", channel.ChannelName).
-		Find(&recordings).Error; err != nil {
+	if err := Db.Where("channel_name = ?", channel.ChannelName).Find(&recordings).Error; err != nil {
+		log.Printf("No recordings found to destroy for channel %s", channel.ChannelName)
 		return err
 	}
-	// TODO: Also Cancel running jobs from this channel
 
+	if jobs, err := channel.Jobs(); err != nil {
+		log.Printf("Error querying all jobs for this channel")
+	} else {
+		for _, job := range jobs {
+			job.Destroy()
+		}
+	}
+
+	// TODO: Also Cancel running jobs from this channel
 	for _, recording := range recordings {
 		if err := recording.Destroy(); err != nil {
 			log.Printf("Error deleting recording '%s': %v", err, recording.Filename)
@@ -356,7 +365,7 @@ func (channel *Channel) NewRecording() (Recording, string) {
 // Capture Starts and also waits for the stream to end or being killed
 func (channel *Channel) Capture(url string, skip uint) error {
 	if _, ok := streams[channel.ChannelName]; ok {
-		//log.Println("[Channel] Already recording: " + channel.ChannelName)
+		// log.Println("[Channel] Already recording: " + channel.ChannelName)
 		return nil
 	}
 
@@ -369,8 +378,8 @@ func (channel *Channel) Capture(url string, skip uint) error {
 
 	recInfo[channel.ChannelName] = &recording
 	streams[channel.ChannelName] = exec.Command("ffmpeg", "-hide_banner", "-loglevel", "error", "-i", url, "-ss", fmt.Sprintf("%d", skip), "-movflags", "faststart", "-c", "copy", outputPath)
-	str := strings.Join([]string{"ffmpeg", "-hide_banner", "-loglevel", "error", "-i", url, "-ss", fmt.Sprintf("%d", skip), "-movflags", "faststart", "-c", "copy", outputPath}, " ")
-	log.Printf("Executing: %s", str)
+	cmdStr := strings.Join([]string{"ffmpeg", "-hide_banner", "-loglevel", "error", "-i", url, "-ss", fmt.Sprintf("%d", skip), "-movflags", "faststart", "-c", "copy", outputPath}, " ")
+	log.Printf("Executing: %s", cmdStr)
 
 	sterr, _ := streams[channel.ChannelName].StderrPipe()
 
@@ -385,7 +394,7 @@ func (channel *Channel) Capture(url string, skip uint) error {
 		log.Printf("[Capture] Error enqueuing reccording for: %s/%s: %v", channel.ChannelName, recording.Filename, err)
 	}
 
-	if err := recJob.UpdateInfo(streams[channel.ChannelName].Process.Pid, str); err != nil {
+	if err := recJob.UpdateInfo(streams[channel.ChannelName].Process.Pid, cmdStr); err != nil {
 		log.Printf("[recJob.UpdateInfo]: %s / %v", channel.ChannelName, err)
 	}
 
@@ -414,7 +423,7 @@ func (channel *Channel) Capture(url string, skip uint) error {
 			// an ExitStatus() method with the same signature.
 			if _, ok := exiterr.Sys().(syscall.WaitStatus); ok {
 				return err
-				//return status.ExitStatus()
+				// return status.ExitStatus()
 			}
 		}
 		return err
