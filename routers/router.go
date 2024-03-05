@@ -70,7 +70,7 @@ func Setup() http.Handler {
 
 		// Channels
 		apiv1.GET("/channels", v1.GetChannels)
-		apiv1.POST("/channels", v1.AddChannel)
+		apiv1.POST("/channels", v1.CreateChannel)
 
 		apiv1.GET("/channels/:channelName", v1.GetChannel)
 		apiv1.DELETE("/channels/:channelName", v1.DeleteChannel)
@@ -104,7 +104,7 @@ func Setup() http.Handler {
 
 		// recordings
 		apiv1.GET("/recordings", v1.GetRecordings)
-		apiv1.GET("/recordings/sorted/:column/:order/:limit", v1.GetSorted)
+		apiv1.GET("/recordings/filter/:column/:order/:limit", v1.FilterRecordings)
 		apiv1.GET("/recordings/random/:limit", v1.GetRandomRecordings)
 		apiv1.GET("/recordings/bookmarks", v1.GetBookmarks)
 		apiv1.GET("/recordings/:channelName", v1.GetRecording)

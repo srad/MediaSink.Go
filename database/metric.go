@@ -1,12 +1,12 @@
-package models
+package database
 
 import "time"
 
 type NetInfo struct {
-	Dev           string    `json:"dev"`
-	TransmitBytes uint64    `json:"transmitBytes"`
-	ReceiveBytes  uint64    `json:"receiveBytes"`
-	CreatedAt     time.Time `json:"createdAt"`
+	Dev           string    `json:"dev" extensions:"!x-nullable"`
+	TransmitBytes uint64    `json:"transmitBytes" extensions:"!x-nullable"`
+	ReceiveBytes  uint64    `json:"receiveBytes" extensions:"!x-nullable"`
+	CreatedAt     time.Time `json:"createdAt" extensions:"!x-nullable"`
 }
 
 func (NetInfo) TableName() string {
@@ -14,9 +14,9 @@ func (NetInfo) TableName() string {
 }
 
 type CPULoad struct {
-	CPU       string    `json:"cpu"`
-	Load      float64   `json:"load"`
-	CreatedAt time.Time `json:"createdAt"`
+	CPU       string    `json:"cpu" extensions:"!x-nullable"`
+	Load      float64   `json:"load" extensions:"!x-nullable"`
+	CreatedAt time.Time `json:"createdAt" extensions:"!x-nullable"`
 }
 
 func (CPULoad) TableName() string {

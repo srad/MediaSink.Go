@@ -9,7 +9,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/srad/streamsink/app"
-	"github.com/srad/streamsink/models"
+	"github.com/srad/streamsink/database"
 )
 
 // AddJob godoc
@@ -20,7 +20,7 @@ import (
 // @Param       filename    path string  true  "Filename in channel"
 // @Accept      json
 // @Produce     json
-// @Success     200 {object} models.Job
+// @Success     200 {object} database.Job
 // @Failure     400 {} http.StatusBadRequest
 // @Failure     500 {} http.StatusInternalServerError
 // @Router      /jobs/{channelName}/{filename} [post]
@@ -35,7 +35,7 @@ func AddJob(c *gin.Context) {
 		return
 	}
 
-	job, err := models.EnqueuePreviewJob(channelName, filename)
+	job, err := database.EnqueuePreviewJob(channelName, filename)
 	if err != nil {
 		appG.Response(http.StatusInternalServerError, err)
 		return
@@ -82,7 +82,7 @@ func StopJob(c *gin.Context) {
 // @Success     200
 // @Failure     400 {string} http.StatusBadRequest
 // @Failure     500 {string} http.StatusInternalServerError
-// @Router      /jobs/{pid} [delete]
+// @Router      /jobs/{id} [delete]
 func DestroyJob(c *gin.Context) {
 	appG := app.Gin{C: c}
 
@@ -92,7 +92,7 @@ func DestroyJob(c *gin.Context) {
 		return
 	}
 
-	job, err := models.FindJobById(id)
+	job, err := database.FindJobById(id)
 	if err != nil {
 		appG.Response(http.StatusBadRequest, err)
 		return
@@ -109,12 +109,12 @@ func DestroyJob(c *gin.Context) {
 // @Tags        jobs
 // @Accept      json
 // @Produce     json
-// @Success     200 {object} []models.Job
+// @Success     200 {object} []database.Job
 // @Failure     500 {}  http.StatusInternalServerError
 // @Router      /jobs [get]
 func GetJobs(c *gin.Context) {
 	appG := app.Gin{C: c}
-	jobs, err := models.JobList()
+	jobs, err := database.JobList()
 
 	if err != nil {
 		appG.Response(http.StatusInternalServerError, err)

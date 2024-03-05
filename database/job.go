@@ -1,4 +1,4 @@
-package models
+package database
 
 import (
 	"errors"
@@ -25,8 +25,8 @@ var (
 )
 
 type JobMessage struct {
-	JobId       uint        `json:"jobId,omitempty"`
-	ChannelName string      `json:"channelName,omitempty"`
+	JobId       uint        `json:"jobId,omitempty" extensions:"!x-nullable"`
+	ChannelName string      `json:"channelName,omitempty" extensions:"!x-nullable"`
 	Filename    string      `json:"filename,omitempty"`
 	Type        string      `json:"type,omitempty"`
 	Data        interface{} `json:"data,omitempty"`

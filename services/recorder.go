@@ -5,16 +5,37 @@ import (
 	"log"
 	"time"
 
+	"github.com/srad/streamsink/database"
 	"github.com/srad/streamsink/entities"
-	"github.com/srad/streamsink/models"
 	"github.com/srad/streamsink/utils"
 )
 
 var (
 	isPaused         = false
 	cancel           context.CancelFunc
-	RecorderMessages = make(chan entities.EventMessage)
+	recorderMessages = make(chan entities.EventMessage)
 )
+
+func SendMessage(event entities.EventMessage) {
+	go messageSend(event)
+}
+
+func messageSend(event entities.EventMessage) {
+	recorderMessages <- event
+}
+
+func DispatchRecorder(ctx context.Context) {
+	for {
+		select {
+		case m := <-recorderMessages:
+			entities.SocketChannel <- entities.SocketEvent{Name: m.Name, Data: m.Message}
+			return
+		case <-ctx.Done():
+			log.Println("[dispatchMessages] stopped")
+			return
+		}
+	}
+}
 
 const (
 	streamCheckBreak         = 2 * time.Second
@@ -22,6 +43,7 @@ const (
 	captureThumbInterval     = 30 * time.Second
 )
 
+// startThumbnailWorker Creates in intervals snapshots of the video as a preview.
 func startThumbnailWorker(ctx context.Context) {
 	for {
 		select {
@@ -29,12 +51,12 @@ func startThumbnailWorker(ctx context.Context) {
 			log.Println("[startThumbnailWorker] stopped")
 			return
 		case <-time.After(captureThumbInterval):
-			for channelName, info := range models.GetStreamInfo() {
+			for channelName, info := range database.GetStreamInfo() {
 				if info.Url != "" {
 					if err := info.Screenshot(); err != nil {
 						log.Printf("[Recorder] Error extracting first frame of channel | file: %s", channelName)
 					} else {
-						RecorderMessages <- entities.EventMessage{Name: "channel:thumbnail", Message: channelName}
+						SendMessage(entities.EventMessage{Name: "channel:thumbnail", Message: channelName})
 					}
 				}
 			}
@@ -50,6 +72,7 @@ func startStreamWorker(ctx context.Context) {
 			return
 		case <-time.After(breakBetweenCheckStreams):
 			checkStreams()
+			log.Println("Sleeping between stream checks zzz...")
 		}
 	}
 }
@@ -59,7 +82,7 @@ func checkStreams() {
 	if isPaused {
 		return
 	}
-	channels, err := models.EnabledChannelList()
+	channels, err := database.EnabledChannelList()
 	if err != nil {
 		log.Println(err)
 		return
@@ -70,25 +93,27 @@ func checkStreams() {
 		}
 
 		// Get the current database value, in case it case been updated meanwhile.
-		currentChannel, err := models.GetChannelByName(channel.ChannelName)
+		channel, err := database.GetChannelByName(channel.ChannelName)
 
 		if err != nil {
 			log.Printf("[checkStreams] Error channel %s: %s", channel.ChannelName, err)
 			continue
 		}
 
-		if currentChannel.IsRecording() || currentChannel.IsPaused {
+		if channel.IsRecording() || channel.IsPaused {
 			log.Printf("[checkStreams] Already recording or paused: %s", channel.ChannelName)
 			continue
 		}
 
 		if err := channel.Start(); err != nil {
 			// log.Printf("[checkStreams] Start error: %v | %s\n", channel, err)
-			RecorderMessages <- entities.EventMessage{Name: "channel:offline", Message: channel.ChannelName}
+			SendMessage(entities.EventMessage{Name: "channel:offline", Message: channel.ChannelName})
 		} else {
-			RecorderMessages <- entities.EventMessage{Name: "channel:online", Message: channel.ChannelName}
-			RecorderMessages <- entities.EventMessage{Name: "channel:start", Message: channel.ChannelName}
+			SendMessage(entities.EventMessage{Name: "channel:online", Message: channel.ChannelName})
+			SendMessage(entities.EventMessage{Name: "channel:start", Message: channel.ChannelName})
 		}
+
+		log.Println(channel.ChannelName)
 
 		// StopRecorder between each check
 		time.Sleep(streamCheckBreak)
@@ -116,14 +141,14 @@ func StopRecorder() error {
 
 	isPaused = true
 	cancel()
-	models.TerminateAll()
+	database.TerminateAll()
 
 	return nil
 }
 
 func GeneratePosters() error {
 	log.Println("[Recorder] Updating all recordings info")
-	recordings, err := models.RecordingsList()
+	recordings, err := database.RecordingsList()
 	if err != nil {
 		log.Printf("Error %v", err)
 		return err

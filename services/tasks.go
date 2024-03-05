@@ -11,7 +11,7 @@ import (
 	"github.com/srad/streamsink/workers"
 
 	"github.com/srad/streamsink/conf"
-	"github.com/srad/streamsink/models"
+	"github.com/srad/streamsink/database"
 	"gorm.io/gorm"
 )
 
@@ -23,10 +23,10 @@ var (
 // FixOrphanedRecordings Go through all open jobs with status "recording" and complete them.
 func fixOrphanedRecordings() {
 	log.Println("Fixing orphaned recordings ...")
-	jobs, err := models.GetJobsByStatus(models.StatusRecording)
+	jobs, err := database.GetJobsByStatus(database.StatusRecording)
 
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		log.Printf("No jobs with status '%s' found\n", models.StatusRecording)
+		log.Printf("No jobs with status '%s' found\n", database.StatusRecording)
 		return
 	}
 	// Other errors
@@ -48,7 +48,7 @@ func fixOrphanedRecordings() {
 			}
 			log.Printf("Deleted file '%s'", job.Filename)
 		} else {
-			rec := &models.Recording{
+			rec := &database.Recording{
 				ChannelName:  job.ChannelName,
 				Duration:     0,
 				Filename:     job.Filename,
@@ -74,7 +74,7 @@ func StartUpJobs() error {
 }
 
 func deleteChannels() error {
-	channels, err := models.ChannelList()
+	channels, err := database.ChannelList()
 	if err != nil {
 		log.Printf("[StartUpJobs] ChannelList error: %s", err.Error())
 		return err

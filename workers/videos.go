@@ -12,8 +12,8 @@ import (
 	"time"
 
 	"github.com/srad/streamsink/conf"
+	"github.com/srad/streamsink/database"
 	"github.com/srad/streamsink/entities"
-	"github.com/srad/streamsink/models"
 	"github.com/srad/streamsink/utils"
 	"gorm.io/gorm"
 )
@@ -56,7 +56,7 @@ func processJobs(ctx context.Context) {
 }
 
 func conversionJobs() {
-	job, err := models.GetNextJob(models.StatusConvert)
+	job, err := database.GetNextJob(database.StatusConvert)
 	if job == nil {
 		return
 	}
@@ -81,7 +81,7 @@ func conversionJobs() {
 				log.Printf("Error updating job progress: %s", err.Error())
 			}
 
-			JobInfoChannel <- entities.EventMessage{Name: "job:progress", Message: models.JobMessage{JobId: job.JobId, Data: JobVideoInfo{Packets: job.Recording.Packets, Frame: info.Frame}, Type: job.Status, ChannelName: job.ChannelName, Filename: job.Filename}}
+			JobInfoChannel <- entities.EventMessage{Name: "job:progress", Message: database.JobMessage{JobId: job.JobId, Data: JobVideoInfo{Packets: job.Recording.Packets, Frame: info.Frame}, Type: job.Status, ChannelName: job.ChannelName, Filename: job.Filename}}
 		},
 		ChannelName: job.ChannelName,
 		Filename:    job.Filename,
@@ -105,7 +105,7 @@ func conversionJobs() {
 	}
 
 	// All good now, save the record.
-	rec := &models.Recording{
+	rec := &database.Recording{
 		ChannelName:  job.ChannelName,
 		Filename:     result.Filename,
 		PathRelative: result.PathRelative,
@@ -118,7 +118,7 @@ func conversionJobs() {
 			log.Printf("Error deleting file '%s': %s", result.Filepath, err.Error())
 		}
 	} else {
-		if _, err := models.EnqueuePreviewJob(result.ChannelName, result.Filename); err != nil {
+		if _, err := database.EnqueuePreviewJob(result.ChannelName, result.Filename); err != nil {
 			log.Printf("Error enqueing preview job: %s", err.Error())
 		}
 	}
@@ -126,9 +126,9 @@ func conversionJobs() {
 
 // Handles one single job.
 func previewJobs() {
-	job, err := models.GetNextJob(models.StatusPreview)
+	job, err := database.GetNextJob(database.StatusPreview)
 	if job == nil && err == nil {
-		// log.Printf("No jobs found with status '%s'", models.StatusPreview)
+		// log.Printf("No jobs found with status '%s'", database.StatusPreview)
 		return
 	}
 	if err != nil {
@@ -137,7 +137,7 @@ func previewJobs() {
 	}
 
 	// Delete any old previews first
-	errDelete := models.DestroyPreviews(job.ChannelName, job.Filename)
+	errDelete := database.DestroyPreviews(job.ChannelName, job.Filename)
 	if errDelete != nil && !errors.Is(errDelete, gorm.ErrRecordNotFound) {
 		log.Printf("[Job] Error deleting existing previews: %v", errDelete)
 	}
@@ -151,7 +151,7 @@ func previewJobs() {
 	err = GeneratePreviews(&utils.VideoConversionArgs{
 		OnStart: func(info *utils.CommandInfo) {
 			_ = job.UpdateInfo(info.Pid, info.Command)
-			JobInfoChannel <- entities.EventMessage{Name: "job:start", Message: models.JobMessage{
+			JobInfoChannel <- entities.EventMessage{Name: "job:start", Message: database.JobMessage{
 				JobId:       job.JobId,
 				ChannelName: job.ChannelName,
 				Filename:    job.Filename,
@@ -159,7 +159,7 @@ func previewJobs() {
 			}}
 		},
 		OnProgress: func(info *utils.ProcessInfo) {
-			JobInfoChannel <- entities.EventMessage{Name: "job:progress", Message: models.JobMessage{
+			JobInfoChannel <- entities.EventMessage{Name: "job:progress", Message: database.JobMessage{
 				JobId:       job.JobId,
 				ChannelName: job.ChannelName,
 				Filename:    job.Filename,
@@ -185,7 +185,7 @@ func previewJobs() {
 		return
 	}
 
-	_, err2 := models.UpdatePreview(job.ChannelName, job.Filename)
+	_, err2 := database.UpdatePreview(job.ChannelName, job.Filename)
 	if err2 != nil {
 		log.Printf("[Job] Error adding previews: %v", err2)
 		return
@@ -193,7 +193,7 @@ func previewJobs() {
 
 	if _, err := job.FindRecording(); err != nil {
 		// TODO
-		// services.notify("job:preview:done", models.JobMessage{JobId: job.JobId, ChannelName: job.ChannelName, Filename: job.Filename, Data: rec})
+		// services.notify("job:preview:done", database.JobMessage{JobId: job.JobId, ChannelName: job.ChannelName, Filename: job.Filename, Data: rec})
 	}
 	err3 := job.Destroy()
 	if err3 != nil {
@@ -207,7 +207,7 @@ func previewJobs() {
 // Cut video, add preview job, destroy job.
 // This action is intrinsically procedural, keep it together locally.
 func cuttingJobs() error {
-	job, err := models.GetNextJob(models.StatusCut)
+	job, err := database.GetNextJob(database.StatusCut)
 	if errors.Is(err, gorm.ErrRecordNotFound) || job == nil {
 		return err
 	}
@@ -318,7 +318,7 @@ func cuttingJobs() error {
 	}
 
 	// Cutting written to dist, add record to database
-	newRec := models.Recording{
+	newRec := database.Recording{
 		ChannelName:  job.ChannelName,
 		Filename:     filename,
 		PathRelative: conf.GetRelativeRecordingsPath(job.ChannelName, filename),
@@ -339,7 +339,7 @@ func cuttingJobs() error {
 	}
 
 	// Successfully added cut record, enqueue preview job
-	_, err = models.EnqueuePreviewJob(job.ChannelName, filename)
+	_, err = database.EnqueuePreviewJob(job.ChannelName, filename)
 	if err != nil {
 		log.Printf("[Job] Error adding preview for cutting job %d: %v", job.JobId, err)
 		return err

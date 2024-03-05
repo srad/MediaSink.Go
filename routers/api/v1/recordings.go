@@ -2,14 +2,13 @@ package v1
 
 import (
 	"encoding/json"
-	"log"
 	"net/http"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"github.com/srad/streamsink/app"
 	"github.com/srad/streamsink/conf"
-	"github.com/srad/streamsink/models"
+	"github.com/srad/streamsink/database"
 	"github.com/srad/streamsink/services"
 )
 
@@ -24,12 +23,12 @@ type CutRequest struct {
 // @Tags        recordings
 // @Accept      json
 // @Produce     json
-// @Success     200 {object} []models.Recording
+// @Success     200 {object} []database.Recording
 // @Failure     500 {} string "Error message"
 // @Router      /recordings [get]
 func GetRecordings(c *gin.Context) {
 	appG := app.Gin{C: c}
-	recordings, err := models.RecordingsList()
+	recordings, err := database.RecordingsList()
 
 	if err != nil {
 		appG.Response(http.StatusInternalServerError, nil)
@@ -71,7 +70,7 @@ func GeneratePosters(c *gin.Context) {
 func UpdateVideoInfo(c *gin.Context) {
 	appG := app.Gin{C: c}
 	// TODO Make into a cancelable job
-	models.UpdateVideoInfo()
+	database.UpdateVideoInfo()
 	appG.Response(http.StatusOK, nil)
 }
 
@@ -86,7 +85,7 @@ func UpdateVideoInfo(c *gin.Context) {
 // @Router      /recordings/isupdating [get]
 func IsUpdatingVideoInfo(c *gin.Context) {
 	appG := app.Gin{C: c}
-	log.Println("jjjjjjjjjjjjjjjjjjjjjjjjj")
+	// TODO: do it
 	appG.Response(http.StatusOK, true)
 }
 
@@ -97,7 +96,7 @@ func IsUpdatingVideoInfo(c *gin.Context) {
 // @Accept      json
 // @Produce     json
 // @Param       channelName path string true "Channel name"
-// @Success     200 {object} []models.Recording
+// @Success     200 {object} []database.Recording
 // @Failure     400 {} string "Error message"
 // @Failure     500 {} string "Error message"
 // @Router      /recordings/{channelName} [get]
@@ -110,7 +109,7 @@ func GetRecording(c *gin.Context) {
 		return
 	}
 
-	recordings, err := models.FindByName(channelName)
+	recordings, err := database.FindByName(channelName)
 	if err != nil {
 		appG.Response(http.StatusInternalServerError, err)
 		return
@@ -125,12 +124,12 @@ func GetRecording(c *gin.Context) {
 // @Tags        recordings
 // @Accept      json
 // @Produce     json
-// @Success     200 {object} []models.Recording
+// @Success     200 {object} []database.Recording
 // @Failure     500 {} string "Error message"
 // @Router      /recordings/bookmarks [get]
 func GetBookmarks(c *gin.Context) {
 	appG := app.Gin{C: c}
-	recordings, err := models.BookmarkList()
+	recordings, err := database.BookmarkList()
 
 	if err != nil {
 		appG.Response(http.StatusInternalServerError, nil)
@@ -148,7 +147,7 @@ func GetBookmarks(c *gin.Context) {
 // @Produce     json
 // @Param       channelName path string true "Channel name"
 // @Param       filename    path string true "Filename to generate the preview for"
-// @Success     200 {object} models.Job
+// @Success     200 {object} database.Job
 // @Failure     400 {} string "Error message"
 // @Failure     500 {} string "Error message"
 // @Router      /recordings/{channelName}/{filename}/preview [post]
@@ -158,7 +157,7 @@ func GeneratePreview(c *gin.Context) {
 	channelName := c.Param("channelName")
 	filename := c.Param("filename")
 
-	job, err := models.EnqueuePreviewJob(channelName, filename)
+	job, err := database.EnqueuePreviewJob(channelName, filename)
 	if err != nil {
 		appG.Response(http.StatusInternalServerError, err)
 		return
@@ -182,7 +181,7 @@ func GeneratePreview(c *gin.Context) {
 func FavRecording(c *gin.Context) {
 	appG := app.Gin{C: c}
 
-	if err := models.FavRecording(c.Param("channelName"), c.Param("filename"), true); err != nil {
+	if err := database.FavRecording(c.Param("channelName"), c.Param("filename"), true); err != nil {
 		appG.Response(http.StatusInternalServerError, err)
 		return
 	}
@@ -205,7 +204,7 @@ func FavRecording(c *gin.Context) {
 func UnfavRecording(c *gin.Context) {
 	appG := app.Gin{C: c}
 
-	if err := models.FavRecording(c.Param("channelName"), c.Param("filename"), false); err != nil {
+	if err := database.FavRecording(c.Param("channelName"), c.Param("filename"), false); err != nil {
 		appG.Response(http.StatusInternalServerError, err)
 		return
 	}
@@ -220,7 +219,7 @@ func UnfavRecording(c *gin.Context) {
 // @Param       CutRequest body CutRequest true "Start and end timestamp of cutting sequences."
 // @Accept      json
 // @Produce     json
-// @Success     200 {object} models.Job
+// @Success     200 {object} database.Job
 // @Failure     400 {} string "Error message"
 // @Failure     500 {} string "Error message"
 // @Router      /recordings/{channelName}/{filename}/cut [post]
@@ -242,7 +241,7 @@ func CutRecording(c *gin.Context) {
 		return
 	}
 
-	job, err := models.EnqueueCuttingJob(channelName, filename, conf.AbsoluteFilepath(channelName, filename), string(cut))
+	job, err := database.EnqueueCuttingJob(channelName, filename, conf.AbsoluteFilepath(channelName, filename), string(cut))
 	if err != nil {
 		appG.Response(http.StatusInternalServerError, err.Error())
 		return
@@ -260,7 +259,7 @@ func CutRecording(c *gin.Context) {
 // @Param       mediaType path string true "Media type to convert to: 720, 1080, mp3"
 // @Accept      json
 // @Produce     json
-// @Success     200 {object} models.Job
+// @Success     200 {object} database.Job
 // @Failure     400 {} string "Error message"
 // @Failure     500 {} string "Error message"
 // @Router      /recordings/{channelName}/{filename}/{mediaType}/convert [post]
@@ -271,7 +270,7 @@ func Convert(c *gin.Context) {
 	filename := c.Param("filename")
 	mediaType := c.Param("mediaType")
 
-	job, err := models.EnqueueConversionJob(channelName, filename, conf.AbsoluteFilepath(channelName, filename), mediaType)
+	job, err := database.EnqueueConversionJob(channelName, filename, conf.AbsoluteFilepath(channelName, filename), mediaType)
 	if err != nil {
 		appG.Response(http.StatusInternalServerError, err.Error())
 		return
@@ -280,18 +279,18 @@ func Convert(c *gin.Context) {
 	appG.Response(http.StatusOK, job)
 }
 
-// GetSorted godoc
+// FilterRecordings godoc
 // @Summary     Get the top N the latest recordings
 // @Description Get the top N the latest recordings.
 // @Tags        recordings
 // @Accept      json
 // @Produce     json
 // @Param       limit path string int "How many recordings"
-// @Success     200 {object} []models.Recording
+// @Success     200 {object} []database.Recording
 // @Failure     400 {} string "Error message"
 // @Failure     500 {} string "Error message"
-// @Router      /recordings/latest/{limit} [get]
-func GetSorted(c *gin.Context) {
+// @Router      /recordings/filter/{column}/{order}/{limit} [get]
+func FilterRecordings(c *gin.Context) {
 	appG := app.Gin{C: c}
 
 	limit, err := strconv.Atoi(c.Param("limit"))
@@ -303,7 +302,7 @@ func GetSorted(c *gin.Context) {
 	column := c.Param("column")
 	order := c.Param("order")
 
-	recordings, err := models.SortBy(column, order, limit)
+	recordings, err := database.SortBy(column, order, limit)
 	if err != nil {
 		appG.Response(http.StatusInternalServerError, err.Error())
 		return
@@ -318,7 +317,7 @@ func GetSorted(c *gin.Context) {
 // @Accept      json
 // @Produce     json
 // @Param       limit path string int "How many recordings"
-// @Success     200 {object} []models.Recording
+// @Success     200 {object} []database.Recording
 // @Failure     400 {} string "Error message"
 // @Failure     500 {} string "Error message"
 // @Router      /recordings/random/{limit} [get]
@@ -331,7 +330,7 @@ func GetRandomRecordings(c *gin.Context) {
 		return
 	}
 
-	recordings, err := models.FindRandom(limit)
+	recordings, err := database.FindRandom(limit)
 
 	if err != nil {
 		appG.Response(http.StatusInternalServerError, err.Error())
@@ -380,7 +379,7 @@ func DeleteRecording(c *gin.Context) {
 		return
 	}
 
-	rec, err := models.FindRecording(channelName, filename)
+	rec, err := database.FindRecording(channelName, filename)
 	if err != nil {
 		appG.Response(http.StatusInternalServerError, err.Error())
 		return

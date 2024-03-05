@@ -5,7 +5,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/srad/streamsink/app"
-	"github.com/srad/streamsink/models"
+	"github.com/srad/streamsink/database"
 )
 
 // GetCpu godoc
@@ -14,12 +14,12 @@ import (
 // @Tags        metric
 // @Accept      json
 // @Produce     json
-// @Success     200 {object} models.CPULoad
+// @Success     200 {object} database.CPULoad
 // @Failure     500 {}  http.StatusInternalServerError
 // @Router      /metric/cpu [get]
 func GetCpu(c *gin.Context) {
 	appG := app.Gin{C: c}
-	response, err := models.GetCpuMeasure()
+	response, err := database.GetCpuMeasure()
 	if err != nil {
 		appG.Response(http.StatusInternalServerError, err)
 		return
@@ -34,12 +34,12 @@ func GetCpu(c *gin.Context) {
 // @Tags        metric
 // @Accept      json
 // @Produce     json
-// @Success     200 {object} models.NetInfo
+// @Success     200 {object} database.NetInfo
 // @Failure     500 {}  http.StatusInternalServerError
 // @Router      /metric/net [get]
 func GetNet(c *gin.Context) {
 	appG := app.Gin{C: c}
-	response, err := models.GetNetworkMeasure()
+	response, err := database.GetNetworkMeasure()
 	if err != nil {
 		appG.Response(http.StatusInternalServerError, err)
 		return

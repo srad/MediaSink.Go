@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 
 	"github.com/srad/streamsink/conf"
-	"github.com/srad/streamsink/models"
+	"github.com/srad/streamsink/database"
 	"github.com/srad/streamsink/utils"
 )
 
@@ -62,7 +62,7 @@ func importRecordings() error {
 
 		log.Printf("[Import] Reading folder: %s\n", channelName)
 
-		channel := &models.Channel{
+		channel := &database.Channel{
 			ChannelName: channelName,
 			DisplayName: channelName,
 			SkipStart:   0,
@@ -94,12 +94,12 @@ func importRecordings() error {
 					if err := channel.DeleteRecordingsFile(file.Name()); err != nil {
 						log.Printf(" + [Import] Error deleting '%s'", file.Name())
 					} else {
-						models.DestroyPreviews(channelName, file.Name())
+						database.DestroyPreviews(channelName, file.Name())
 						log.Printf(" + [Import] Deleted file '%s'", file.Name())
 					}
 					continue
 				}
-				if _, err := models.AddIfNotExistsRecording(channelName, file.Name()); err != nil {
+				if _, err := database.AddIfNotExistsRecording(channelName, file.Name()); err != nil {
 					log.Printf(" + [Import] Error: %s\n", err.Error())
 					continue
 				}
@@ -114,11 +114,11 @@ func importRecordings() error {
 
 				if err1 == nil && err2 == nil && err3 == nil {
 					log.Println(" + [Import] Preview files exist")
-					models.UpdatePreview(channelName, file.Name())
+					database.UpdatePreview(channelName, file.Name())
 					continue
 				} else if errors.Is(err1, os.ErrNotExist) || errors.Is(err2, os.ErrNotExist) {
 					log.Printf(" + [Import] Adding job for %s\n", file.Name())
-					models.EnqueuePreviewJob(channelName, file.Name())
+					database.EnqueuePreviewJob(channelName, file.Name())
 				} else {
 					// Schrödinger: file may or may not exist. See err for details.
 					// Therefore, do *NOT* use !os.IsNotExist(err) to test for file existence

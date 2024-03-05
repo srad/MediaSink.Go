@@ -1,4 +1,4 @@
-package models
+package database
 
 import (
 	"errors"
@@ -10,9 +10,9 @@ import (
 )
 
 type Setting struct {
-	SettingKey   string `json:"settingKey" gorm:"primaryKey;"`
-	SettingValue string `json:"settingValue" gorm:"not null;"`
-	SettingType  string `json:"-" gorm:"not null;"`
+	SettingKey   string `json:"settingKey" gorm:"primaryKey;" extensions:"!x-nullable"`
+	SettingValue string `json:"settingValue" gorm:"not null;" extensions:"!x-nullable"`
+	SettingType  string `json:"-" gorm:"not null;" extensions:"!x-nullable"`
 }
 
 const (

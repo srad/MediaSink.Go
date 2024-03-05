@@ -11,7 +11,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/srad/streamsink/conf"
-	"github.com/srad/streamsink/models"
+	"github.com/srad/streamsink/database"
 	"github.com/srad/streamsink/routers"
 	"github.com/srad/streamsink/services"
 	"github.com/srad/streamsink/workers"
@@ -27,7 +27,7 @@ func main() {
 	}()
 
 	conf.Read()
-	models.Init()
+	database.Init()
 	// model.StartMetrics(conf.AppCfg.NetworkDev)
 	setupFolders()
 
@@ -69,7 +69,7 @@ func cleanup() {
 }
 
 func setupFolders() {
-	channels, err := models.ChannelList()
+	channels, err := database.ChannelList()
 	if err != nil {
 		fmt.Println(err)
 		return

@@ -1,4 +1,4 @@
-package models
+package database
 
 import (
 	"errors"
@@ -19,36 +19,35 @@ import (
 	"gorm.io/gorm"
 )
 
+type Channel struct {
+	ChannelId       uint      `json:"channelId" gorm:"autoIncrement" extensions:"!x-nullable"`
+	ChannelName     string    `json:"channelName" gorm:"unique;not null;" extensions:"!x-nullable"`
+	DisplayName     string    `json:"displayName" gorm:"not null;default:''" extensions:"!x-nullable"`
+	SkipStart       uint      `json:"skipStart" gorm:"not null;default:0" extensions:"!x-nullable"`
+	Url             string    `json:"url" gorm:"not null;default:''" extensions:"!x-nullable"`
+	Tags            string    `json:"tags" gorm:"not null;default:''" extensions:"!x-nullable"`
+	Fav             bool      `json:"fav" gorm:"index:idx_fav,not null" extensions:"!x-nullable"`
+	IsPaused        bool      `json:"isPaused" gorm:"not null,default:false" extensions:"!x-nullable"`
+	Deleted         bool      `json:"deleted" gorm:"not null,default:false" extensions:"!x-nullable"`
+	CreatedAt       time.Time `json:"createdAt" extensions:"!x-nullable"`
+	RecordingsCount uint      `json:"recordingsCount" gorm:"" extensions:"!x-nullable"`
+	RecordingsSize  uint      `json:"recordingsSize" gorm:"" extensions:"!x-nullable"`
+}
+
+type StreamInfo struct {
+	IsOnline      bool   `json:"isOnline" extensions:"!x-nullable"`
+	IsTerminating bool   `extensions:"!x-nullable"`
+	Url           string `extensions:"!x-nullable"`
+	ChannelName   string `json:"channelName" extensions:"!x-nullable"`
+}
+
 var (
 	recInfo    = make(map[string]*Recording)
-	pause      = false
 	streamInfo = make(map[string]StreamInfo)
 	streams    = make(map[string]*exec.Cmd)
 	// "tag1,tag2,...
 	rTags, _ = regexp.Compile("^[a-z\\-0-9]+(,[a-z\\-0-9]+)*$")
 )
-
-type Channel struct {
-	ChannelId       uint      `json:"channelId" gorm:"autoIncrement"`
-	ChannelName     string    `json:"channelName" gorm:"unique;not null;"`
-	DisplayName     string    `json:"displayName" gorm:"not null;default:''"`
-	SkipStart       uint      `json:"skipStart" gorm:"not null;default:0"`
-	Url             string    `json:"url" gorm:"not null;default:''"`
-	Tags            string    `json:"tags" gorm:"not null;default:''"`
-	Fav             bool      `json:"fav" gorm:"index:idx_fav,not null"`
-	IsPaused        bool      `json:"isPaused" gorm:"not null,default:false"`
-	Deleted         bool      `json:"deleted" gorm:"not null,default:false"`
-	CreatedAt       time.Time `json:"createdAt"`
-	RecordingsCount uint      `json:"recordingsCount" gorm:""`
-	RecordingsSize  uint      `json:"recordingsSize" gorm:""`
-}
-
-type StreamInfo struct {
-	IsOnline      bool `json:"isOnline"`
-	IsTerminating bool
-	Url           string
-	ChannelName   string `json:"channelName"`
-}
 
 func (channel *Channel) Create(tags *[]string) (*Channel, error) {
 	channel.ChannelName = strings.ToLower(strings.TrimSpace(channel.ChannelName))

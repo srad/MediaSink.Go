@@ -1,7 +1,9 @@
 package v1
 
 import (
+	"errors"
 	"fmt"
+	"gorm.io/gorm"
 	"io"
 	"log"
 	"net/http"
@@ -14,30 +16,30 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/srad/streamsink/app"
 	"github.com/srad/streamsink/conf"
-	"github.com/srad/streamsink/models"
+	"github.com/srad/streamsink/database"
 )
 
 var (
 	rChannel, _ = regexp.Compile("(?i)^[a-z_0-9]+$")
 )
 
-type ChannelResponse struct {
-	models.Channel
-	IsRecording   bool    `json:"isRecording"`
-	IsOnline      bool    `json:"isOnline"`
-	IsTerminating bool    `json:"isTerminating"`
-	Preview       string  `json:"preview"`
-	MinRecording  float64 `json:"minRecording"`
-}
-
 type ChannelRequest struct {
 	ChannelId   *uint     `json:"channelId"`
-	ChannelName string    `json:"channelName"`
-	DisplayName string    `json:"displayName"`
-	SkipStart   uint      `json:"skipStart"`
-	Url         string    `json:"url"`
-	IsPaused    bool      `json:"isPaused"`
+	ChannelName string    `json:"channelName" extensions:"!x-nullable"`
+	DisplayName string    `json:"displayName" extensions:"!x-nullable"`
+	SkipStart   uint      `json:"skipStart" extensions:"!x-nullable"`
+	Url         string    `json:"url" extensions:"!x-nullable"`
+	IsPaused    bool      `json:"isPaused" extensions:"!x-nullable"`
 	Tags        *[]string `json:"tags"`
+}
+
+type ChannelResponse struct {
+	database.Channel
+	IsRecording   bool    `json:"isRecording" extensions:"!x-nullable"`
+	IsOnline      bool    `json:"isOnline" extensions:"!x-nullable"`
+	IsTerminating bool    `json:"isTerminating" extensions:"!x-nullable"`
+	Preview       string  `json:"preview" extensions:"!x-nullable"`
+	MinRecording  float64 `json:"minRecording" extensions:"!x-nullable"`
 }
 
 type TagChannelRequest struct {
@@ -76,7 +78,7 @@ type TagChannelRequest struct {
 // @Router      /channels [get]
 func GetChannels(c *gin.Context) {
 	appG := app.Gin{C: c}
-	channels, err := models.ChannelListNotDeleted()
+	channels, err := database.ChannelListNotDeleted()
 	if err != nil {
 		appG.Response(http.StatusInternalServerError, nil)
 		return
@@ -108,16 +110,15 @@ func GetChannels(c *gin.Context) {
 // @Description Return the data of one channel
 // @Tags        channels
 // @Produce     json
-// @Success     200 {object} []ChannelResponse
+// @Success     200 {object} ChannelResponse
 // @Failure     500 {}  http.StatusInternalServerError
 // @Router      /channels/{channelName} [get]
 func GetChannel(c *gin.Context) {
 	appG := app.Gin{C: c}
 	channelName := c.Param("channelName")
-	if channel, err := models.GetChannelByName(channelName); err != nil {
+	if channel, err := database.GetChannelByName(channelName); err != nil {
 		log.Printf("[GetChannel] Error getting channel: %s", err.Error())
 		appG.Response(http.StatusInternalServerError, err.Error())
-		return
 	} else {
 		res := &ChannelResponse{
 			Channel:       *channel,
@@ -126,39 +127,37 @@ func GetChannel(c *gin.Context) {
 			IsRecording:   channel.IsRecording(),
 			MinRecording:  channel.RecordingMinutes()}
 
-		log.Printf("%s", channelName)
 		appG.Response(http.StatusOK, &res)
-		return
 	}
 }
 
-// AddChannel godoc
+// CreateChannel godoc
 // @Summary     Add a new channel
 // @Description Add a new channel
 // @Tags        channels
 // @Param       ChannelRequest body ChannelRequest true "Channel data"
 // @Accept      json
 // @Produce     json
-// @Success     200 {object} models.Channel
+// @Success     200 {object} database.Channel
 // @Failure     400 {} http.StatusBadRequest
 // @Failure     500 {} http.StatusInternalServerError
 // @Router      /channels [post]
-func AddChannel(c *gin.Context) {
+func CreateChannel(c *gin.Context) {
 	appG := app.Gin{C: c}
 	data := &ChannelRequest{}
 	if err := c.BindJSON(&data); err != nil {
-		log.Printf("[AddChannel] Error parsing request: %s", err.Error())
+		log.Printf("[CreateChannel] Error parsing request: %s", err.Error())
 		appG.Response(http.StatusInternalServerError, err.Error())
 		return
 	}
 	url := strings.TrimSpace(data.Url)
 	if !rChannel.MatchString(data.ChannelName) || len(url) == 0 {
-		log.Printf("[AddChannel] Error validating: %s, %s", data.ChannelName, data.Url)
+		log.Printf("[CreateChannel] Error validating: %s, %s", data.ChannelName, data.Url)
 		appG.Response(http.StatusBadRequest, fmt.Sprintf("Parameters wrong, Channel: '%s', Url: '%s'", data.ChannelName, data.Url))
 		return
 	}
 
-	channel := models.Channel{
+	channel := database.Channel{
 		ChannelName:     data.ChannelName,
 		DisplayName:     data.DisplayName,
 		SkipStart:       data.SkipStart,
@@ -171,8 +170,12 @@ func AddChannel(c *gin.Context) {
 		CreatedAt:       time.Now()}
 
 	newChannel, err := channel.Create(data.Tags)
-	if err != nil {
-		log.Printf("[AddChannel] Error creating record: %s", err.Error())
+	if errors.Is(err, gorm.ErrDuplicatedKey) {
+		log.Printf("[CreateChannel] Error creating record: %s", err.Error())
+		appG.Response(http.StatusInternalServerError, "Channel name already exists")
+		return
+	} else if err != nil {
+		log.Printf("[CreateChannel] Error creating record: %s", err.Error())
 		appG.Response(http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -197,7 +200,7 @@ func AddChannel(c *gin.Context) {
 // @Param       body formData ChannelRequest true "Channel data to update"
 // @Accept      json
 // @Produce     json
-// @Success     200 {object} models.Channel
+// @Success     200 {object} database.Channel
 // @Failure     400 {} http.StatusBadRequest
 // @Failure     500 {} http.StatusInternalServerError
 // @Router      /channels/{channelName} [patch]
@@ -219,7 +222,7 @@ func UpdateChannel(c *gin.Context) {
 		return
 	}
 
-	channel := models.Channel{
+	channel := database.Channel{
 		ChannelId:   *data.ChannelId,
 		ChannelName: data.ChannelName,
 		DisplayName: data.DisplayName,
@@ -249,12 +252,12 @@ func UpdateChannel(c *gin.Context) {
 // @Accept      json
 // @Produce     json
 // @Param       channelName path string true  "List of tags"
-// @Success     200 {object} models.Channel
+// @Success     200 {object} database.Channel
 // @Failure     500 {}  http.StatusInternalServerError
 // @Router      /channels/{channelName} [delete]
 func DeleteChannel(c *gin.Context) {
 	appG := app.Gin{C: c}
-	channel, err := models.GetChannelByName(c.Param("channelName"))
+	channel, err := database.GetChannelByName(c.Param("channelName"))
 	if err != nil {
 		appG.Response(http.StatusNotFound, fmt.Sprintf("Channel not found: %s", err.Error()))
 		return
@@ -283,7 +286,7 @@ func DeleteChannel(c *gin.Context) {
 // @Produce     json
 // @Param       TagChannelRequest body TagChannelRequest true "Channel data"
 // @Param       channelName path string true "Channel name"
-// @Success     200 {object} models.Channel
+// @Success     200 {object} database.Channel
 // @Failure     500 {}  http.StatusInternalServerError
 // @Router      /channels/{channelName}/tags [post]
 func TagChannel(c *gin.Context) {
@@ -297,7 +300,7 @@ func TagChannel(c *gin.Context) {
 		return
 	}
 
-	if err := models.TagChannel(channelName, data.Tags); err != nil {
+	if err := database.TagChannel(channelName, data.Tags); err != nil {
 		log.Println(err)
 		appG.Response(http.StatusInternalServerError, err.Error())
 		return
@@ -327,7 +330,7 @@ func ResumeChannel(c *gin.Context) {
 		return
 	}
 
-	channel, err := models.GetChannelByName(channelName)
+	channel, err := database.GetChannelByName(channelName)
 	if err != nil {
 		log.Printf("[ResumeChannel] Error getting channel '%s': %s", channelName, err.Error())
 		appG.Response(http.StatusInternalServerError, err.Error())
@@ -356,7 +359,7 @@ func ResumeChannel(c *gin.Context) {
 func FavChannel(c *gin.Context) {
 	appG := app.Gin{C: c}
 
-	channel := models.Channel{ChannelName: c.Param("channelName"), Fav: true}
+	channel := database.Channel{ChannelName: c.Param("channelName"), Fav: true}
 
 	if err := channel.FavChannel(); err != nil {
 		appG.Response(http.StatusInternalServerError, err.Error())
@@ -379,7 +382,7 @@ func FavChannel(c *gin.Context) {
 func UnFavChannel(c *gin.Context) {
 	appG := app.Gin{C: c}
 
-	channel := models.Channel{ChannelName: c.Param("channelName"), Fav: false}
+	channel := database.Channel{ChannelName: c.Param("channelName"), Fav: false}
 	if err := channel.UnFavChannel(); err != nil {
 		appG.Response(http.StatusInternalServerError, err.Error())
 		return
@@ -398,7 +401,7 @@ func UnFavChannel(c *gin.Context) {
 // @Param       channelName path string true "Channel name"
 // @Accept      json
 // @Produce     json
-// @Success     200 {object} models.Recording
+// @Success     200 {object} database.Recording
 // @Failure     400 {} http.StatusBadRequest
 // @Failure     500 {} http.StatusInternalServerError
 // @Router      /channels/{channelName}/upload [post]
@@ -411,7 +414,7 @@ func UploadChannel(c *gin.Context) {
 		return
 	}
 
-	channel := models.Channel{ChannelName: c.Param("channelName"), Fav: false}
+	channel := database.Channel{ChannelName: c.Param("channelName"), Fav: false}
 	recording, outputPath := channel.NewRecording()
 
 	out, err := os.Create(outputPath)
@@ -427,7 +430,7 @@ func UploadChannel(c *gin.Context) {
 	}
 
 	recording.Save("recording")
-	models.EnqueuePreviewJob(recording.ChannelName, recording.Filename)
+	database.EnqueuePreviewJob(recording.ChannelName, recording.Filename)
 
 	appG.Response(http.StatusOK, recording)
 }
@@ -448,7 +451,7 @@ func PauseChannel(c *gin.Context) {
 	channelName := c.Param("channelName")
 
 	log.Println("Pausing channel " + channelName)
-	channel, err := models.GetChannelByName(channelName)
+	channel, err := database.GetChannelByName(channelName)
 	if err != nil {
 		appG.Response(http.StatusInternalServerError, err.Error())
 		return

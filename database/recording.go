@@ -1,4 +1,4 @@
-package models
+package database
 
 import (
 	"errors"
@@ -20,21 +20,21 @@ var (
 
 type Recording struct {
 	Channel     Channel   `json:"-" gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE;foreignKey:channel_name;references:channel_name"`
-	ChannelName string    `json:"channelName" gorm:"primaryKey;"`
-	Filename    string    `json:"filename" gorm:"primaryKey;"`
-	Bookmark    bool      `json:"bookmark" gorm:"index:idx_bookmark,not null"`
-	CreatedAt   time.Time `json:"createdAt" gorm:"not null"`
+	ChannelName string    `json:"channelName" gorm:"primaryKey;" extensions:"!x-nullable"`
+	Filename    string    `json:"filename" gorm:"primaryKey;" extensions:"!x-nullable"`
+	Bookmark    bool      `json:"bookmark" gorm:"index:idx_bookmark,not null" extensions:"!x-nullable"`
+	CreatedAt   time.Time `json:"createdAt" gorm:"not null" extensions:"!x-nullable"`
 	LastAccess  time.Time `json:"lastAccess"`
 	VideoType   string    `json:"videoType"`
 
-	Packets  uint64  `json:"packets" gorm:"default:0;not null"`
-	Duration float64 `json:"duration" gorm:"default:0;not null"`
-	Size     uint64  `json:"size" gorm:"default:0;not null"`
-	BitRate  uint64  `json:"bitRate" gorm:"default:0;not null"`
-	Width    uint    `json:"width" gorm:"default:0"`
-	Height   uint    `json:"height" gorm:"default:0"`
+	Packets  uint64  `json:"packets" gorm:"default:0;not null" extensions:"!x-nullable"`
+	Duration float64 `json:"duration" gorm:"default:0;not null" extensions:"!x-nullable"`
+	Size     uint64  `json:"size" gorm:"default:0;not null" extensions:"!x-nullable"`
+	BitRate  uint64  `json:"bitRate" gorm:"default:0;not null" extensions:"!x-nullable"`
+	Width    uint    `json:"width" gorm:"default:0" extensions:"!x-nullable"`
+	Height   uint    `json:"height" gorm:"default:0" extensions:"!x-nullable"`
 
-	PathRelative  string `json:"pathRelative" gorm:"not null;"`
+	PathRelative  string `json:"pathRelative" gorm:"not null;" extensions:"!x-nullable"`
 	PreviewStripe string `json:"previewStripe" gorm:"default:null"`
 	PreviewVideo  string `json:"previewVideo" gorm:"default:null"`
 	PreviewCover  string `json:"previewCover" gorm:"default:null"`

@@ -4,7 +4,7 @@ import (
 	"context"
 	"log"
 
-	"github.com/srad/streamsink/models"
+	"github.com/srad/streamsink/database"
 	"github.com/srad/streamsink/utils"
 )
 
@@ -37,7 +37,7 @@ func trackCpu(ctx context.Context) {
 				return
 			}
 
-			if err := models.Db.Model(&utils.CPULoad{}).Create(cpu.LoadCpu).Error; err != nil {
+			if err := database.Db.Model(&utils.CPULoad{}).Create(cpu.LoadCpu).Error; err != nil {
 				log.Printf("[trackCpu] Error saving metric: %v", err)
 			}
 		}
@@ -56,7 +56,7 @@ func trackNetwork(networkDev string, ctx context.Context) {
 				log.Println("[trackNetwork] stopped")
 				return
 			}
-			if err := models.Db.Model(&utils.NetInfo{}).Create(netInfo).Error; err != nil {
+			if err := database.Db.Model(&utils.NetInfo{}).Create(netInfo).Error; err != nil {
 				log.Printf("[trackCpu] Error saving metric: %v", err)
 			}
 		}
