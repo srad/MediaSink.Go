@@ -1,12 +1,13 @@
 package database
 
 import (
+	"context"
 	"errors"
 	"log"
 	"time"
 
 	"github.com/srad/streamsink/conf"
-	"github.com/srad/streamsink/entities"
+	"github.com/srad/streamsink/network"
 	"github.com/srad/streamsink/utils"
 	"gorm.io/gorm"
 )
@@ -21,8 +22,29 @@ const (
 )
 
 var (
-	JobChannel = make(chan entities.EventMessage)
+	jobChannel = make(chan network.EventMessage)
 )
+
+func SendJobChannel(name string, data interface{}) {
+	go sendChannel(name, data)
+}
+
+func sendChannel(name string, data interface{}) {
+	jobChannel <- network.EventMessage{Name: name, Message: data}
+}
+
+func DispatchJob(ctx context.Context) {
+	for {
+		select {
+		case m := <-jobChannel:
+			network.SendSocket(m.Name, m.Message)
+			return
+		case <-ctx.Done():
+			log.Println("[dispatchMessages] stopped")
+			return
+		}
+	}
+}
 
 type JobMessage struct {
 	JobId       uint        `json:"jobId,omitempty" extensions:"!x-nullable"`
@@ -97,7 +119,7 @@ func addJob(channelName, filename, filepath, status string, args *string) (*Job,
 	}
 	log.Printf("[Job] Enqueued job: '%s/%s' -> %s", channelName, filename, status)
 
-	JobChannel <- entities.EventMessage{Name: "job:create", Message: JobMessage{JobId: job.JobId, Type: status, ChannelName: job.ChannelName, Filename: job.Filename}}
+	SendJobChannel("job:create", JobMessage{JobId: job.JobId, Type: status, ChannelName: job.ChannelName, Filename: job.Filename})
 
 	return &job, nil
 }
@@ -135,7 +157,7 @@ func (job *Job) Destroy() error {
 	}
 	log.Printf("[Job] Job id delete %d", job.JobId)
 
-	JobChannel <- entities.EventMessage{Name: "job:destroy", Message: JobMessage{JobId: job.JobId, ChannelName: job.ChannelName, Filename: job.Filename}}
+	SendJobChannel("job:destroy", JobMessage{JobId: job.JobId, ChannelName: job.ChannelName, Filename: job.Filename})
 
 	return nil
 }

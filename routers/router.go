@@ -6,6 +6,7 @@ import (
 
 	"github.com/srad/streamsink/conf"
 	"github.com/srad/streamsink/docs"
+	"github.com/srad/streamsink/network"
 
 	"github.com/gin-contrib/cors"
 	socketio "github.com/googollee/go-socket.io"
@@ -125,8 +126,8 @@ func Setup() http.Handler {
 		apiv1.GET("/metric/cpu", v1.GetCpu)
 		apiv1.GET("/metric/net", v1.GetNet)
 
-		go v1.WsListen()
-		apiv1.GET("/ws", v1.WsHandler)
+		go network.WsListen()
+		apiv1.GET("/ws", network.WsHandler)
 	}
 
 	return r

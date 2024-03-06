@@ -13,7 +13,7 @@ import (
 
 	"github.com/srad/streamsink/conf"
 	"github.com/srad/streamsink/database"
-	"github.com/srad/streamsink/entities"
+	"github.com/srad/streamsink/network"
 	"github.com/srad/streamsink/utils"
 	"gorm.io/gorm"
 )
@@ -21,7 +21,7 @@ import (
 var (
 	sleepBetweenRounds = 1 * time.Second
 	cancelWorker       context.CancelFunc
-	JobInfoChannel     = make(chan entities.EventMessage)
+	JobInfoChannel     = make(chan network.EventMessage)
 )
 
 type JobVideoInfo struct {
@@ -81,7 +81,7 @@ func conversionJobs() {
 				log.Printf("Error updating job progress: %s", err.Error())
 			}
 
-			JobInfoChannel <- entities.EventMessage{Name: "job:progress", Message: database.JobMessage{JobId: job.JobId, Data: JobVideoInfo{Packets: job.Recording.Packets, Frame: info.Frame}, Type: job.Status, ChannelName: job.ChannelName, Filename: job.Filename}}
+			JobInfoChannel <- network.EventMessage{Name: "job:progress", Message: database.JobMessage{JobId: job.JobId, Data: JobVideoInfo{Packets: job.Recording.Packets, Frame: info.Frame}, Type: job.Status, ChannelName: job.ChannelName, Filename: job.Filename}}
 		},
 		ChannelName: job.ChannelName,
 		Filename:    job.Filename,
@@ -151,7 +151,7 @@ func previewJobs() {
 	err = GeneratePreviews(&utils.VideoConversionArgs{
 		OnStart: func(info *utils.CommandInfo) {
 			_ = job.UpdateInfo(info.Pid, info.Command)
-			JobInfoChannel <- entities.EventMessage{Name: "job:start", Message: database.JobMessage{
+			JobInfoChannel <- network.EventMessage{Name: "job:start", Message: database.JobMessage{
 				JobId:       job.JobId,
 				ChannelName: job.ChannelName,
 				Filename:    job.Filename,
@@ -159,7 +159,7 @@ func previewJobs() {
 			}}
 		},
 		OnProgress: func(info *utils.ProcessInfo) {
-			JobInfoChannel <- entities.EventMessage{Name: "job:progress", Message: database.JobMessage{
+			JobInfoChannel <- network.EventMessage{Name: "job:progress", Message: database.JobMessage{
 				JobId:       job.JobId,
 				ChannelName: job.ChannelName,
 				Filename:    job.Filename,

@@ -1,4 +1,4 @@
-package v1
+package network
 
 import (
 	"log"
@@ -7,19 +7,28 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
-	"github.com/srad/streamsink/entities"
 )
 
-// --------------------------------------------------------------------------------------
-// This module manages the incoming ws connections and message dispatching
-// --------------------------------------------------------------------------------------
-
 var (
-	upGrader = websocket.Upgrader{CheckOrigin: func(r *http.Request) bool {
+	socketChannel = make(chan SocketEvent)
+	upGrader      = websocket.Upgrader{CheckOrigin: func(r *http.Request) bool {
 		return true
 	}}
 	dispatcher = wsDispatcher{}
 )
+
+type SocketEvent struct {
+	Data interface{} `json:"data"`
+	Name string      `json:"name"`
+}
+
+func SendSocket(name string, data interface{}) {
+	go channelDispatcher(SocketEvent{Name: name, Data: data})
+}
+
+func channelDispatcher(event SocketEvent) {
+	socketChannel <- event
+}
 
 type wsDispatcher struct {
 	listeners []wsConnection
@@ -29,7 +38,7 @@ func (d *wsDispatcher) addWs(ws wsConnection) {
 	d.listeners = append(d.listeners, ws)
 }
 
-func (d *wsDispatcher) notify(msg entities.SocketEvent) {
+func (d *wsDispatcher) notify(msg SocketEvent) {
 	for _, l := range d.listeners {
 		if err := l.send(msg); err != nil {
 			log.Printf("[notify] %v", err)
@@ -52,8 +61,8 @@ func (d *wsDispatcher) rmWs(ws *websocket.Conn) {
 	}
 }
 
-func NewSocketEvent(event string, data interface{}) entities.SocketEvent {
-	return entities.SocketEvent{Name: event, Data: data}
+func NewSocketEvent(event string, data interface{}) SocketEvent {
+	return SocketEvent{Name: event, Data: data}
 }
 
 type wsConnection struct {
@@ -64,7 +73,7 @@ type wsConnection struct {
 func WsListen() {
 	for {
 		select {
-		case m := <-entities.SocketChannel:
+		case m := <-socketChannel:
 			dispatcher.notify(m)
 		}
 	}
@@ -88,7 +97,7 @@ func WsHandler(c *gin.Context) {
 	})
 
 	for {
-		msg := &entities.SocketEvent{}
+		msg := &SocketEvent{}
 		err := ws.ReadJSON(&msg)
 		if err != nil {
 			log.Printf("[WsHandler] error read message: %v", err)

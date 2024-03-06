@@ -1,4 +1,4 @@
-package entities
+package network
 
 type EventMessage struct {
 	Name    string

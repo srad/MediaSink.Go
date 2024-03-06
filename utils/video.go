@@ -146,7 +146,7 @@ func ExtractFirstFrame(input, height, outputPathPoster string) error {
 }
 
 func ConvertVideo(args *VideoConversionArgs, mediaType string) (*ConversionResult, error) {
-	absoluteChannelFolder := conf.AbsoluteRecordingsPath(args.ChannelName)
+	absoluteChannelFolder := conf.AbsoluteChannelPath(args.ChannelName)
 	input := filepath.Join(absoluteChannelFolder, args.Filename)
 	if !utils.FileExists(input) {
 		return nil, errors.New(fmt.Sprintf("File '%s' does not exit", input))

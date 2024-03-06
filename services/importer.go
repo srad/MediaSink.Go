@@ -56,7 +56,7 @@ func importRecordings() error {
 
 	channelFolders, _ := file.Readdirnames(0)
 	for _, channelName := range channelFolders {
-		if dir, err := os.Stat(conf.AbsoluteRecordingsPath(channelName)); err != nil || !dir.IsDir() {
+		if dir, err := os.Stat(conf.AbsoluteChannelPath(channelName)); err != nil || !dir.IsDir() {
 			continue
 		}
 
@@ -77,7 +77,7 @@ func importRecordings() error {
 			log.Printf(" + Error adding channel channel '%s': %v", channelName, err)
 		}
 
-		files, err := os.ReadDir(conf.AbsoluteRecordingsPath(channelName))
+		files, err := os.ReadDir(conf.AbsoluteChannelPath(channelName))
 		if err != nil {
 			log.Printf("[Import] Error reading '%s': %v", channelName, err)
 			continue
@@ -127,8 +127,6 @@ func importRecordings() error {
 			}
 		}
 	}
-
-	log.Println("######################################################################################")
 
 	return nil
 }

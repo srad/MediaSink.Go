@@ -1,21 +1,23 @@
 package database
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"log"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"syscall"
 	"time"
 
-	"github.com/srad/streamsink/utils"
-
+	utils2 "github.com/astaxie/beego/utils"
 	"github.com/srad/streamsink/conf"
+	"github.com/srad/streamsink/utils"
 	"gorm.io/gorm"
 )
 
@@ -32,6 +34,16 @@ type Channel struct {
 	CreatedAt       time.Time `json:"createdAt" extensions:"!x-nullable"`
 	RecordingsCount uint      `json:"recordingsCount" gorm:"" extensions:"!x-nullable"`
 	RecordingsSize  uint      `json:"recordingsSize" gorm:"" extensions:"!x-nullable"`
+}
+
+type ChannelFile struct {
+	ChannelName string    `json:"channelName" gorm:"unique;not null;" extensions:"!x-nullable"`
+	DisplayName string    `json:"displayName" gorm:"not null;default:''" extensions:"!x-nullable"`
+	SkipStart   uint      `json:"skipStart" gorm:"not null;default:0" extensions:"!x-nullable"`
+	Url         string    `json:"url" gorm:"not null;default:''" extensions:"!x-nullable"`
+	Tags        string    `json:"tags" gorm:"not null;default:''" extensions:"!x-nullable"`
+	Fav         bool      `json:"fav" gorm:"index:idx_fav,not null" extensions:"!x-nullable"`
+	CreatedAt   time.Time `json:"createdAt" extensions:"!x-nullable"`
 }
 
 type StreamInfo struct {
@@ -67,7 +79,45 @@ func (channel *Channel) Create(tags *[]string) (*Channel, error) {
 
 	conf.MakeChannelFolders(channel.ChannelName)
 
+	channel.WriteJson()
+
 	return channel, nil
+}
+
+func (channel *Channel) ExistsJson() bool {
+	return utils2.FileExists(channel.jsonPath())
+}
+
+func (channel *Channel) jsonPath() string {
+	return path.Join(conf.AbsoluteChannelPath(channel.ChannelName), "channel.json")
+}
+
+func (channel *Channel) ReadJson() (*ChannelFile, error) {
+	if data, err := os.ReadFile(channel.jsonPath()); err != nil {
+		return nil, err
+	} else {
+		var content *ChannelFile
+		json.Unmarshal(data, content)
+		return content, nil
+	}
+}
+
+// WriteJson Additionally write a backup of the channel data to a JSON file. This can be used to re-import data from disks.
+func (channel *Channel) WriteJson() {
+	jsonPath := channel.jsonPath()
+	content := &ChannelFile{
+		ChannelName: channel.ChannelName,
+		DisplayName: channel.DisplayName,
+		SkipStart:   channel.SkipStart,
+		Url:         channel.Url,
+		Tags:        channel.Tags,
+		Fav:         channel.Fav,
+		CreatedAt:   channel.CreatedAt,
+	}
+	file, _ := json.MarshalIndent(content, "", " ")
+	if err := os.WriteFile(jsonPath, file, 0644); err != nil {
+		log.Printf("Error writing channel.json file to: %s", jsonPath)
+	}
 }
 
 func (channel *Channel) Update() error {
@@ -127,8 +177,9 @@ func (channel *Channel) Start() error {
 	}()
 
 	go func() {
+		log.Printf("Start capturing url: %s", url)
 		if err := channel.Capture(url, channel.SkipStart); err != nil {
-			log.Printf("Error capting video: %s", err.Error())
+			log.Printf("Error capturing video: %s", err.Error())
 		}
 	}()
 
@@ -280,7 +331,7 @@ func (channel *Channel) SoftDestroy() error {
 		log.Printf("Error deleting recordings of channel '%s': %v", channel.ChannelName, err)
 		return err
 	}
-	if err := os.RemoveAll(conf.AbsoluteRecordingsPath(channel.ChannelName)); err != nil && !os.IsNotExist(err) {
+	if err := os.RemoveAll(conf.AbsoluteChannelPath(channel.ChannelName)); err != nil && !os.IsNotExist(err) {
 		log.Printf("Error deleting channel folder: %v", err)
 		return err
 	}
@@ -295,7 +346,7 @@ func (channel *Channel) SoftDestroy() error {
 
 func (channel *Channel) Destroy() error {
 	// Channel folder
-	if err := os.RemoveAll(conf.AbsoluteRecordingsPath(channel.ChannelName)); err != nil && !os.IsNotExist(err) {
+	if err := os.RemoveAll(conf.AbsoluteChannelPath(channel.ChannelName)); err != nil && !os.IsNotExist(err) {
 		log.Printf("Error deleting channel folder: %v", err)
 		return err
 	}

@@ -6,21 +6,27 @@ import (
 	"time"
 
 	"github.com/srad/streamsink/database"
-	"github.com/srad/streamsink/entities"
+	"github.com/srad/streamsink/network"
 	"github.com/srad/streamsink/utils"
+)
+
+const (
+	streamCheckBreak         = 2 * time.Second
+	breakBetweenCheckStreams = 10 * time.Second
+	captureThumbInterval     = 30 * time.Second
 )
 
 var (
 	isPaused         = false
 	cancel           context.CancelFunc
-	recorderMessages = make(chan entities.EventMessage)
+	recorderMessages = make(chan network.EventMessage)
 )
 
-func SendMessage(event entities.EventMessage) {
+func SendMessage(event network.EventMessage) {
 	go messageSend(event)
 }
 
-func messageSend(event entities.EventMessage) {
+func messageSend(event network.EventMessage) {
 	recorderMessages <- event
 }
 
@@ -28,7 +34,7 @@ func DispatchRecorder(ctx context.Context) {
 	for {
 		select {
 		case m := <-recorderMessages:
-			entities.SocketChannel <- entities.SocketEvent{Name: m.Name, Data: m.Message}
+			network.SendSocket(m.Name, m.Message)
 			return
 		case <-ctx.Done():
 			log.Println("[dispatchMessages] stopped")
@@ -36,12 +42,6 @@ func DispatchRecorder(ctx context.Context) {
 		}
 	}
 }
-
-const (
-	streamCheckBreak         = 2 * time.Second
-	breakBetweenCheckStreams = 10 * time.Second
-	captureThumbInterval     = 30 * time.Second
-)
 
 // startThumbnailWorker Creates in intervals snapshots of the video as a preview.
 func startThumbnailWorker(ctx context.Context) {
@@ -56,7 +56,7 @@ func startThumbnailWorker(ctx context.Context) {
 					if err := info.Screenshot(); err != nil {
 						log.Printf("[Recorder] Error extracting first frame of channel | file: %s", channelName)
 					} else {
-						SendMessage(entities.EventMessage{Name: "channel:thumbnail", Message: channelName})
+						SendMessage(network.EventMessage{Name: "channel:thumbnail", Message: channelName})
 					}
 				}
 			}
@@ -107,10 +107,10 @@ func checkStreams() {
 
 		if err := channel.Start(); err != nil {
 			// log.Printf("[checkStreams] Start error: %v | %s\n", channel, err)
-			SendMessage(entities.EventMessage{Name: "channel:offline", Message: channel.ChannelName})
+			SendMessage(network.EventMessage{Name: "channel:offline", Message: channel.ChannelName})
 		} else {
-			SendMessage(entities.EventMessage{Name: "channel:online", Message: channel.ChannelName})
-			SendMessage(entities.EventMessage{Name: "channel:start", Message: channel.ChannelName})
+			SendMessage(network.EventMessage{Name: "channel:online", Message: channel.ChannelName})
+			SendMessage(network.EventMessage{Name: "channel:start", Message: channel.ChannelName})
 		}
 
 		log.Println(channel.ChannelName)

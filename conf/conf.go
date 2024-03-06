@@ -56,7 +56,7 @@ func AbsoluteDataPath(channelName string) string {
 	return filepath.Join(AppCfg.RecordingsAbsolutePath, channelName, AppCfg.DataPath)
 }
 
-func AbsoluteRecordingsPath(channelName string) string {
+func AbsoluteChannelPath(channelName string) string {
 	return filepath.Join(AppCfg.RecordingsAbsolutePath, channelName)
 }
 
@@ -153,7 +153,7 @@ func Read() {
 }
 
 func MakeChannelFolders(channelName string) {
-	dir := AbsoluteRecordingsPath(channelName)
+	dir := AbsoluteChannelPath(channelName)
 	if _, err := os.Stat(dir); os.IsNotExist(err) {
 		fmt.Println("Creating folder: " + dir)
 		if err := os.MkdirAll(dir, os.ModePerm); err != nil {
