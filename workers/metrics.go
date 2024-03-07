@@ -5,7 +5,7 @@ import (
 	"log"
 
 	"github.com/srad/streamsink/database"
-	"github.com/srad/streamsink/utils"
+	"github.com/srad/streamsink/helpers"
 )
 
 var (
@@ -31,13 +31,13 @@ func trackCpu(ctx context.Context) {
 			return
 		default:
 			// sleeps automatically
-			cpu, err := utils.CpuUsage(30)
+			cpu, err := helpers.CpuUsage(30)
 			if err != nil {
 				log.Printf("[trackCpu] Error reasing cpu: %v", err)
 				return
 			}
 
-			if err := database.Db.Model(&utils.CPULoad{}).Create(cpu.LoadCpu).Error; err != nil {
+			if err := database.Db.Model(&helpers.CPULoad{}).Create(cpu.LoadCpu).Error; err != nil {
 				log.Printf("[trackCpu] Error saving metric: %v", err)
 			}
 		}
@@ -51,12 +51,12 @@ func trackNetwork(networkDev string, ctx context.Context) {
 			log.Println("[trackNetwork] stopped")
 			return
 		default:
-			netInfo, err := utils.NetMeasure(networkDev, 15)
+			netInfo, err := helpers.NetMeasure(networkDev, 15)
 			if err != nil {
 				log.Println("[trackNetwork] stopped")
 				return
 			}
-			if err := database.Db.Model(&utils.NetInfo{}).Create(netInfo).Error; err != nil {
+			if err := database.Db.Model(&helpers.NetInfo{}).Create(netInfo).Error; err != nil {
 				log.Printf("[trackCpu] Error saving metric: %v", err)
 			}
 		}

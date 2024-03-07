@@ -6,8 +6,8 @@ import (
 	"time"
 
 	"github.com/srad/streamsink/database"
+	"github.com/srad/streamsink/helpers"
 	"github.com/srad/streamsink/network"
-	"github.com/srad/streamsink/utils"
 )
 
 const (
@@ -19,7 +19,7 @@ const (
 var (
 	isPaused         = false
 	cancel           context.CancelFunc
-	recorderMessages = make(chan network.EventMessage)
+	recorderMessages = make(chan network.EventMessage, 1000)
 )
 
 func SendMessage(event network.EventMessage) {
@@ -160,7 +160,7 @@ func GeneratePosters() error {
 		filepath := rec.FilePath()
 		log.Printf("[] %s (%d/%d)", filepath, i, count)
 
-		if err := utils.CreatePreviewPoster(filepath, rec.DataFolder(), utils.FileNameWithoutExtension(rec.Filename)+".jpg"); err != nil {
+		if err := helpers.CreatePreviewPoster(filepath, rec.DataFolder(), helpers.FileNameWithoutExtension(rec.Filename)+".jpg"); err != nil {
 			log.Printf("[GeneratePosters] Error creating poster: %s", err.Error())
 		}
 		i++

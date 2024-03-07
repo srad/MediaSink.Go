@@ -34,12 +34,12 @@ func main() {
 	services.StartDispatch()
 	services.StartUpJobs()
 	services.StartRecorder()
-	go workers.StartWorker()
+	workers.StartWorker()
 
 	gin.SetMode("release")
 	endPoint := fmt.Sprintf("0.0.0.0:%d", 3000)
 
-	log.Printf("[info] start http server listening %s", endPoint)
+	log.Printf("[main] start http server listening %s", endPoint)
 
 	server := &http.Server{
 		Addr:           endPoint,
@@ -53,7 +53,7 @@ func main() {
 		if err := server.ListenAndServe(); err != nil {
 			log.Fatalln(err)
 		} else {
-			log.Printf("[info] start http server listening %s", endPoint)
+			log.Printf("[main] start http server listening %s", endPoint)
 		}
 	}()
 

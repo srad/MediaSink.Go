@@ -241,7 +241,7 @@ func CutRecording(c *gin.Context) {
 		return
 	}
 
-	job, err := database.EnqueueCuttingJob(channelName, filename, conf.AbsoluteFilepath(channelName, filename), string(cut))
+	job, err := database.EnqueueCuttingJob(channelName, filename, conf.AbsoluteChannelFilePath(channelName, filename), string(cut))
 	if err != nil {
 		appG.Response(http.StatusInternalServerError, err.Error())
 		return
@@ -270,7 +270,7 @@ func Convert(c *gin.Context) {
 	filename := c.Param("filename")
 	mediaType := c.Param("mediaType")
 
-	job, err := database.EnqueueConversionJob(channelName, filename, conf.AbsoluteFilepath(channelName, filename), mediaType)
+	job, err := database.EnqueueConversionJob(channelName, filename, conf.AbsoluteChannelFilePath(channelName, filename), mediaType)
 	if err != nil {
 		appG.Response(http.StatusInternalServerError, err.Error())
 		return
@@ -353,7 +353,7 @@ func GetRandomRecordings(c *gin.Context) {
 // @Failure     500 {} string "Error message"
 // @Router      /recordings/{channelName}/{filename}/download [get]
 func DownloadRecording(c *gin.Context) {
-	c.FileAttachment(conf.AbsoluteFilepath(c.Param("channelName"), c.Param("filename")), c.Param("filename"))
+	c.FileAttachment(conf.AbsoluteChannelFilePath(c.Param("channelName"), c.Param("filename")), c.Param("filename"))
 }
 
 // DeleteRecording godoc

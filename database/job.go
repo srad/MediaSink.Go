@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/srad/streamsink/conf"
+	"github.com/srad/streamsink/helpers"
 	"github.com/srad/streamsink/network"
-	"github.com/srad/streamsink/utils"
 	"gorm.io/gorm"
 )
 
@@ -22,7 +22,7 @@ const (
 )
 
 var (
-	jobChannel = make(chan network.EventMessage)
+	jobChannel = make(chan network.EventMessage, 1000)
 )
 
 func SendJobChannel(name string, data interface{}) {
@@ -56,17 +56,18 @@ type JobMessage struct {
 
 type Job struct {
 	Recording Recording `json:"-" gorm:"foreignKey:ChannelName,Filename;references:channel_name,Filename;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
-	JobId     uint      `json:"jobId" gorm:"autoIncrement"`
 	Channel   Channel   `json:"-" gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE;foreignKey:channel_name;references:channel_name"`
 
-	// Unique entry, this is the actual primary key
-	ChannelName string `json:"channelName" gorm:"not null"`
-	Filename    string `json:"filename" gorm:"not null"`
-	Status      string `json:"status" gorm:"not null"`
+	JobId uint `json:"jobId" gorm:"autoIncrement" extensions:"!x-nullable"`
 
-	Filepath  string    `json:"pathRelative" gorm:"not null;"`
-	Active    bool      `json:"active" gorm:"not null;default:false"`
-	CreatedAt time.Time `json:"createdAt" gorm:"not null;;index:idx_create_at"`
+	// Unique entry, this is the actual primary key
+	ChannelName string `json:"channelName" gorm:"not null" extensions:"!x-nullable"`
+	Filename    string `json:"filename" gorm:"not null" extensions:"!x-nullable"`
+	Status      string `json:"status" gorm:"not null" extensions:"!x-nullable"`
+
+	Filepath  string    `json:"pathRelative" gorm:"not null;" extensions:"!x-nullable"`
+	Active    bool      `json:"active" gorm:"not null;default:false" extensions:"!x-nullable"`
+	CreatedAt time.Time `json:"createdAt" gorm:"not null;;index:idx_create_at" extensions:"!x-nullable"`
 
 	// Additional information
 	Pid      int     `json:"pid" gorm:"default:null"`
@@ -85,7 +86,7 @@ func EnqueueConversionJob(channelName, filename, filepath, mediaType string) (*J
 }
 
 func EnqueuePreviewJob(channelName, filename string) (*Job, error) {
-	return addJob(channelName, filename, conf.AbsoluteFilepath(channelName, filename), StatusPreview, nil)
+	return addJob(channelName, filename, conf.AbsoluteChannelFilePath(channelName, filename), StatusPreview, nil)
 }
 
 func EnqueueCuttingJob(channelName, filename, filepath, intervals string) (*Job, error) {
@@ -146,7 +147,7 @@ func (channel *Channel) Jobs() ([]*Job, error) {
 
 func (job *Job) Destroy() error {
 	if job.Pid != 0 {
-		if err := utils.Interrupt(job.Pid); err != nil {
+		if err := helpers.Interrupt(job.Pid); err != nil {
 			log.Printf("[Destroy] Error interrupting process: %s", err.Error())
 			return err
 		}

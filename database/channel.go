@@ -15,34 +15,41 @@ import (
 	"syscall"
 	"time"
 
-	utils2 "github.com/astaxie/beego/utils"
+	"github.com/astaxie/beego/utils"
 	"github.com/srad/streamsink/conf"
-	"github.com/srad/streamsink/utils"
+	"github.com/srad/streamsink/helpers"
 	"gorm.io/gorm"
 )
 
+// Channel Represent a single stream, that shall be recorded. It can also serve as a folder for videos.
 type Channel struct {
-	ChannelId       uint      `json:"channelId" gorm:"autoIncrement" extensions:"!x-nullable"`
-	ChannelName     string    `json:"channelName" gorm:"unique;not null;" extensions:"!x-nullable"`
-	DisplayName     string    `json:"displayName" gorm:"not null;default:''" extensions:"!x-nullable"`
-	SkipStart       uint      `json:"skipStart" gorm:"not null;default:0" extensions:"!x-nullable"`
-	Url             string    `json:"url" gorm:"not null;default:''" extensions:"!x-nullable"`
-	Tags            string    `json:"tags" gorm:"not null;default:''" extensions:"!x-nullable"`
-	Fav             bool      `json:"fav" gorm:"index:idx_fav,not null" extensions:"!x-nullable"`
-	IsPaused        bool      `json:"isPaused" gorm:"not null,default:false" extensions:"!x-nullable"`
-	Deleted         bool      `json:"deleted" gorm:"not null,default:false" extensions:"!x-nullable"`
-	CreatedAt       time.Time `json:"createdAt" extensions:"!x-nullable"`
-	RecordingsCount uint      `json:"recordingsCount" gorm:"" extensions:"!x-nullable"`
-	RecordingsSize  uint      `json:"recordingsSize" gorm:"" extensions:"!x-nullable"`
-}
-
-type ChannelFile struct {
+	ChannelId   uint      `json:"channelId" gorm:"autoIncrement;primaryKey;column:channel_id" extensions:"!x-nullable"`
 	ChannelName string    `json:"channelName" gorm:"unique;not null;" extensions:"!x-nullable"`
 	DisplayName string    `json:"displayName" gorm:"not null;default:''" extensions:"!x-nullable"`
 	SkipStart   uint      `json:"skipStart" gorm:"not null;default:0" extensions:"!x-nullable"`
 	Url         string    `json:"url" gorm:"not null;default:''" extensions:"!x-nullable"`
 	Tags        string    `json:"tags" gorm:"not null;default:''" extensions:"!x-nullable"`
 	Fav         bool      `json:"fav" gorm:"index:idx_fav,not null" extensions:"!x-nullable"`
+	IsPaused    bool      `json:"isPaused" gorm:"not null,default:false" extensions:"!x-nullable"`
+	Deleted     bool      `json:"deleted" gorm:"not null,default:false" extensions:"!x-nullable"`
+	CreatedAt   time.Time `json:"createdAt" extensions:"!x-nullable"`
+
+	// Only for query result.
+	RecordingsCount uint `json:"recordingsCount" gorm:"" extensions:"!x-nullable"`
+	RecordingsSize  uint `json:"recordingsSize" gorm:"" extensions:"!x-nullable"`
+
+	// 1:n
+	Recordings []Recording `json:"recordings" gorm:"foreignKey:channel_id;constraint:OnDelete:CASCADE;foreignKey:ChannelId"`
+}
+
+// ChannelFile This type is used to store a JSON file in each channel folder to restore the database, if it is absent.
+type ChannelFile struct {
+	ChannelName string    `json:"channelName" extensions:"!x-nullable"`
+	DisplayName string    `json:"displayName" extensions:"!x-nullable"`
+	SkipStart   uint      `json:"skipStart" extensions:"!x-nullable"`
+	Url         string    `json:"url" extensions:"!x-nullable"`
+	Tags        string    `json:"tags" extensions:"!x-nullable"`
+	Fav         bool      `json:"fav" extensions:"!x-nullable"`
 	CreatedAt   time.Time `json:"createdAt" extensions:"!x-nullable"`
 }
 
@@ -78,14 +85,13 @@ func (channel *Channel) Create(tags *[]string) (*Channel, error) {
 	}
 
 	conf.MakeChannelFolders(channel.ChannelName)
-
 	channel.WriteJson()
 
 	return channel, nil
 }
 
 func (channel *Channel) ExistsJson() bool {
-	return utils2.FileExists(channel.jsonPath())
+	return utils.FileExists(channel.jsonPath())
 }
 
 func (channel *Channel) jsonPath() string {
@@ -96,7 +102,7 @@ func (channel *Channel) ReadJson() (*ChannelFile, error) {
 	if data, err := os.ReadFile(channel.jsonPath()); err != nil {
 		return nil, err
 	} else {
-		var content *ChannelFile
+		var content *ChannelFile = &ChannelFile{}
 		json.Unmarshal(data, content)
 		return content, nil
 	}
@@ -121,9 +127,15 @@ func (channel *Channel) WriteJson() {
 }
 
 func (channel *Channel) Update() error {
-	return Db.Table("channels").
+	err := Db.Table("channels").
 		Where("channel_name = ?", channel.ChannelName).
 		Updates(map[string]interface{}{"display_name": channel.DisplayName, "url": channel.Url, "skip_start": channel.SkipStart}).Error
+
+	if err == nil {
+		channel.WriteJson()
+	}
+
+	return err
 }
 
 func TagChannel(channelName string, tags []string) error {
@@ -171,7 +183,7 @@ func (channel *Channel) Start() error {
 	log.Printf("[Start] Starting '%s' at '%s'", channel.ChannelName, url)
 
 	go func() {
-		if err := utils.ExtractFirstFrame(url, conf.FrameWidth, filepath.Join(conf.AbsoluteDataPath(channel.ChannelName), conf.SnapshotFilename)); err != nil {
+		if err := helpers.ExtractFirstFrame(url, conf.FrameWidth, filepath.Join(conf.AbsoluteDataPath(channel.ChannelName), conf.SnapshotFilename)); err != nil {
 			log.Printf("Error: %s", err.Error())
 		}
 	}()
@@ -405,7 +417,7 @@ func (channel *Channel) DestroyData() {
 }
 
 func (channel *Channel) NewRecording() (Recording, string) {
-	filename, timestamp := utils.CreateRecordingName(channel.ChannelName)
+	filename, timestamp := helpers.CreateRecordingName(channel.ChannelName)
 	relativePath := filepath.Join("recordings", channel.ChannelName, filename)
 	outputFile := filepath.Join(conf.AppCfg.RecordingsAbsolutePath, channel.ChannelName, filename)
 
@@ -520,7 +532,7 @@ func (channel *Channel) Info() *Recording {
 }
 
 func (si *StreamInfo) Screenshot() error {
-	return utils.ExtractFirstFrame(si.Url, conf.FrameWidth, filepath.Join(conf.AbsoluteDataPath(si.ChannelName), conf.SnapshotFilename))
+	return helpers.ExtractFirstFrame(si.Url, conf.FrameWidth, filepath.Join(conf.AbsoluteDataPath(si.ChannelName), conf.SnapshotFilename))
 }
 
 func GetStreamInfo() map[string]StreamInfo {

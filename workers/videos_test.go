@@ -5,7 +5,7 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/srad/streamsink/utils"
+	"github.com/srad/streamsink/helpers"
 )
 
 var (
@@ -16,7 +16,7 @@ var (
 )
 
 func TestGetFrameCount(t *testing.T) {
-	count, err := utils.GetFrameCount(file)
+	count, err := helpers.GetFrameCount(file)
 	if err != nil {
 		t.Errorf("error computing framecount: %v", err)
 	}
@@ -27,7 +27,7 @@ func TestGetFrameCount(t *testing.T) {
 }
 
 func TestGetVideoInfo(t *testing.T) {
-	info, err := utils.GetVideoInfo(file)
+	info, err := helpers.GetVideoInfo(file)
 	if err != nil {
 		t.Errorf("error when getting video duration: %v", err)
 	}

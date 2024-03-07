@@ -13,15 +13,15 @@ import (
 
 	"github.com/srad/streamsink/conf"
 	"github.com/srad/streamsink/database"
+	"github.com/srad/streamsink/helpers"
 	"github.com/srad/streamsink/network"
-	"github.com/srad/streamsink/utils"
 	"gorm.io/gorm"
 )
 
 var (
 	sleepBetweenRounds = 1 * time.Second
-	cancelWorker       context.CancelFunc
-	JobInfoChannel     = make(chan network.EventMessage)
+	JobInfoChannel     = make(chan network.EventMessage, 1000)
+	ctx, cancel        = context.WithCancel(context.Background())
 )
 
 type JobVideoInfo struct {
@@ -30,13 +30,11 @@ type JobVideoInfo struct {
 }
 
 func StartWorker() {
-	ctx, c := context.WithCancel(context.Background())
-	cancelWorker = c
 	go processJobs(ctx)
 }
 
 func StopWorker() {
-	cancelWorker()
+	cancel()
 }
 
 func processJobs(ctx context.Context) {
@@ -46,37 +44,47 @@ func processJobs(ctx context.Context) {
 			log.Println("[processJobs] Worker stopped")
 			return
 		case <-time.After(sleepBetweenRounds):
-			conversionJobs()
-			if err := cuttingJobs(); err != nil {
-				log.Printf("Error current job: %s", err.Error())
+			// Intentionally blocking call, one after another.
+
+			// Conversion
+			if job, err := conversionJobs(); err != nil {
+				log.Printf("[processJobs] Error current job: %s", err.Error())
+			} else if job != nil {
+				log.Printf("[processJobs] Conversion completed for '%s'", job.Filepath)
 			}
-			previewJobs()
+
+			// Cutting
+			if job, err := cuttingJobs(); err != nil {
+				log.Printf("[processJobs] Error current job: %s", err.Error())
+			} else if job != nil {
+				log.Printf("[processJobs] Cutting completed for: %s", job.Filepath)
+			}
+
+			// Previews
+			if job, err := previewJobs(); err != nil {
+				log.Printf("[processJobs] Error current job: %s", err.Error())
+			} else if job != nil {
+				log.Printf("[processJobs] Preview completed for '%s'", job.Filepath)
+			}
 		}
 	}
 }
 
-func conversionJobs() {
+func conversionJobs() (*database.Job, error) {
 	job, err := database.GetNextJob(database.StatusConvert)
-	if job == nil {
-		return
-	}
-	if err != nil {
-		log.Printf("[Job] Error handlung job: %v", err)
-		if err := job.Destroy(); err != nil {
-			log.Printf("Error destroying job: %s", err.Error())
-		}
-		return
+	if job == nil || err != nil {
+		return job, err
 	}
 
 	if err := job.Activate(); err != nil {
 		log.Printf("Error activating job: %s", err.Error())
 	}
 
-	result, err := utils.ConvertVideo(&utils.VideoConversionArgs{
-		OnStart: func(info *utils.CommandInfo) {
+	result, err := helpers.ConvertVideo(&helpers.VideoConversionArgs{
+		OnStart: func(info *helpers.CommandInfo) {
 			_ = job.UpdateInfo(info.Pid, info.Command)
 		},
-		OnProgress: func(info *utils.ProcessInfo) {
+		OnProgress: func(info *helpers.ProcessInfo) {
 			if err := job.UpdateProgress(fmt.Sprintf("%f", float32(info.Frame)/float32(job.Recording.Packets)*100)); err != nil {
 				log.Printf("Error updating job progress: %s", err.Error())
 			}
@@ -95,7 +103,7 @@ func conversionJobs() {
 		if err := job.Destroy(); err != nil {
 			log.Printf("Error destroying job: %s", err.Error())
 		}
-		return
+		return job, err
 	} else {
 		log.Printf("[conversionJobs] Completed conversion of '%s' with args '%s'", job.Filename, *job.Args)
 	}
@@ -116,30 +124,28 @@ func conversionJobs() {
 	if err := rec.Save("recording"); err != nil {
 		if err := os.Remove(result.Filepath); err != nil {
 			log.Printf("Error deleting file '%s': %s", result.Filepath, err.Error())
+			return job, err
 		}
 	} else {
 		if _, err := database.EnqueuePreviewJob(result.ChannelName, result.Filename); err != nil {
 			log.Printf("Error enqueing preview job: %s", err.Error())
+			return job, err
 		}
 	}
+
+	return job, nil
 }
 
 // Handles one single job.
-func previewJobs() {
+func previewJobs() (*database.Job, error) {
 	job, err := database.GetNextJob(database.StatusPreview)
-	if job == nil && err == nil {
-		// log.Printf("No jobs found with status '%s'", database.StatusPreview)
-		return
-	}
-	if err != nil {
-		log.Printf("[Job] Error handlung job: %v", err)
-		return
+	if job == nil || err != nil {
+		return job, err
 	}
 
 	// Delete any old previews first
-	errDelete := database.DestroyPreviews(job.ChannelName, job.Filename)
-	if errDelete != nil && !errors.Is(errDelete, gorm.ErrRecordNotFound) {
-		log.Printf("[Job] Error deleting existing previews: %v", errDelete)
+	if err := database.DestroyPreviews(job.ChannelName, job.Filename); err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		log.Printf("[Job] Error deleting existing previews: %s", err.Error())
 	}
 
 	log.Printf("[Job] Generating preview for '%s'", job.Filename)
@@ -148,8 +154,8 @@ func previewJobs() {
 		log.Printf("[Job] Error activating job: %d", job.JobId)
 	}
 
-	err = GeneratePreviews(&utils.VideoConversionArgs{
-		OnStart: func(info *utils.CommandInfo) {
+	conversion := &helpers.VideoConversionArgs{
+		OnStart: func(info *helpers.CommandInfo) {
 			_ = job.UpdateInfo(info.Pid, info.Command)
 			JobInfoChannel <- network.EventMessage{Name: "job:start", Message: database.JobMessage{
 				JobId:       job.JobId,
@@ -158,7 +164,7 @@ func previewJobs() {
 				Type:        job.Status,
 			}}
 		},
-		OnProgress: func(info *utils.ProcessInfo) {
+		OnProgress: func(info *helpers.ProcessInfo) {
 			JobInfoChannel <- network.EventMessage{Name: "job:progress", Message: database.JobMessage{
 				JobId:       job.JobId,
 				ChannelName: job.ChannelName,
@@ -168,11 +174,10 @@ func previewJobs() {
 		},
 		ChannelName: job.ChannelName,
 		Filename:    job.Filename,
-	})
-
-	if err != nil {
+	}
+	if result, err := GeneratePreviews(conversion); err != nil {
 		// Delete the file if it is corrupted
-		checkFileErr := CheckVideo(conf.GetRecordingsPaths(job.ChannelName, job.Filename).Filepath)
+		checkFileErr := helpers.CheckVideo(conf.GetRecordingsPaths(job.ChannelName, job.Filename).Filepath)
 		if checkFileErr != nil {
 			if rec, err := job.FindRecording(); err != nil {
 				_ = rec.Destroy()
@@ -181,40 +186,30 @@ func previewJobs() {
 		}
 		// Since the job failed for some reason, remove it
 		_ = job.Destroy()
-		log.Printf("[Job] Error generating preview for '%s' : %v\n", job.Filename, err)
-		return
-	}
 
-	_, err2 := database.UpdatePreview(job.ChannelName, job.Filename)
-	if err2 != nil {
-		log.Printf("[Job] Error adding previews: %v", err2)
-		return
+		return job, fmt.Errorf("[Job] Error generating preview for '%s' : %v\n", job.Filename, err)
+	} else if _, err := database.UpdatePreview(result.ChannelName, result.Filename); err != nil {
+		return job, fmt.Errorf("[Job] Error adding previews: %v", err)
 	}
 
 	if _, err := job.FindRecording(); err != nil {
 		// TODO
 		// services.notify("job:preview:done", database.JobMessage{JobId: job.JobId, ChannelName: job.ChannelName, Filename: job.Filename, Data: rec})
 	}
-	err3 := job.Destroy()
-	if err3 != nil {
-		log.Printf("[Job] Error deleteing job: %v", err3)
-		return
+
+	if err := job.Destroy(); err != nil {
+		return job, fmt.Errorf("[Job] Error deleteing job: %v", err)
 	}
 
-	log.Printf("[Job] Preview job complete for '%s'", job.Filepath)
+	return job, nil
 }
 
 // Cut video, add preview job, destroy job.
 // This action is intrinsically procedural, keep it together locally.
-func cuttingJobs() error {
+func cuttingJobs() (*database.Job, error) {
 	job, err := database.GetNextJob(database.StatusCut)
-	if errors.Is(err, gorm.ErrRecordNotFound) || job == nil {
-		return err
-	}
-
-	if err != nil {
-		log.Printf("[Job] Error handling cutting job: %v", err)
-		return err
+	if job == nil || err != nil {
+		return job, err
 	}
 
 	log.Printf("[Job] Generating preview for '%s'", job.Filename)
@@ -225,34 +220,34 @@ func cuttingJobs() error {
 
 	if job.Args == nil {
 		log.Printf("[Job] Error missing args for cutting job: %d", job.JobId)
-		return err
+		return job, err
 	}
 
 	// Parse arguments
-	cutArgs := &utils.CutArgs{}
+	cutArgs := &helpers.CutArgs{}
 	s := []byte(*job.Args)
 	err = json.Unmarshal(s, &cutArgs)
 	if err != nil {
 		log.Printf("[Job] Error parsing cutting job arguments: %v", err)
 		_ = job.Destroy()
-		return err
+		return job, err
 	}
 
 	// Filenames
 	now := time.Now()
 	stamp := now.Format("2006_01_02_15_04_05")
 	filename := fmt.Sprintf("%s_cut_%s.mp4", job.ChannelName, stamp)
-	inputPath := conf.AbsoluteFilepath(job.ChannelName, job.Filename)
-	outputFile := conf.AbsoluteFilepath(job.ChannelName, filename)
+	inputPath := conf.AbsoluteChannelFilePath(job.ChannelName, job.Filename)
+	outputFile := conf.AbsoluteChannelFilePath(job.ChannelName, filename)
 	segFiles := make([]string, len(cutArgs.Starts))
 	mergeFileContent := make([]string, len(cutArgs.Starts))
 
 	// Cut
 	segmentFilename := fmt.Sprintf("%s_cut_%s", job.ChannelName, stamp)
 	for i, start := range cutArgs.Starts {
-		segFiles[i] = conf.AbsoluteFilepath(job.ChannelName, fmt.Sprintf("%s_%04d.mp4", segmentFilename, i))
-		err = utils.CutVideo(&utils.CuttingJob{
-			OnStart: func(info *utils.CommandInfo) {
+		segFiles[i] = conf.AbsoluteChannelFilePath(job.ChannelName, fmt.Sprintf("%s_%04d.mp4", segmentFilename, i))
+		err = helpers.CutVideo(&helpers.CuttingJob{
+			OnStart: func(info *helpers.CommandInfo) {
 				_ = job.UpdateInfo(info.Pid, info.Command)
 			},
 			OnProgress: func(s string) {
@@ -269,14 +264,14 @@ func cuttingJobs() error {
 				}
 			}
 			_ = job.Destroy()
-			return err
+			return job, err
 		}
 	}
 	// Merge file txt, enumerate
 	for i, file := range segFiles {
 		mergeFileContent[i] = fmt.Sprintf("file '%s'", file)
 	}
-	mergeTextFile := conf.AbsoluteFilepath(job.ChannelName, fmt.Sprintf("%s.txt", segmentFilename))
+	mergeTextFile := conf.AbsoluteChannelFilePath(job.ChannelName, fmt.Sprintf("%s.txt", segmentFilename))
 	err = os.WriteFile(mergeTextFile, []byte(strings.Join(mergeFileContent, "\n")), 0644)
 	if err != nil {
 		log.Printf("[Job] Error writing concat text file '%s': %v", mergeTextFile, err)
@@ -287,10 +282,10 @@ func cuttingJobs() error {
 		}
 		_ = os.RemoveAll(mergeTextFile)
 		_ = job.Destroy()
-		return err
+		return job, err
 	}
 
-	err = utils.MergeVideos(func(s string) { log.Printf("[MergeVideos] %s", s) }, mergeTextFile, outputFile)
+	err = helpers.MergeVideos(func(s string) { log.Printf("[MergeVideos] %s", s) }, mergeTextFile, outputFile)
 	if err != nil {
 		// Job failed, destroy all files.
 		log.Printf("[Job] Error merging file '%s': %s", mergeTextFile, err.Error())
@@ -301,7 +296,7 @@ func cuttingJobs() error {
 		}
 		_ = os.RemoveAll(mergeTextFile)
 		_ = job.Destroy()
-		return err
+		return job, err
 	}
 
 	_ = os.RemoveAll(mergeTextFile)
@@ -312,7 +307,7 @@ func cuttingJobs() error {
 		}
 	}
 
-	info, err := utils.GetVideoInfo(outputFile)
+	info, err := helpers.GetVideoInfo(outputFile)
 	if err != nil {
 		log.Printf("[Job] Error reading video information for file '%s': %v", filename, err)
 	}
@@ -321,7 +316,7 @@ func cuttingJobs() error {
 	newRec := database.Recording{
 		ChannelName:  job.ChannelName,
 		Filename:     filename,
-		PathRelative: conf.GetRelativeRecordingsPath(job.ChannelName, filename),
+		PathRelative: conf.ChannelPath(job.ChannelName, filename),
 		Duration:     info.Duration,
 		Width:        info.Width,
 		Height:       info.Height,
@@ -335,40 +330,33 @@ func cuttingJobs() error {
 	err = newRec.Save("cut")
 	if err != nil {
 		log.Printf("[Job] Error creating: %v", err)
-		return err
+		return job, err
 	}
 
 	// Successfully added cut record, enqueue preview job
 	_, err = database.EnqueuePreviewJob(job.ChannelName, filename)
 	if err != nil {
 		log.Printf("[Job] Error adding preview for cutting job %d: %v", job.JobId, err)
-		return err
+		return job, err
 	}
 
 	// Finished, destroy job
 	err = job.Destroy()
 	if err != nil {
 		log.Printf("[Job] Error deleteing job: %v", err)
-		return err
+		return job, err
 	}
 
 	log.Printf("[Job] Cutting job complete for '%s'", job.Filepath)
-	return nil
+	return job, nil
 }
 
-func CheckVideo(filepath string) error {
-	return utils.ExecSync(&utils.ExecArgs{
-		Command:     "ffmpeg",
-		CommandArgs: []string{"-v", "error", "-i", filepath, "-f", "null", "-"},
-	})
-}
-
-func GeneratePreviews(args *utils.VideoConversionArgs) error {
+func GeneratePreviews(args *helpers.VideoConversionArgs) (*helpers.PreviewResult, error) {
 	inputPath := filepath.Join(conf.AppCfg.RecordingsAbsolutePath, args.ChannelName, args.Filename)
 
 	log.Println("---------------------------------------------- Preview Job ----------------------------------------------")
 	log.Println(inputPath)
 	log.Println("---------------------------------------------------------------------------------------------------------")
 
-	return utils.CreatePreview(args, inputPath, conf.AbsoluteDataPath(args.ChannelName), conf.FrameCount, 128, 256)
+	return helpers.CreatePreview(args, inputPath, conf.AbsoluteDataPath(args.ChannelName), conf.FrameCount, 128, 256)
 }

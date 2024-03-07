@@ -5,21 +5,23 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"path/filepath"
+	"strings"
 	"time"
 
-	"github.com/srad/streamsink/utils"
+	"github.com/srad/streamsink/helpers"
 
 	"github.com/srad/streamsink/conf"
 	"gorm.io/gorm"
 )
 
 var (
-	UpdatingVideoInfo bool = false
+	UpdatingVideoInfo = false
 )
 
 type Recording struct {
 	Channel     Channel   `json:"-" gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE;foreignKey:channel_name;references:channel_name"`
+	ChannelId   uint      `json:"channelId" gorm:"column:channel_id;" extensions:"!x-nullable"`
+	RecordingId uint      `json:"recordingId" gorm:"column:recording_id" extensions:"!x-nullable"`
 	ChannelName string    `json:"channelName" gorm:"primaryKey;" extensions:"!x-nullable"`
 	Filename    string    `json:"filename" gorm:"primaryKey;" extensions:"!x-nullable"`
 	Bookmark    bool      `json:"bookmark" gorm:"index:idx_bookmark,not null" extensions:"!x-nullable"`
@@ -27,17 +29,18 @@ type Recording struct {
 	LastAccess  time.Time `json:"lastAccess"`
 	VideoType   string    `json:"videoType"`
 
-	Packets  uint64  `json:"packets" gorm:"default:0;not null" extensions:"!x-nullable"`
+	Packets  uint64  `json:"packets" gorm:"default:0;not null" extensions:"!x-nullable"` // Total number of video packets/frames.
 	Duration float64 `json:"duration" gorm:"default:0;not null" extensions:"!x-nullable"`
 	Size     uint64  `json:"size" gorm:"default:0;not null" extensions:"!x-nullable"`
 	BitRate  uint64  `json:"bitRate" gorm:"default:0;not null" extensions:"!x-nullable"`
 	Width    uint    `json:"width" gorm:"default:0" extensions:"!x-nullable"`
 	Height   uint    `json:"height" gorm:"default:0" extensions:"!x-nullable"`
 
-	PathRelative  string `json:"pathRelative" gorm:"not null;" extensions:"!x-nullable"`
-	PreviewStripe string `json:"previewStripe" gorm:"default:null"`
-	PreviewVideo  string `json:"previewVideo" gorm:"default:null"`
-	PreviewCover  string `json:"previewCover" gorm:"default:null"`
+	PreviewStripe  string   `json:"previewStripe" gorm:"default:null"`
+	PathRelative   string   `json:"pathRelative" gorm:"not null;"`
+	PreviewVideo   string   `json:"previewVideo" gorm:"default:null"`
+	PreviewCover   string   `json:"previewCover" gorm:"default:null"`
+	PreviewScreens []string `json:"previewScreens" gorm:"serializer:json"`
 }
 
 func FindByName(channelName string) ([]*Recording, error) {
@@ -131,9 +134,9 @@ func BookmarkList() ([]*Recording, error) {
 }
 
 func (recording *Recording) Save(videoType string) error {
-	info, err := utils.GetVideoInfo(conf.AbsoluteFilepath(recording.ChannelName, recording.Filename))
+	info, err := helpers.GetVideoInfo(conf.AbsoluteChannelFilePath(recording.ChannelName, recording.Filename))
 	if err != nil {
-		log.Printf("[AddRecord] GetVideoInfo() error '%s' for '%s'", err.Error(), conf.AbsoluteFilepath(recording.ChannelName, recording.Filename))
+		log.Printf("[AddRecord] GetVideoInfo() error '%s' for '%s'", err.Error(), conf.AbsoluteChannelFilePath(recording.ChannelName, recording.Filename))
 		return err
 	}
 
@@ -162,11 +165,12 @@ func (recording *Recording) Destroy() error {
 		return err
 	}
 
-	// TODO: Also Cancel running jobs from this channel
-	// Remove associated jobs
-	if err := Db.Delete(&Job{}, "channel_name = ? AND filename = ?", recording.ChannelName, recording.Filename).Error; err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
-		log.Println(fmt.Sprintf("Error job for recording of file '%s' from channel '%s': %v", recording.Filename, recording.ChannelName, err))
-		return err
+	if jobs, err := recording.FindJobs(); err == nil {
+		for _, job := range *jobs {
+			if destroyErr := job.Destroy(); destroyErr != nil {
+				log.Printf("Error destroying job-id: %d", job.JobId)
+			}
+		}
 	}
 
 	paths := conf.GetRecordingsPaths(recording.ChannelName, recording.Filename)
@@ -235,10 +239,15 @@ func AddIfNotExistsRecording(channelName, filename string) (*Recording, error) {
 		return nil, nil
 	}
 
+	paths := conf.GetRecordingsPaths(channelName, filename)
+
 	newRec := &Recording{
 		ChannelName:  channelName,
 		Filename:     filename,
-		PathRelative: conf.GetRelativeRecordingsPath(channelName, filename),
+		PathRelative: conf.ChannelPath(channelName, filename),
+		PreviewVideo: paths.VideosPath,
+		//PreviewStripe: paths.StripePath,
+		PreviewCover: paths.CoverPath,
 		CreatedAt:    time.Now(),
 		Bookmark:     false,
 	}
@@ -251,16 +260,16 @@ func AddIfNotExistsRecording(channelName, filename string) (*Recording, error) {
 	return newRec, nil
 }
 
-func (recording *Recording) GetVideoInfo() (*utils.FFProbeInfo, error) {
-	return utils.GetVideoInfo(conf.AbsoluteFilepath(recording.ChannelName, recording.Filename))
+func (recording *Recording) GetVideoInfo() (*helpers.FFProbeInfo, error) {
+	return helpers.GetVideoInfo(conf.AbsoluteChannelFilePath(recording.ChannelName, recording.Filename))
 }
 
-func (recording *Recording) UpdateInfo(info *utils.FFProbeInfo) error {
+func (recording *Recording) UpdateInfo(info *helpers.FFProbeInfo) error {
 	return Db.Updates(&Recording{ChannelName: recording.ChannelName, Filename: recording.Filename, Duration: info.Duration, BitRate: info.BitRate, Size: info.Size, Width: info.Width, Height: info.Height, Packets: info.PacketCount}).Error
 }
 
 func (recording *Recording) FilePath() string {
-	return conf.AbsoluteFilepath(recording.ChannelName, recording.Filename)
+	return conf.AbsoluteChannelFilePath(recording.ChannelName, recording.Filename)
 }
 
 func (recording *Recording) DataFolder() string {
@@ -275,8 +284,19 @@ func UpdatePreview(channelName, filename string) (*Recording, error) {
 
 	paths := conf.GetRecordingsPaths(channelName, filename)
 
-	rec.PreviewVideo = filepath.Join("recordings", channelName, conf.AppCfg.DataPath, "videos", paths.MP4)
-	rec.PreviewStripe = filepath.Join("recordings", channelName, conf.AppCfg.DataPath, "stripes", paths.JPG)
+	screens := []string{}
+	files, err := os.ReadDir(paths.ScreensPath)
+	for _, file := range files {
+		// Only take screen files
+		if !file.IsDir() && strings.HasPrefix(file.Name(), filename) {
+			screens = append(screens, file.Name())
+		}
+	}
+
+	rec.PreviewVideo = paths.VideosPath
+	rec.PreviewStripe = paths.StripePath
+	rec.PreviewCover = paths.CoverPath
+	rec.PreviewScreens = screens
 
 	if err := Db.
 		Table("recordings").
@@ -292,13 +312,16 @@ func DestroyPreviews(channelName, filename string) error {
 	paths := conf.GetRecordingsPaths(channelName, filename)
 
 	if err := os.Remove(paths.VideosPath); err != nil && !os.IsNotExist(err) {
-		log.Println(fmt.Sprintf("Error deleting '%s' from channel '%s': %v", paths.VideosPath, channelName, err))
+		log.Println(fmt.Sprintf("[DestroyPreviews] Error deleting '%s' from channel '%s': %v", paths.VideosPath, channelName, err))
 	}
 	if err := os.Remove(paths.StripePath); err != nil && !os.IsNotExist(err) {
-		log.Println(fmt.Sprintf("Error deleting '%s' from channel '%s': %v", paths.StripePath, channelName, err))
+		log.Println(fmt.Sprintf("[DestroyPreviews] Error deleting '%s' from channel '%s': %v", paths.StripePath, channelName, err))
 	}
 	if err := os.Remove(paths.CoverPath); err != nil && !os.IsNotExist(err) {
-		log.Println(fmt.Sprintf("Error deleting '%s' from channel '%s': %v", paths.StripePath, channelName, err))
+		log.Println(fmt.Sprintf("[DestroyPreviews] Error deleting '%s' from channel '%s': %v", paths.StripePath, channelName, err))
+	}
+	if err := os.Remove(paths.ScreensPath); err != nil && !os.IsNotExist(err) {
+		log.Println(fmt.Sprintf("[DestroyPreviews] Error deleting '%s' from channel '%s': %v", paths.StripePath, channelName, err))
 	}
 
 	rec, err := FindRecording(channelName, filename)
@@ -309,6 +332,7 @@ func DestroyPreviews(channelName, filename string) error {
 	rec.PreviewVideo = ""
 	rec.PreviewStripe = ""
 	rec.PreviewCover = ""
+	rec.PreviewScreens = nil
 
 	if err := Db.Model(&rec).Save(&rec).Error; err != nil {
 		return err

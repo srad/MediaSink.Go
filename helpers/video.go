@@ -1,4 +1,4 @@
-package utils
+package helpers
 
 import (
 	"encoding/json"
@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -73,6 +74,14 @@ type ConversionResult struct {
 	CreatedAt    time.Time
 }
 
+type PreviewResult struct {
+	ScreensPath    string
+	StripeFilePath string
+	VideoFilePath  string
+	ChannelName    string
+	Filename       string
+}
+
 func CreatePreviewStripe(errListener func(string), outputDir, outFile, absolutePath string, frameDistance, frameHeight uint, fps float64) error {
 	dir := filepath.Join(outputDir, conf.StripesFolder)
 	if err := os.MkdirAll(dir, 0777); err != nil {
@@ -84,7 +93,8 @@ func CreatePreviewStripe(errListener func(string), outputDir, outFile, absoluteP
 			errListener(info.Output)
 		},
 		Command:     "ffmpeg",
-		CommandArgs: []string{"-i", absolutePath, "-y", "-progress", "pipe:2", "-frames:v", "1", "-q:v", "0", "-threads", fmt.Sprint(conf.ThreadCount), "-an", "-vf", fmt.Sprintf("select=not(mod(n\\,%d)),scale=-2:%d,drawtext=fontfile=%s: text='%%{pts\\:gmtime\\:0\\:%%H\\\\\\:%%M\\\\\\:%%S}': rate=%f: x=(w-tw)/2: y=h-(2*lh): fontsize=20: fontcolor=white: bordercolor=black: borderw=3: box=0: boxcolor=0x00000000@1,tile=%dx1", frameDistance, frameHeight, conf.GetFontPath(), fps, conf.FrameCount), "-hide_banner", "-loglevel", "error", "-stats", "-vsync", "vfr", filepath.Join(dir, outFile)},
+		CommandArgs: []string{"-i", absolutePath, "-y", "-progress", "pipe:2", "-frames:v", "1", "-q:v", "0", "-threads", fmt.Sprint(conf.ThreadCount), "-an", "-vf", fmt.Sprintf("select=not(mod(n\\,%d)),scale=-2:%d,tile=%dx1", frameDistance, frameHeight, conf.FrameCount), "-hide_banner", "-loglevel", "error", "-stats", "-fps_mode", "vfr", filepath.Join(dir, outFile)},
+		//CommandArgs: []string{"-i", absolutePath, "-y", "-progress", "pipe:2", "-frames:v", "1", "-q:v", "0", "-threads", fmt.Sprint(conf.ThreadCount), "-an", "-vf", fmt.Sprintf("select=not(mod(n\\,%d)),scale=-2:%d,drawtext=fontfile=%s: text='%%{pts\\:gmtime\\:0\\:%%H\\\\\\:%%M\\\\\\:%%S}': rate=%f: x=(w-tw)/2: y=h-(2*lh): fontsize=20: fontcolor=white: bordercolor=black: borderw=3: box=0: boxcolor=0x00000000@1,tile=%dx1", frameDistance, frameHeight, conf.GetFontPath(), fps, conf.FrameCount), "-hide_banner", "-loglevel", "error", "-stats", "-fps_mode", "vfr", filepath.Join(dir, outFile)},
 	})
 }
 
@@ -97,16 +107,16 @@ func CreatePreviewPoster(inputPath, outputDir, filename string) error {
 	return ExtractFirstFrame(inputPath, conf.FrameWidth, filepath.Join(dirPoster, filename))
 }
 
-func CreatePreviewVideo(pipeInfo func(info PipeMessage), outputDir, outFile, absolutePath string, frameDistance, frameHeight uint, fps float64) error {
+func CreatePreviewVideo(pipeInfo func(info PipeMessage), outputDir, outFile, absolutePath string, frameDistance, frameHeight uint, fps float64) (string, error) {
 	dir := filepath.Join(outputDir, conf.VideosFolder)
 	if err := os.MkdirAll(dir, 0777); err != nil {
-		return err
+		return "", err
 	}
 
-	return ExecSync(&ExecArgs{
+	return dir, ExecSync(&ExecArgs{
 		OnPipeErr:   pipeInfo,
 		Command:     "ffmpeg",
-		CommandArgs: []string{"-i", absolutePath, "-y", "-progress", "pipe:2", "-q:v", "0", "-threads", fmt.Sprint(conf.ThreadCount), "-an", "-vf", fmt.Sprintf("select=not(mod(n\\,%d)),scale=-2:%d,drawtext=fontfile=%s: text='%%{pts\\:gmtime\\:0\\:%%H\\\\\\:%%M\\\\\\:%%S}': rate=%f: x=(w-tw)/2: y=h-(2*lh): fontsize=20: fontcolor=white: bordercolor=black: borderw=3: box=0: boxcolor=0x00000000@1,setpts=(7/2)*N/TB", frameDistance, frameHeight, conf.GetFontPath(), fps), "-hide_banner", "-loglevel", "error", "-stats", "-vsync", "vfr", "-movflags", "faststart", filepath.Join(dir, outFile)},
+		CommandArgs: []string{"-i", absolutePath, "-y", "-progress", "pipe:2", "-q:v", "0", "-threads", fmt.Sprint(conf.ThreadCount), "-an", "-vf", fmt.Sprintf("select=not(mod(n\\,%d)),scale=-2:%d", frameDistance, frameHeight), "-hide_banner", "-loglevel", "error", "-stats", "-fps_mode", "vfr", "-movflags", "faststart", filepath.Join(dir, outFile)},
 	})
 }
 
@@ -160,7 +170,7 @@ func ConvertVideo(args *VideoConversionArgs, mediaType string) (*ConversionResul
 		result := &ConversionResult{
 			ChannelName:  args.ChannelName,
 			Filename:     mp3Filename,
-			PathRelative: conf.GetRelativeRecordingsPath(args.ChannelName, mp3Filename),
+			PathRelative: conf.ChannelPath(args.ChannelName, mp3Filename),
 			CreatedAt:    time.Now(),
 			Filepath:     outputAbsoluteMp3,
 		}
@@ -185,7 +195,7 @@ func ConvertVideo(args *VideoConversionArgs, mediaType string) (*ConversionResul
 		result := &ConversionResult{
 			ChannelName:  args.ChannelName,
 			Filename:     name,
-			PathRelative: conf.GetRelativeRecordingsPath(args.ChannelName, name),
+			PathRelative: conf.ChannelPath(args.ChannelName, name),
 			CreatedAt:    time.Now(),
 			Filepath:     output,
 		}
@@ -223,17 +233,17 @@ func ConvertVideo(args *VideoConversionArgs, mediaType string) (*ConversionResul
 	}
 }
 
-func CreatePreview(args *VideoConversionArgs, inputFilePath, outputDir string, extractCount int, frameHeight, videoHeight uint) error {
+func CreatePreview(args *VideoConversionArgs, inputFilePath, outputDir string, extractCount int, frameHeight, videoHeight uint) (*PreviewResult, error) {
 	totalFrameCount, err := GetFrameCount(inputFilePath)
 	if err != nil {
 		log.Printf("Error getting frame count for: '%s'\n", inputFilePath)
-		return err
+		return nil, err
 	}
 
 	info, err := GetVideoInfo(inputFilePath)
 	if err != nil {
 		log.Printf("Error getting frame rate for: '%s'\n", inputFilePath)
-		return err
+		return nil, err
 	}
 
 	frameDistance := uint(float32(totalFrameCount) / float32(extractCount))
@@ -245,45 +255,54 @@ func CreatePreview(args *VideoConversionArgs, inputFilePath, outputDir string, e
 			log.Printf("[createPreviewStripe] %s", s)
 		}
 	}, outputDir, filename+".jpg", inputFilePath, frameDistance, frameHeight, info.Fps); err != nil {
-		return errors.New(fmt.Sprintf("error generating stripe for '%s': %s", inputFilePath, err.Error()))
+		return nil, errors.New(fmt.Sprintf("error generating stripe for '%s': %s", inputFilePath, err.Error()))
 	}
 
-	if err := CreatePreviewShots(func(s string) {}, outputDir, filename, inputFilePath, frameDistance, frameHeight, info.Fps); err != nil {
-		return err
+	dir, err := CreatePreviewShots(func(s string) {}, outputDir, filename, inputFilePath, frameDistance, frameHeight, info.Fps)
+	if err != nil {
+		return nil, err
 	}
 
 	var i uint64 = 1
-	if err := CreatePreviewVideo(func(info PipeMessage) {
+	previewVideoDir, err := CreatePreviewVideo(func(info PipeMessage) {
 		if strings.Contains(info.Output, "frame=") {
 			args.OnProgress(&ProcessInfo{Frame: i, Raw: info.Output, Total: extractCount})
 			i++
 		}
-	}, outputDir, filename+".mp4", inputFilePath, frameDistance, videoHeight, info.Fps); err != nil {
-		return errors.New(fmt.Sprintf("error generating preview video for '%s': %s", inputFilePath, err.Error()))
+	}, outputDir, filename+".mp4", inputFilePath, frameDistance, videoHeight, info.Fps)
+
+	if err != nil {
+		return nil, errors.New(fmt.Sprintf("error generating preview video for '%s': %s", inputFilePath, err.Error()))
 	}
 
 	if err := CreatePreviewPoster(inputFilePath, outputDir, filename+".jpg"); err != nil {
-		return errors.New(fmt.Sprintf("error generating poster for '%s': %s", inputFilePath, err.Error()))
+		return nil, errors.New(fmt.Sprintf("error generating poster for '%s': %s", inputFilePath, err.Error()))
 	}
 
-	return nil
+	return &PreviewResult{
+		ChannelName:    args.ChannelName,
+		Filename:       args.Filename,
+		ScreensPath:    dir,
+		VideoFilePath:  previewVideoDir,
+		StripeFilePath: path.Join(outputDir, filename+".jpg"),
+	}, nil
 }
 
 // CreatePreviewShots Create a separate preview image file, at every frame distance.
-func CreatePreviewShots(errListener func(s string), outputDir string, filename string, inputFilePath string, frameDistance uint, frameHeight uint, fps float64) error {
-	dirPreview := filepath.Join(outputDir, conf.PreviewsFolder, filename)
+func CreatePreviewShots(errListener func(s string), outputDir string, filename string, inputFilePath string, frameDistance uint, frameHeight uint, fps float64) (string, error) {
+	dirPreview := filepath.Join(outputDir, conf.ScreensFolder, filename)
 	if err := os.MkdirAll(dirPreview, 0777); err != nil {
-		return err
+		return dirPreview, err
 	}
 
-	outFile := fmt.Sprintf("%s%%d.jpg", filename)
+	outFile := fmt.Sprintf("%s_%%010d.jpg", filename)
 
-	return ExecSync(&ExecArgs{
+	return dirPreview, ExecSync(&ExecArgs{
 		OnPipeErr: func(info PipeMessage) {
 			errListener(info.Output)
 		},
 		Command:     "ffmpeg",
-		CommandArgs: []string{"-i", inputFilePath, "-y", "-progress", "pipe:2", "-frames:v", "1", "-q:v", "0", "-threads", fmt.Sprint(conf.ThreadCount), "-an", "-vf", fmt.Sprintf("select=not(mod(n\\,%d)),scale=-2:%d,drawtext=fontfile=%s: text='%%{pts\\:gmtime\\:0\\:%%H\\\\\\:%%M\\\\\\:%%S}': rate=%f: x=(w-tw)/2: y=h-(2*lh): fontsize=20: fontcolor=white: bordercolor=black: borderw=3: box=0: boxcolor=0x00000000@1,tile=%dx1", frameDistance, frameHeight, conf.GetFontPath(), fps, conf.FrameCount), "-hide_banner", "-loglevel", "error", "-stats", "-vsync", "vfr", filepath.Join(dirPreview, outFile)},
+		CommandArgs: []string{"-i", inputFilePath, "-y", "-progress", "pipe:2", "-q:v", "0", "-threads", fmt.Sprint(conf.ThreadCount), "-an", "-vf", fmt.Sprintf("select=not(mod(n\\,%d)),scale=-2:%d", frameDistance, frameHeight), "-hide_banner", "-loglevel", "error", "-stats", "-fps_mode", "vfr", filepath.Join(dirPreview, outFile)},
 	})
 }
 
@@ -417,4 +436,11 @@ func ParseFFmpegKVs(text string) map[string]string {
 	}
 
 	return kvs
+}
+
+func CheckVideo(filepath string) error {
+	return ExecSync(&ExecArgs{
+		Command:     "ffmpeg",
+		CommandArgs: []string{"-v", "error", "-i", filepath, "-f", "null", "-"},
+	})
 }

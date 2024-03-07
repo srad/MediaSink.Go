@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/srad/streamsink/utils"
+	"github.com/srad/streamsink/helpers"
 
 	"github.com/gin-gonic/gin"
 	"github.com/srad/streamsink/app"
@@ -64,7 +64,7 @@ func StopJob(c *gin.Context) {
 		return
 	}
 
-	if utils.Interrupt(pid); err != nil {
+	if helpers.Interrupt(pid); err != nil {
 		appG.Response(http.StatusInternalServerError, err)
 		return
 	}

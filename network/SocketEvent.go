@@ -10,7 +10,7 @@ import (
 )
 
 var (
-	socketChannel = make(chan SocketEvent)
+	socketChannel = make(chan SocketEvent, 1000)
 	upGrader      = websocket.Upgrader{CheckOrigin: func(r *http.Request) bool {
 		return true
 	}}

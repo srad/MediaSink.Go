@@ -2,12 +2,9 @@ db:
   filename: 'streamsink.sqlite3'
 dirs:
   recordings: ''
-  recordingsfolder: ''
   data: '.previews'
 sys:
   network: ''
   disk: ''
-default:
-  importurl: ''
 settings:
   minrecmin: 15

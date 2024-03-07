@@ -13,26 +13,13 @@ import (
 	"github.com/spf13/viper"
 )
 
-type Cfg struct {
-	DbFileName             string
-	RecordingsFolder       string
-	RecordingsAbsolutePath string
-	DataDisk               string
-	NetworkDev             string
-	DataPath               string
-	// PublicPath             string
-	// ScriptPath             string
-	DefaultImportUrl string
-	MinRecMin        int
-}
-
 const (
-	VideosFolder   = "videos"
-	StripesFolder  = "stripes"
-	PostersFolder  = "posters"
-	PreviewsFolder = "previews"
-	winFont        = "C\\\\:/Windows/Fonts/DMMono-Regular.ttf"
-	linuxFont      = "/usr/share/fonts/truetype/DMMono-Regular.ttf"
+	VideosFolder  = "videos"
+	StripesFolder = "stripes"
+	PostersFolder = "posters"
+	ScreensFolder = "screens"
+	winFont       = "C\\\\:/Windows/Fonts/DMMono-Regular.ttf"
+	linuxFont     = "/usr/share/fonts/truetype/DMMono-Regular.ttf"
 	// FrameCount Number of extracted frames or timeline/preview
 	FrameCount       = 96
 	FrameWidth       = "480"
@@ -44,24 +31,15 @@ var (
 	ThreadCount = uint(float32(runtime.NumCPU() / 2))
 )
 
-type VideoPaths struct {
-	Filepath string
-}
-
-func DataPath(channelName string) string {
-	return filepath.Join(AppCfg.RecordingsFolder, channelName, AppCfg.DataPath)
-}
-
-func AbsoluteDataPath(channelName string) string {
-	return filepath.Join(AppCfg.RecordingsAbsolutePath, channelName, AppCfg.DataPath)
-}
-
-func AbsoluteChannelPath(channelName string) string {
-	return filepath.Join(AppCfg.RecordingsAbsolutePath, channelName)
-}
-
-func AbsoluteFilepath(channelName, filename string) string {
-	return filepath.Join(AppCfg.RecordingsAbsolutePath, channelName, filename)
+type Cfg struct {
+	DbFileName             string
+	RecordingsAbsolutePath string
+	DataDisk               string
+	NetworkDev             string
+	DataPath               string
+	// PublicPath             string
+	// ScriptPath             string
+	MinRecMin int
 }
 
 type RecordingPaths struct {
@@ -75,6 +53,32 @@ type RecordingPaths struct {
 	CoverPath              string
 	JPG                    string
 	MP4                    string
+	ScreensPath            string
+}
+
+type VideoPaths struct {
+	Filepath string
+}
+
+func RelativeDataPath(channelName string) string {
+	return filepath.Join(channelName, AppCfg.DataPath)
+}
+
+func AbsoluteDataPath(channelName string) string {
+	return filepath.Join(AppCfg.RecordingsAbsolutePath, channelName, AppCfg.DataPath)
+}
+
+func ChannelPath(channelName, filename string) string {
+	return filepath.Join(channelName, filename)
+}
+
+func AbsoluteChannelFilePath(channelName, filename string) string {
+	return filepath.Join(AppCfg.RecordingsAbsolutePath, channelName, filename)
+}
+
+func AbsoluteChannelPath(channelName string) string {
+
+	return filepath.Join(AppCfg.RecordingsAbsolutePath, channelName)
 }
 
 func GetRecordingsPaths(channelName, filename string) RecordingPaths {
@@ -85,24 +89,17 @@ func GetRecordingsPaths(channelName, filename string) RecordingPaths {
 	return RecordingPaths{
 		AbsoluteRecordingsPath: AppCfg.RecordingsAbsolutePath,
 
-		Filepath:           AbsoluteFilepath(channelName, filename),
-		VideosPath:         filepath.Join(DataPath(channelName), VideosFolder, mp4),
-		StripePath:         filepath.Join(DataPath(channelName), StripesFolder, stripeJpg),
-		CoverPath:          filepath.Join(DataPath(channelName), PostersFolder, posterJpg),
+		Filepath:           AbsoluteChannelFilePath(channelName, filename),
+		VideosPath:         filepath.Join(RelativeDataPath(channelName), VideosFolder, mp4),
+		StripePath:         filepath.Join(RelativeDataPath(channelName), StripesFolder, stripeJpg),
+		CoverPath:          filepath.Join(RelativeDataPath(channelName), PostersFolder, posterJpg),
+		ScreensPath:        filepath.Join(RelativeDataPath(channelName), ScreensFolder, filename),
 		AbsoluteVideosPath: filepath.Join(AbsoluteDataPath(channelName), VideosFolder, mp4),
 		AbsoluteStripePath: filepath.Join(AbsoluteDataPath(channelName), StripesFolder, stripeJpg),
 		AbsolutePosterPath: filepath.Join(AbsoluteDataPath(channelName), PostersFolder, posterJpg),
 		JPG:                stripeJpg,
 		MP4:                mp4,
 	}
-}
-
-func GetRelativeRecordingsPath(channelName, filename string) string {
-	return filepath.Join(AppCfg.RecordingsFolder, channelName, filename)
-}
-
-func GetAbsoluteRecordingsPath(channelName, filename string) string {
-	return filepath.Join(AppCfg.RecordingsAbsolutePath, channelName, filename)
 }
 
 func getConfInt(key, envKey string) int {
@@ -140,15 +137,12 @@ func Read() {
 
 	AppCfg.DbFileName = getConfString("db.filename", "DB_FILENAME")
 
-	AppCfg.RecordingsAbsolutePath = getConfString("dirs.recordingsfolder", "REC_PATH")
-	AppCfg.RecordingsFolder = getConfString("dirs.recordings", "REC_FOLDERNAME")
+	AppCfg.RecordingsAbsolutePath = getConfString("dirs.recordings", "REC_PATH")
 	AppCfg.DataPath = getConfString("dirs.data", "DATA_DIR")
-	// AppCfg.PublicPath = getConfString("dirs.public", "PUBLIC_PATH")
 
 	AppCfg.DataDisk = getConfString("sys.disk", "DATA_DISK")
 	AppCfg.NetworkDev = getConfString("sys.network", "NET_ADAPTER")
 
-	AppCfg.DefaultImportUrl = getConfString("default.importurl", "DEFAULT_IMPORT_URL")
 	AppCfg.MinRecMin = getConfInt("settings.minrecmin", "MIN_REC_MIN")
 }
 

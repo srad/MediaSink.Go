@@ -1,24 +1,43 @@
 package services
 
 import (
-	"context"
 	"errors"
 	"fmt"
+	"github.com/srad/streamsink/conf"
+	"github.com/srad/streamsink/database"
+	"github.com/srad/streamsink/helpers"
+	"gorm.io/gorm"
 	"log"
 	"os"
 	"time"
-
-	"github.com/srad/streamsink/workers"
-
-	"github.com/srad/streamsink/conf"
-	"github.com/srad/streamsink/database"
-	"gorm.io/gorm"
 )
 
-var (
-	importing    = false
-	cancelImport context.CancelFunc
-)
+func StartUpJobs() error {
+	log.Println("[StartUpJobs] Running startup job ...")
+
+	deleteChannels()
+	StartImport()
+	go fixOrphanedRecordings()
+
+	return nil
+}
+
+func deleteChannels() error {
+	channels, err := database.ChannelList()
+	if err != nil {
+		log.Printf("[DeleteChannels] ChannelList error: %s", err.Error())
+		return err
+	}
+
+	for _, channel := range channels {
+		if channel.Deleted {
+			log.Printf("[DeleteChannels] Deleting channel : %s", channel.ChannelName)
+			channel.Destroy()
+		}
+	}
+
+	return nil
+}
 
 // FixOrphanedRecordings Go through all open jobs with status "recording" and complete them.
 func fixOrphanedRecordings() {
@@ -38,7 +57,7 @@ func fixOrphanedRecordings() {
 	// Check for orphaned videos
 	for _, job := range jobs {
 		log.Printf("Handling Job #%d of '%s/%s'", job.JobId, job.Filepath, job.Filename)
-		err := workers.CheckVideo(job.Filepath)
+		err := helpers.CheckVideo(job.Filepath)
 		if err != nil {
 			log.Printf("The file '%s' is corrupted, deleting from disk and job queue: %v\n", job.Filename, err)
 			job.Destroy()
@@ -52,7 +71,7 @@ func fixOrphanedRecordings() {
 				ChannelName:  job.ChannelName,
 				Duration:     0,
 				Filename:     job.Filename,
-				PathRelative: conf.GetRelativeRecordingsPath(job.ChannelName, job.Filename),
+				PathRelative: conf.ChannelPath(job.ChannelName, job.Filename),
 				Bookmark:     false,
 				CreatedAt:    time.Now(),
 			}
@@ -61,31 +80,4 @@ func fixOrphanedRecordings() {
 			log.Printf("Added recording for '%s' and deleted orphaned recording job\n", job.Filename)
 		}
 	}
-}
-
-func StartUpJobs() error {
-	log.Println("[StartUpJobs] Running startup job")
-
-	deleteChannels() // wait for this to complete
-	StartImport()
-	go fixOrphanedRecordings()
-
-	return nil
-}
-
-func deleteChannels() error {
-	channels, err := database.ChannelList()
-	if err != nil {
-		log.Printf("[StartUpJobs] ChannelList error: %s", err.Error())
-		return err
-	}
-
-	for _, channel := range channels {
-		if channel.Deleted {
-			log.Printf("[StartUpJobs] Deleting channel : %s", channel.ChannelName)
-			channel.Destroy()
-		}
-	}
-
-	return nil
 }
