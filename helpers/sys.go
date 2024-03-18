@@ -140,7 +140,7 @@ func Interrupt(pid int) error {
 		delete(cmd, pid)
 		return err
 	}
-	return errors.New(fmt.Sprintf("pid %d not found", pid))
+	return fmt.Errorf("pid %d not found", pid)
 }
 
 func CpuUsage(waitSeconds uint64) (*CPUInfo, error) {
@@ -318,7 +318,7 @@ func networkTraffic(device string) (*NetInfo, error) {
 		}
 	}
 
-	return nil, errors.New(fmt.Sprintf("Device '%s' not found", dev))
+	return nil, fmt.Errorf("device '%s' not found", dev)
 }
 
 func exe(cmd string, args ...string) (string, error) {

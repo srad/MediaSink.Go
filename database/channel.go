@@ -158,7 +158,7 @@ func TagChannel(channelName string, tags []string) error {
 func prepareTags(tags []string) (string, error) {
 	joined := strings.ToLower(strings.Join(tags, ","))
 	if !rTags.MatchString(joined) {
-		return "", errors.New(fmt.Sprintf("Invalid tags: '%s'", tags))
+		return "", fmt.Errorf("invalid tags: %s", tags)
 	}
 
 	return joined, nil
@@ -174,7 +174,7 @@ func (channel *Channel) Start() error {
 	streamInfo[channel.ChannelName] = StreamInfo{IsOnline: url != "", Url: url, ChannelName: channel.ChannelName, IsTerminating: false}
 	if url == "" {
 		// Channel offline
-		return errors.New(fmt.Sprintf("no url found for channel '%s'", channel.ChannelName))
+		return fmt.Errorf("no url found for channel '%s'", channel.ChannelName)
 	}
 	if err != nil {
 		return err
@@ -506,7 +506,7 @@ func (channel *Channel) Capture(url string, skip uint) error {
 			log.Printf("[Capture] Error destroying recording: %v\n", err)
 		}
 
-		if job, err := EnqueuePreviewJob(channel.ChannelName, recording.Filename); err != nil {
+		if job, err := recording.EnqueuePreviewJob(); err != nil {
 			log.Printf("[FinishRecording] Error enqueuing job for %v\n", err)
 			return err
 		} else {

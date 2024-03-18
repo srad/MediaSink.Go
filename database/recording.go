@@ -3,9 +3,9 @@ package database
 import (
 	"errors"
 	"fmt"
+	"github.com/astaxie/beego/utils"
 	"log"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/srad/streamsink/helpers"
@@ -36,11 +36,11 @@ type Recording struct {
 	Width    uint    `json:"width" gorm:"default:0" extensions:"!x-nullable"`
 	Height   uint    `json:"height" gorm:"default:0" extensions:"!x-nullable"`
 
-	PreviewStripe  string   `json:"previewStripe" gorm:"default:null"`
-	PathRelative   string   `json:"pathRelative" gorm:"not null;"`
-	PreviewVideo   string   `json:"previewVideo" gorm:"default:null"`
-	PreviewCover   string   `json:"previewCover" gorm:"default:null"`
-	PreviewScreens []string `json:"previewScreens" gorm:"serializer:json"`
+	PreviewStripe string `json:"previewStripe" gorm:"default:null"`
+	PathRelative  string `json:"pathRelative" gorm:"not null;"`
+	PreviewVideo  string `json:"previewVideo" gorm:"default:null"`
+	PreviewCover  string `json:"previewCover" gorm:"default:null"`
+	//PreviewScreens []string `json:"previewScreens" gorm:"serializer:json"`
 }
 
 func FindByName(channelName string) ([]*Recording, error) {
@@ -133,8 +133,22 @@ func BookmarkList() ([]*Recording, error) {
 	return recordings, nil
 }
 
+func (recording *Recording) GetPaths() conf.RecordingPaths {
+	return conf.GetRecordingsPaths(recording.ChannelName, recording.Filename)
+}
+
+func (recording *Recording) PreviewsExist() bool {
+	paths := recording.GetPaths()
+
+	videoExists := utils.FileExists(paths.AbsoluteVideosPath)
+	stripeExists := utils.FileExists(paths.AbsoluteStripePath)
+	posterExists := utils.FileExists(paths.AbsolutePosterPath)
+
+	return videoExists && stripeExists && posterExists
+}
+
 func (recording *Recording) Save(videoType string) error {
-	info, err := helpers.GetVideoInfo(conf.AbsoluteChannelFilePath(recording.ChannelName, recording.Filename))
+	info, err := recording.GetVideoInfo()
 	if err != nil {
 		log.Printf("[AddRecord] GetVideoInfo() error '%s' for '%s'", err.Error(), conf.AbsoluteChannelFilePath(recording.ChannelName, recording.Filename))
 		return err
@@ -261,7 +275,8 @@ func AddIfNotExistsRecording(channelName, filename string) (*Recording, error) {
 }
 
 func (recording *Recording) GetVideoInfo() (*helpers.FFProbeInfo, error) {
-	return helpers.GetVideoInfo(conf.AbsoluteChannelFilePath(recording.ChannelName, recording.Filename))
+	video := helpers.Video{FilePath: conf.AbsoluteChannelFilePath(recording.ChannelName, recording.Filename)}
+	return video.GetVideoInfo()
 }
 
 func (recording *Recording) UpdateInfo(info *helpers.FFProbeInfo) error {
@@ -276,31 +291,31 @@ func (recording *Recording) DataFolder() string {
 	return conf.AbsoluteDataPath(recording.ChannelName)
 }
 
-func UpdatePreview(channelName, filename string) (*Recording, error) {
-	rec, err := FindRecording(channelName, filename)
+func (recording *Recording) UpdatePreview() (*Recording, error) {
+	rec, err := FindRecording(recording.ChannelName, recording.Filename)
 	if err != nil {
 		return nil, err
 	}
 
-	paths := conf.GetRecordingsPaths(channelName, filename)
+	paths := conf.GetRecordingsPaths(recording.ChannelName, recording.Filename)
 
-	screens := []string{}
-	files, err := os.ReadDir(paths.ScreensPath)
-	for _, file := range files {
-		// Only take screen files
-		if !file.IsDir() && strings.HasPrefix(file.Name(), filename) {
-			screens = append(screens, file.Name())
-		}
-	}
+	//screens := []string{}
+	//files, err := os.ReadDir(paths.ScreensPath)
+	//for _, file := range files {
+	//	// Only take screen files
+	//	if !file.IsDir() && strings.HasPrefix(file.Name(), recording.Filename) {
+	//		screens = append(screens, file.Name())
+	//	}
+	//}
 
 	rec.PreviewVideo = paths.VideosPath
 	rec.PreviewStripe = paths.StripePath
 	rec.PreviewCover = paths.CoverPath
-	rec.PreviewScreens = screens
+	//rec.PreviewScreens = screens
 
 	if err := Db.
 		Table("recordings").
-		Where("channel_name = ? AND filename = ?", channelName, filename).
+		Where("channel_name = ? AND filename = ?", recording.ChannelName, recording.Filename).
 		Save(&rec).Error; err != nil {
 		return nil, err
 	}
@@ -308,23 +323,23 @@ func UpdatePreview(channelName, filename string) (*Recording, error) {
 	return rec, nil
 }
 
-func DestroyPreviews(channelName, filename string) error {
-	paths := conf.GetRecordingsPaths(channelName, filename)
+func (recording *Recording) DestroyPreviews() error {
+	paths := conf.GetRecordingsPaths(recording.ChannelName, recording.Filename)
 
 	if err := os.Remove(paths.VideosPath); err != nil && !os.IsNotExist(err) {
-		log.Println(fmt.Sprintf("[DestroyPreviews] Error deleting '%s' from channel '%s': %v", paths.VideosPath, channelName, err))
+		log.Println(fmt.Sprintf("[DestroyPreviews] Error deleting '%s' from channel '%s': %v", paths.VideosPath, recording.ChannelName, err))
 	}
 	if err := os.Remove(paths.StripePath); err != nil && !os.IsNotExist(err) {
-		log.Println(fmt.Sprintf("[DestroyPreviews] Error deleting '%s' from channel '%s': %v", paths.StripePath, channelName, err))
+		log.Println(fmt.Sprintf("[DestroyPreviews] Error deleting '%s' from channel '%s': %v", paths.StripePath, recording.ChannelName, err))
 	}
 	if err := os.Remove(paths.CoverPath); err != nil && !os.IsNotExist(err) {
-		log.Println(fmt.Sprintf("[DestroyPreviews] Error deleting '%s' from channel '%s': %v", paths.StripePath, channelName, err))
+		log.Println(fmt.Sprintf("[DestroyPreviews] Error deleting '%s' from channel '%s': %v", paths.StripePath, recording.ChannelName, err))
 	}
-	if err := os.Remove(paths.ScreensPath); err != nil && !os.IsNotExist(err) {
-		log.Println(fmt.Sprintf("[DestroyPreviews] Error deleting '%s' from channel '%s': %v", paths.StripePath, channelName, err))
-	}
+	//if err := os.Remove(paths.ScreensPath); err != nil && !os.IsNotExist(err) {
+	//	log.Println(fmt.Sprintf("[DestroyPreviews] Error deleting '%s' from channel '%s': %v", paths.StripePath, recording.ChannelName, err))
+	//}
 
-	rec, err := FindRecording(channelName, filename)
+	rec, err := FindRecording(recording.ChannelName, recording.Filename)
 	if err != nil {
 		return err
 	}
@@ -332,7 +347,7 @@ func DestroyPreviews(channelName, filename string) error {
 	rec.PreviewVideo = ""
 	rec.PreviewStripe = ""
 	rec.PreviewCover = ""
-	rec.PreviewScreens = nil
+	//rec.PreviewScreens = nil
 
 	if err := Db.Model(&rec).Save(&rec).Error; err != nil {
 		return err

@@ -3,7 +3,6 @@ package services
 import (
 	"context"
 	"fmt"
-	"github.com/astaxie/beego/utils"
 	"github.com/srad/streamsink/conf"
 	"github.com/srad/streamsink/database"
 	"github.com/srad/streamsink/helpers"
@@ -107,14 +106,17 @@ func ImportChannels(context.Context) error {
 				continue
 			}
 
+			recording := &database.Recording{ChannelName: channelName, Filename: file.Name()}
+
 			log.Printf("  [Import] Checking recordingFolder: %s, %s", channelName, file.Name())
 
-			if _, err := helpers.GetVideoInfo(conf.AbsoluteChannelFilePath(channelName, file.Name())); err != nil {
+			video := &helpers.Video{FilePath: conf.AbsoluteChannelFilePath(channelName, file.Name())}
+			if _, err := video.GetVideoInfo(); err != nil {
 				log.Printf("    [Import] File '%s' seems corrupted, deleting ...", file.Name())
 				if err := channel.DeleteRecordingsFile(file.Name()); err != nil {
 					log.Printf("    [Import] Error deleting '%s'", file.Name())
 				} else {
-					database.DestroyPreviews(channelName, file.Name())
+					recording.DestroyPreviews()
 					log.Printf("    [Import] Deleted: %s", file.Name())
 				}
 				continue
@@ -127,18 +129,12 @@ func ImportChannels(context.Context) error {
 			// Not new record inserted and therefore not automatically new previews generated.
 			// So check if the files exist and if not generate them.
 			// Create preview if any not existent
-			paths := conf.GetRecordingsPaths(channelName, file.Name())
-			videoExists := utils.FileExists(paths.AbsoluteVideosPath)
-			stripeExists := utils.FileExists(paths.AbsoluteStripePath)
-			posterExists := utils.FileExists(paths.AbsolutePosterPath)
-			screensExist := utils.FileExists(paths.ScreensPath)
-
-			if videoExists && stripeExists && posterExists && screensExist {
+			if recording.PreviewsExist() {
 				log.Println("    [Import] Preview files exist")
-				database.UpdatePreview(channelName, file.Name())
+				recording.UpdatePreview()
 			} else {
 				log.Printf("    [Import] Adding job for %s\n", file.Name())
-				database.EnqueuePreviewJob(channelName, file.Name())
+				recording.EnqueuePreviewJob()
 			}
 		}
 	}

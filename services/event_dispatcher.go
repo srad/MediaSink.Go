@@ -6,7 +6,6 @@ import (
 
 	"github.com/srad/streamsink/database"
 	"github.com/srad/streamsink/network"
-	"github.com/srad/streamsink/workers"
 )
 
 var (
@@ -31,7 +30,7 @@ func dispatchMessages(ctx context.Context) {
 func dispatchJobInfo(ctx context.Context) {
 	for {
 		select {
-		case m := <-workers.JobInfoChannel:
+		case m := <-database.JobInfoChannel:
 			network.SendSocket(m.Name, m.Message)
 			return
 		case <-ctx.Done():

@@ -3,31 +3,21 @@ package workers
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/srad/streamsink/conf"
 	"github.com/srad/streamsink/database"
 	"github.com/srad/streamsink/helpers"
-	"github.com/srad/streamsink/network"
-	"gorm.io/gorm"
 )
 
 var (
 	sleepBetweenRounds = 1 * time.Second
-	JobInfoChannel     = make(chan network.EventMessage, 1000)
 	ctx, cancel        = context.WithCancel(context.Background())
 )
-
-type JobVideoInfo struct {
-	Packets uint64 `json:"packets"`
-	Frame   uint64 `json:"frame"`
-}
 
 func StartWorker() {
 	go processJobs(ctx)
@@ -61,7 +51,7 @@ func processJobs(ctx context.Context) {
 			}
 
 			// Previews
-			if job, err := previewJobs(); err != nil {
+			if job, err := database.PreviewJobs(); err != nil {
 				log.Printf("[processJobs] Error current job: %s", err.Error())
 			} else if job != nil {
 				log.Printf("[processJobs] Preview completed for '%s'", job.Filepath)
@@ -89,7 +79,7 @@ func conversionJobs() (*database.Job, error) {
 				log.Printf("Error updating job progress: %s", err.Error())
 			}
 
-			JobInfoChannel <- network.EventMessage{Name: "job:progress", Message: database.JobMessage{JobId: job.JobId, Data: JobVideoInfo{Packets: job.Recording.Packets, Frame: info.Frame}, Type: job.Status, ChannelName: job.ChannelName, Filename: job.Filename}}
+			database.SendJobChannel("job:progress", database.JobMessage{JobId: job.JobId, Data: database.JobVideoInfo{Packets: job.Recording.Packets, Frame: info.Frame}, Type: job.Status, ChannelName: job.ChannelName, Filename: job.Filename})
 		},
 		ChannelName: job.ChannelName,
 		Filename:    job.Filename,
@@ -113,7 +103,7 @@ func conversionJobs() (*database.Job, error) {
 	}
 
 	// All good now, save the record.
-	rec := &database.Recording{
+	recording := &database.Recording{
 		ChannelName:  job.ChannelName,
 		Filename:     result.Filename,
 		PathRelative: result.PathRelative,
@@ -121,84 +111,16 @@ func conversionJobs() (*database.Job, error) {
 		CreatedAt:    result.CreatedAt,
 	}
 	// Also, when fails, destroy it, some reason it is foul.
-	if err := rec.Save("recording"); err != nil {
+	if err := recording.Save("recording"); err != nil {
 		if err := os.Remove(result.Filepath); err != nil {
 			log.Printf("Error deleting file '%s': %s", result.Filepath, err.Error())
 			return job, err
 		}
 	} else {
-		if _, err := database.EnqueuePreviewJob(result.ChannelName, result.Filename); err != nil {
+		if _, err := recording.EnqueuePreviewJob(); err != nil {
 			log.Printf("Error enqueing preview job: %s", err.Error())
 			return job, err
 		}
-	}
-
-	return job, nil
-}
-
-// Handles one single job.
-func previewJobs() (*database.Job, error) {
-	job, err := database.GetNextJob(database.StatusPreview)
-	if job == nil || err != nil {
-		return job, err
-	}
-
-	// Delete any old previews first
-	if err := database.DestroyPreviews(job.ChannelName, job.Filename); err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
-		log.Printf("[Job] Error deleting existing previews: %s", err.Error())
-	}
-
-	log.Printf("[Job] Generating preview for '%s'", job.Filename)
-	err = job.Activate()
-	if err != nil {
-		log.Printf("[Job] Error activating job: %d", job.JobId)
-	}
-
-	conversion := &helpers.VideoConversionArgs{
-		OnStart: func(info *helpers.CommandInfo) {
-			_ = job.UpdateInfo(info.Pid, info.Command)
-			JobInfoChannel <- network.EventMessage{Name: "job:start", Message: database.JobMessage{
-				JobId:       job.JobId,
-				ChannelName: job.ChannelName,
-				Filename:    job.Filename,
-				Type:        job.Status,
-			}}
-		},
-		OnProgress: func(info *helpers.ProcessInfo) {
-			JobInfoChannel <- network.EventMessage{Name: "job:progress", Message: database.JobMessage{
-				JobId:       job.JobId,
-				ChannelName: job.ChannelName,
-				Filename:    job.Filename,
-				Data:        JobVideoInfo{Frame: info.Frame, Packets: job.Recording.Packets},
-			}}
-		},
-		ChannelName: job.ChannelName,
-		Filename:    job.Filename,
-	}
-	if result, err := GeneratePreviews(conversion); err != nil {
-		// Delete the file if it is corrupted
-		checkFileErr := helpers.CheckVideo(conf.GetRecordingsPaths(job.ChannelName, job.Filename).Filepath)
-		if checkFileErr != nil {
-			if rec, err := job.FindRecording(); err != nil {
-				_ = rec.Destroy()
-			}
-			log.Printf("[Job] File corrupted, deleting '%s', %v\n", job.Filename, checkFileErr)
-		}
-		// Since the job failed for some reason, remove it
-		_ = job.Destroy()
-
-		return job, fmt.Errorf("[Job] Error generating preview for '%s' : %v\n", job.Filename, err)
-	} else if _, err := database.UpdatePreview(result.ChannelName, result.Filename); err != nil {
-		return job, fmt.Errorf("[Job] Error adding previews: %v", err)
-	}
-
-	if _, err := job.FindRecording(); err != nil {
-		// TODO
-		// services.notify("job:preview:done", database.JobMessage{JobId: job.JobId, ChannelName: job.ChannelName, Filename: job.Filename, Data: rec})
-	}
-
-	if err := job.Destroy(); err != nil {
-		return job, fmt.Errorf("[Job] Error deleteing job: %v", err)
 	}
 
 	return job, nil
@@ -307,7 +229,8 @@ func cuttingJobs() (*database.Job, error) {
 		}
 	}
 
-	info, err := helpers.GetVideoInfo(outputFile)
+	outputVideo := &helpers.Video{FilePath: outputFile}
+	info, err := outputVideo.GetVideoInfo()
 	if err != nil {
 		log.Printf("[Job] Error reading video information for file '%s': %v", filename, err)
 	}
@@ -334,7 +257,7 @@ func cuttingJobs() (*database.Job, error) {
 	}
 
 	// Successfully added cut record, enqueue preview job
-	_, err = database.EnqueuePreviewJob(job.ChannelName, filename)
+	_, err = newRec.EnqueuePreviewJob()
 	if err != nil {
 		log.Printf("[Job] Error adding preview for cutting job %d: %v", job.JobId, err)
 		return job, err
@@ -349,14 +272,4 @@ func cuttingJobs() (*database.Job, error) {
 
 	log.Printf("[Job] Cutting job complete for '%s'", job.Filepath)
 	return job, nil
-}
-
-func GeneratePreviews(args *helpers.VideoConversionArgs) (*helpers.PreviewResult, error) {
-	inputPath := filepath.Join(conf.AppCfg.RecordingsAbsolutePath, args.ChannelName, args.Filename)
-
-	log.Println("---------------------------------------------- Preview Job ----------------------------------------------")
-	log.Println(inputPath)
-	log.Println("---------------------------------------------------------------------------------------------------------")
-
-	return helpers.CreatePreview(args, inputPath, conf.AbsoluteDataPath(args.ChannelName), conf.FrameCount, 128, 256)
 }

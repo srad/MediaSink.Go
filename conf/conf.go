@@ -53,7 +53,7 @@ type RecordingPaths struct {
 	CoverPath              string
 	JPG                    string
 	MP4                    string
-	ScreensPath            string
+	//ScreensPath            string
 }
 
 type VideoPaths struct {
@@ -89,11 +89,11 @@ func GetRecordingsPaths(channelName, filename string) RecordingPaths {
 	return RecordingPaths{
 		AbsoluteRecordingsPath: AppCfg.RecordingsAbsolutePath,
 
-		Filepath:           AbsoluteChannelFilePath(channelName, filename),
-		VideosPath:         filepath.Join(RelativeDataPath(channelName), VideosFolder, mp4),
-		StripePath:         filepath.Join(RelativeDataPath(channelName), StripesFolder, stripeJpg),
-		CoverPath:          filepath.Join(RelativeDataPath(channelName), PostersFolder, posterJpg),
-		ScreensPath:        filepath.Join(RelativeDataPath(channelName), ScreensFolder, filename),
+		Filepath:   AbsoluteChannelFilePath(channelName, filename),
+		VideosPath: filepath.Join(RelativeDataPath(channelName), VideosFolder, mp4),
+		StripePath: filepath.Join(RelativeDataPath(channelName), StripesFolder, stripeJpg),
+		CoverPath:  filepath.Join(RelativeDataPath(channelName), PostersFolder, posterJpg),
+		//ScreensPath:        filepath.Join(RelativeDataPath(channelName), ScreensFolder, filename),
 		AbsoluteVideosPath: filepath.Join(AbsoluteDataPath(channelName), VideosFolder, mp4),
 		AbsoluteStripePath: filepath.Join(AbsoluteDataPath(channelName), StripesFolder, stripeJpg),
 		AbsolutePosterPath: filepath.Join(AbsoluteDataPath(channelName), PostersFolder, posterJpg),
@@ -132,7 +132,7 @@ func Read() {
 	viper.AddConfigPath("./")       // path to look for the config file in
 	err := viper.ReadInConfig()     // Find and read the config file
 	if err != nil {                 // Handle errors reading the config file
-		panic(fmt.Errorf("Fatal error config file: %w \n", err))
+		panic(fmt.Errorf("fatal error config file: %w \n", err))
 	}
 
 	AppCfg.DbFileName = getConfString("db.filename", "DB_FILENAME")

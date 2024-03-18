@@ -52,7 +52,7 @@ func GetValue(settingKey string) (interface{}, error) {
 		return sett.SettingValue == "true", nil
 	}
 
-	return nil, errors.New(fmt.Sprintf("[GetValue] Unknown settings type: %s", sett.SettingType))
+	return nil, fmt.Errorf("unknown settings type: %s", sett.SettingType)
 }
 
 func (setting *Setting) Save() error {

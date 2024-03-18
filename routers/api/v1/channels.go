@@ -430,7 +430,7 @@ func UploadChannel(c *gin.Context) {
 	}
 
 	recording.Save("recording")
-	database.EnqueuePreviewJob(recording.ChannelName, recording.Filename)
+	recording.EnqueuePreviewJob()
 
 	appG.Response(http.StatusOK, recording)
 }

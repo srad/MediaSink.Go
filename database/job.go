@@ -3,6 +3,7 @@ package database
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"time"
 
@@ -22,8 +23,14 @@ const (
 )
 
 var (
-	jobChannel = make(chan network.EventMessage, 1000)
+	jobChannel     = make(chan network.EventMessage, 1000)
+	JobInfoChannel = make(chan network.EventMessage, 1000)
 )
+
+type JobVideoInfo struct {
+	Packets uint64 `json:"packets"`
+	Frame   uint64 `json:"frame"`
+}
 
 func SendJobChannel(name string, data interface{}) {
 	go sendChannel(name, data)
@@ -85,8 +92,8 @@ func EnqueueConversionJob(channelName, filename, filepath, mediaType string) (*J
 	return addJob(channelName, filename, filepath, StatusConvert, &mediaType)
 }
 
-func EnqueuePreviewJob(channelName, filename string) (*Job, error) {
-	return addJob(channelName, filename, conf.AbsoluteChannelFilePath(channelName, filename), StatusPreview, nil)
+func (recording *Recording) EnqueuePreviewJob() (*Job, error) {
+	return addJob(recording.ChannelName, recording.Filename, conf.AbsoluteChannelFilePath(recording.ChannelName, recording.Filename), StatusPreview, nil)
 }
 
 func EnqueueCuttingJob(channelName, filename, filepath, intervals string) (*Job, error) {
@@ -220,4 +227,73 @@ func UpdateJobInfo(jobId uint, info string) error {
 func (job *Job) Activate() error {
 	return Db.Model(&Job{}).Where("job_id = ?", job.JobId).
 		Update("active", true).Error
+}
+
+// PreviewJobs Handles one single job.
+func PreviewJobs() (*Job, error) {
+	job, err := GetNextJob(StatusPreview)
+	if job == nil || err != nil {
+		return job, err
+	}
+
+	recording := &Recording{ChannelName: job.ChannelName, Filename: job.Filename}
+
+	// Delete any old previews first
+	if err := recording.DestroyPreviews(); err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		log.Printf("[Job] Error deleting existing previews: %s", err.Error())
+	}
+
+	log.Printf("[Job] Generating preview for '%s'", job.Filename)
+	err = job.Activate()
+	if err != nil {
+		log.Printf("[Job] Error activating job: %d", job.JobId)
+	}
+
+	conversion := &helpers.VideoConversionArgs{
+		OnStart: func(info *helpers.CommandInfo) {
+			_ = job.UpdateInfo(info.Pid, info.Command)
+			SendJobChannel("job:start", JobMessage{
+				JobId:       job.JobId,
+				ChannelName: job.ChannelName,
+				Filename:    job.Filename,
+				Type:        job.Status,
+			})
+		},
+		OnProgress: func(info *helpers.ProcessInfo) {
+			SendJobChannel("job:progress", JobMessage{
+				JobId:       job.JobId,
+				ChannelName: job.ChannelName,
+				Filename:    job.Filename,
+				Data:        JobVideoInfo{Frame: info.Frame, Packets: job.Recording.Packets}})
+		},
+		ChannelName: job.ChannelName,
+		Filename:    job.Filename,
+	}
+
+	if _, errPreview := helpers.GeneratePreviews(conversion); errPreview != nil {
+		// Delete the file if it is corrupted
+		checkFileErr := helpers.CheckVideo(conf.GetRecordingsPaths(job.ChannelName, job.Filename).Filepath)
+		if checkFileErr != nil {
+			if rec, errJob := job.FindRecording(); errJob != nil {
+				_ = rec.Destroy()
+			}
+			log.Printf("[Job] File corrupted, deleting '%s', %v\n", job.Filename, checkFileErr)
+		}
+		// Since the job failed for some reason, remove it
+		_ = job.Destroy()
+
+		return job, fmt.Errorf("[Job] Error generating preview for '%s' : %v\n", job.Filename, errPreview)
+	} else if _, err := recording.UpdatePreview(); err != nil {
+		return job, fmt.Errorf("[Job] Error adding previews: %v", err)
+	}
+
+	if _, errFind := job.FindRecording(); errFind != nil {
+		SendJobChannel("job:preview:done", JobMessage{JobId: job.JobId, ChannelName: job.ChannelName, Filename: job.Filename})
+	}
+
+	if errDestroy := job.Destroy(); errDestroy != nil {
+		return job, fmt.Errorf("[Job] Error deleteing job: %v", errDestroy)
+	}
+
+	return job, nil
 }

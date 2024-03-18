@@ -13,10 +13,12 @@ var (
 	basefolder          = filepath.Dir(filestring)
 	file                = filepath.Join(basefolder, "..", "assets", "test.mp4")
 	outputPath          = filepath.Join(basefolder, "..", "assets")
+	video               = helpers.Video{FilePath: file}
 )
 
 func TestGetFrameCount(t *testing.T) {
-	count, err := helpers.GetFrameCount(file)
+	video := &helpers.Video{FilePath: file}
+	count, err := video.GetFrameCount()
 	if err != nil {
 		t.Errorf("error computing framecount: %v", err)
 	}
@@ -27,7 +29,7 @@ func TestGetFrameCount(t *testing.T) {
 }
 
 func TestGetVideoInfo(t *testing.T) {
-	info, err := helpers.GetVideoInfo(file)
+	info, err := video.GetVideoInfo()
 	if err != nil {
 		t.Errorf("error when getting video duration: %v", err)
 	}

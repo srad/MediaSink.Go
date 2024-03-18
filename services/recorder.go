@@ -160,7 +160,9 @@ func GeneratePosters() error {
 		filepath := rec.FilePath()
 		log.Printf("[] %s (%d/%d)", filepath, i, count)
 
-		if err := helpers.CreatePreviewPoster(filepath, rec.DataFolder(), helpers.FileNameWithoutExtension(rec.Filename)+".jpg"); err != nil {
+		video := &helpers.Video{FilePath: filepath}
+
+		if err := video.CreatePreviewPoster(rec.DataFolder(), helpers.FileNameWithoutExtension(rec.Filename)+".jpg"); err != nil {
 			log.Printf("[GeneratePosters] Error creating poster: %s", err.Error())
 		}
 		i++

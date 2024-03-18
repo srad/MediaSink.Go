@@ -35,7 +35,8 @@ func AddJob(c *gin.Context) {
 		return
 	}
 
-	job, err := database.EnqueuePreviewJob(channelName, filename)
+	recording := &database.Recording{ChannelName: channelName, Filename: filename}
+	job, err := recording.EnqueuePreviewJob()
 	if err != nil {
 		appG.Response(http.StatusInternalServerError, err)
 		return

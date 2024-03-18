@@ -157,7 +157,8 @@ func GeneratePreview(c *gin.Context) {
 	channelName := c.Param("channelName")
 	filename := c.Param("filename")
 
-	job, err := database.EnqueuePreviewJob(channelName, filename)
+	recording := &database.Recording{ChannelName: channelName, Filename: filename}
+	job, err := recording.EnqueuePreviewJob()
 	if err != nil {
 		appG.Response(http.StatusInternalServerError, err)
 		return
