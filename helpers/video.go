@@ -293,22 +293,22 @@ func (video *Video) CreatePreview(args *VideoConversionArgs, outputDir string, e
 }
 
 // CreatePreviewShots Create a separate preview image file, at every frame distance.
-func (video *Video) CreatePreviewShots(errListener func(s string), outputDir string, filename string, frameDistance uint, frameHeight uint, fps float64) (string, error) {
-	dirPreview := filepath.Join(outputDir, conf.ScreensFolder, filename)
-	if err := os.MkdirAll(dirPreview, 0777); err != nil {
-		return dirPreview, err
-	}
-
-	outFile := fmt.Sprintf("%s_%%010d.jpg", filename)
-
-	return dirPreview, ExecSync(&ExecArgs{
-		OnPipeErr: func(info PipeMessage) {
-			errListener(info.Output)
-		},
-		Command:     "ffmpeg",
-		CommandArgs: []string{"-i", video.FilePath, "-y", "-progress", "pipe:2", "-q:v", "0", "-threads", fmt.Sprint(conf.ThreadCount), "-an", "-vf", fmt.Sprintf("select=not(mod(n\\,%d)),scale=-2:%d", frameDistance, frameHeight), "-hide_banner", "-loglevel", "error", "-stats", "-fps_mode", "vfr", filepath.Join(dirPreview, outFile)},
-	})
-}
+//func (video *Video) CreatePreviewShots(errListener func(s string), outputDir string, filename string, frameDistance uint, frameHeight uint, fps float64) (string, error) {
+//	dirPreview := filepath.Join(outputDir, conf.ScreensFolder, filename)
+//	if err := os.MkdirAll(dirPreview, 0777); err != nil {
+//		return dirPreview, err
+//	}
+//
+//	outFile := fmt.Sprintf("%s_%%010d.jpg", filename)
+//
+//	return dirPreview, ExecSync(&ExecArgs{
+//		OnPipeErr: func(info PipeMessage) {
+//			errListener(info.Output)
+//		},
+//		Command:     "ffmpeg",
+//		CommandArgs: []string{"-i", video.FilePath, "-y", "-progress", "pipe:2", "-q:v", "0", "-threads", fmt.Sprint(conf.ThreadCount), "-an", "-vf", fmt.Sprintf("select=not(mod(n\\,%d)),scale=-2:%d", frameDistance, frameHeight), "-hide_banner", "-loglevel", "error", "-stats", "-fps_mode", "vfr", filepath.Join(dirPreview, outFile)},
+//	})
+//}
 
 // GetFrameCount This requires an entire video passthrough
 func (video *Video) GetFrameCount() (uint64, error) {

@@ -17,9 +17,9 @@ const (
 	VideosFolder  = "videos"
 	StripesFolder = "stripes"
 	PostersFolder = "posters"
-	ScreensFolder = "screens"
-	winFont       = "C\\\\:/Windows/Fonts/DMMono-Regular.ttf"
-	linuxFont     = "/usr/share/fonts/truetype/DMMono-Regular.ttf"
+	//ScreensFolder = "screens"
+	winFont   = "C\\\\:/Windows/Fonts/DMMono-Regular.ttf"
+	linuxFont = "/usr/share/fonts/truetype/DMMono-Regular.ttf"
 	// FrameCount Number of extracted frames or timeline/preview
 	FrameCount       = 96
 	FrameWidth       = "480"

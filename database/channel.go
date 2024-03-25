@@ -418,7 +418,7 @@ func (channel *Channel) DestroyData() {
 
 func (channel *Channel) NewRecording() (Recording, string) {
 	filename, timestamp := helpers.CreateRecordingName(channel.ChannelName)
-	relativePath := filepath.Join("recordings", channel.ChannelName, filename)
+	relativePath := filepath.Join(channel.ChannelName, filename)
 	outputFile := filepath.Join(conf.AppCfg.RecordingsAbsolutePath, channel.ChannelName, filename)
 
 	return Recording{ChannelName: channel.ChannelName, Filename: filename, Duration: 0, Bookmark: false, CreatedAt: timestamp, PathRelative: relativePath}, outputFile
