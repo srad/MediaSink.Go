@@ -24,7 +24,7 @@ func Init() {
 			DSN: dsn,
 			// PreferSimpleProtocol: true, // disables implicit prepared statement usage
 		}), &gorm.Config{
-			Logger: logger.Default.LogMode(logger.Silent),
+			Logger: logger.Default.LogMode(logger.Error),
 		})
 		if err != nil {
 			panic("failed to connect database")
@@ -32,9 +32,10 @@ func Init() {
 		Db = db
 	} else {
 		// SQLite3
+		fmt.Printf("Opening database: %s", conf.AppCfg.DbFileName)
 		db, err := gorm.Open(sqlite.Open(conf.AppCfg.DbFileName), &gorm.Config{
 			DisableForeignKeyConstraintWhenMigrating: true,
-			Logger:                                   logger.Default.LogMode(logger.Silent),
+			Logger:                                   logger.Default.LogMode(logger.Error),
 		})
 		if err != nil {
 			panic("failed to connect database")
