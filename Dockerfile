@@ -7,7 +7,7 @@ RUN echo "deb http://ftp.de.debian.org/debian/ bookworm main contrib non-free" |
 RUN echo "deb-src http://ftp.de.debian.org/debian/ bookworm main contrib non-free" | tee -a /etc/apt/sources.list
 
 RUN apt-get update && apt-get upgrade -y
-RUN DEBIAN_FRONTEND=noninteractive apt-get install sqlite3 python3 python3-pip locales -y
+RUN DEBIAN_FRONTEND=noninteractive apt-get install build-essential libsqlite3-dev sqlite3 python3 python3-pip locales -y
 RUN sed -i -e 's/# en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen && \
     dpkg-reconfigure --frontend=noninteractive locales && \
     update-locale LANG=en_US.UTF-8
@@ -97,6 +97,8 @@ RUN go mod vendor
 
 # https://github.com/mattn/go-sqlite3/issues/803
 RUN GOFLAGS="-g -O2 -Wno-return-local-addr"
+
+ENV CGO_ENABLED=1
 
 ARG TARGETOS TARGETARCH
 RUN GOOS=$TARGETOS GOARCH=$TARGETARCH go build -o ./streamsink
