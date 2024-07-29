@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"os/signal"
@@ -10,14 +9,21 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/srad/streamsink/conf"
-	"github.com/srad/streamsink/database"
+	log "github.com/sirupsen/logrus"
+	"github.com/srad/streamsink/models"
 	"github.com/srad/streamsink/routers"
 	"github.com/srad/streamsink/services"
-	"github.com/srad/streamsink/workers"
+)
+
+var (
+	WarningLog *log.Logger
+	InfoLog    *log.Logger
+	ErrorLog   *log.Logger
 )
 
 func main() {
+	log.SetFormatter(&log.TextFormatter{})
+
 	c := make(chan os.Signal)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
 	go func() {
@@ -26,20 +32,19 @@ func main() {
 		os.Exit(1)
 	}()
 
-	conf.Read()
-	database.Init()
-	// model.StartMetrics(conf.AppCfg.NetworkDev)
+	models.Init()
+	// models.StartMetrics(conf.AppCfg.NetworkDev)
 	setupFolders()
 
 	services.StartDispatch()
 	services.StartUpJobs()
 	services.StartRecorder()
-	workers.StartWorker()
+	models.StartWorker()
 
 	gin.SetMode("release")
 	endPoint := fmt.Sprintf("0.0.0.0:%d", 3000)
 
-	log.Printf("[main] start http server listening %s", endPoint)
+	log.Infof("[main] start http server listening %s", endPoint)
 
 	server := &http.Server{
 		Addr:           endPoint,
@@ -53,7 +58,7 @@ func main() {
 		if err := server.ListenAndServe(); err != nil {
 			log.Fatalln(err)
 		} else {
-			log.Printf("[main] start http server listening %s", endPoint)
+			log.Infof("[main] start http server listening %s", endPoint)
 		}
 	}()
 
@@ -61,20 +66,20 @@ func main() {
 }
 
 func cleanup() {
-	log.Println("cleanup ...")
-	workers.StopWorker()
+	log.Infoln("cleanup ...")
+	models.StopWorker()
 	services.StopRecorder()
 	services.StopDispatch()
-	log.Println("cleanup complete")
+	log.Infoln("cleanup complete")
 }
 
 func setupFolders() {
-	channels, err := database.ChannelList()
+	channels, err := models.ChannelList()
 	if err != nil {
-		fmt.Println(err)
+		log.Errorln(err)
 		return
 	}
 	for _, channel := range channels {
-		conf.MakeChannelFolders(channel.ChannelName)
+		channel.ChannelName.MkDir()
 	}
 }

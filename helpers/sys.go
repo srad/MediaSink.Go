@@ -5,7 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
+	log "github.com/sirupsen/logrus"
 	"os"
 	"os/exec"
 	"strconv"
@@ -44,10 +44,10 @@ type SysInfo struct {
 }
 
 type DiskInfo struct {
-	Size  string `json:"size"`
-	Used  string `json:"used"`
-	Avail string `json:"avail"`
-	Pcent string `json:"pcent"`
+	SizeFormattedGb  string `json:"sizeFormattedGb"`
+	UsedFormattedGb  string `json:"usedFormattedGb"`
+	AvailFormattedGb string `json:"availFormattedGb"`
+	Pcent            string `json:"pcent"`
 }
 
 type NetInfo struct {
@@ -88,13 +88,13 @@ func (execArgs *ExecArgs) ToString() string {
 // ExecSync See: https://stackoverflow.com/questions/10385551/get-exit-code-go
 func ExecSync(execArgs *ExecArgs) error {
 	c := exec.Command(execArgs.Command, execArgs.CommandArgs...)
-	log.Println("Executing: ", execArgs.ToString())
+	log.Infof("Executing: %s", execArgs.ToString())
 
 	// stdout, _ := cmd.StdoutPipe()
 	sterr, _ := c.StderrPipe()
 
 	if err := c.Start(); err != nil {
-		log.Printf("cmd.Start: %v", err)
+		log.Infof("cmd.Start: %s", err)
 		return err
 	}
 
@@ -191,9 +191,6 @@ func cpuMeasures() ([]CPUMeasure, error) {
 	rows := strings.Split(string(out), "\n")
 	var measures []CPUMeasure
 
-	if err != nil {
-		return nil, err
-	}
 	// i := 1, skip first row, calculate individual cpus
 	for _, row := range rows {
 		cols := strings.Fields(row)
@@ -243,7 +240,7 @@ func DiskUsage(path string) (*DiskInfo, error) {
 	lines := strings.Split(out, "\n")
 	parts := strings.Fields(lines[1])
 
-	return &DiskInfo{Size: parts[0], Used: parts[1], Avail: parts[2], Pcent: parts[3]}, nil
+	return &DiskInfo{SizeFormattedGb: parts[0], UsedFormattedGb: parts[1], AvailFormattedGb: parts[2], Pcent: parts[3]}, nil
 }
 
 func NetMeasure(networkDev string, measureSeconds uint64) (*NetInfo, error) {

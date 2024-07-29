@@ -7,7 +7,7 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-// For windows, process kill, see: https://github.com/mattn/goreman/blob/e9150e84f13c37dff0a79b8faed5b86522f3eb8e/proc_windows.go#L16-L51
+// TerminateProc For windows, process kill, see: https://github.com/mattn/goreman/blob/e9150e84f13c37dff0a79b8faed5b86522f3eb8e/proc_windows.go#L16-L51
 func TerminateProc(channelName string) error {
 	dll, err := windows.LoadDLL("kernel32.dll")
 	if err != nil {

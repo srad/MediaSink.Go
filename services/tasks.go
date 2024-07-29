@@ -3,17 +3,16 @@ package services
 import (
 	"errors"
 	"fmt"
-	"github.com/srad/streamsink/conf"
-	"github.com/srad/streamsink/database"
+	log "github.com/sirupsen/logrus"
 	"github.com/srad/streamsink/helpers"
+	"github.com/srad/streamsink/models"
 	"gorm.io/gorm"
-	"log"
 	"os"
 	"time"
 )
 
 func StartUpJobs() error {
-	log.Println("[StartUpJobs] Running startup job ...")
+	log.Infoln("[StartUpJobs] Running startup job ...")
 
 	deleteChannels()
 	StartImport()
@@ -23,15 +22,15 @@ func StartUpJobs() error {
 }
 
 func deleteChannels() error {
-	channels, err := database.ChannelList()
+	channels, err := models.ChannelList()
 	if err != nil {
-		log.Printf("[DeleteChannels] ChannelList error: %s", err.Error())
+		log.Errorf("[DeleteChannels] ChannelList error: %s", err)
 		return err
 	}
 
 	for _, channel := range channels {
 		if channel.Deleted {
-			log.Printf("[DeleteChannels] Deleting channel : %s", channel.ChannelName)
+			log.Infof("[DeleteChannels] Deleting channel : %s", channel.ChannelName)
 			channel.Destroy()
 		}
 	}
@@ -41,43 +40,43 @@ func deleteChannels() error {
 
 // FixOrphanedRecordings Go through all open jobs with status "recording" and complete them.
 func fixOrphanedRecordings() {
-	log.Println("Fixing orphaned recordings ...")
-	jobs, err := database.GetJobsByStatus(database.StatusRecording)
+	log.Infoln("Fixing orphaned recordings ...")
+	jobs, err := models.GetJobsByStatus(models.StatusRecording)
 
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		log.Printf("No jobs with status '%s' found\n", database.StatusRecording)
+		log.Infof("No jobs with status '%s' found", models.StatusRecording)
 		return
 	}
 	// Other errors
 	if err != nil {
-		log.Printf("Error getting jobs: %v\n", err)
+		log.Errorf("Error getting jobs: %s", err)
 		return
 	}
 
 	// Check for orphaned videos
 	for _, job := range jobs {
-		log.Printf("Handling Job #%d of '%s/%s'", job.JobId, job.Filepath, job.Filename)
+		log.Errorf("Handling Job #%d of '%s/%s'", job.JobId, job.Filepath, job.Filename)
 		err := helpers.CheckVideo(job.Filepath)
 		if err != nil {
-			log.Printf("The file '%s' is corrupted, deleting from disk and job queue: %v\n", job.Filename, err)
+			log.Errorf("The file '%s' is corrupted, deleting from disk and job queue: %s", job.Filename, err)
 			job.Destroy()
 			if err := os.Remove(job.Filepath); err != nil && !errors.Is(err, os.ErrNotExist) {
-				log.Println(fmt.Sprintf("Error deleting recording: %v", err))
+				log.Errorf(fmt.Sprintf("Error deleting recording: %s", err))
 				continue
 			}
-			log.Printf("Deleted file '%s'", job.Filename)
+			log.Errorf("Deleted file '%s'", job.Filename)
 		} else {
-			rec := &database.Recording{
+			rec := &models.Recording{
 				ChannelName:  job.ChannelName,
 				Duration:     0,
 				Filename:     job.Filename,
-				PathRelative: conf.ChannelPath(job.ChannelName, job.Filename),
+				PathRelative: job.ChannelName.ChannelPath(job.Filename),
 				Bookmark:     false,
 				CreatedAt:    time.Now(),
 			}
-			rec.Save("recording")
+			rec.Create()
 			job.Destroy()
-			log.Printf("Added recording for '%s' and deleted orphaned recording job\n", job.Filename)
+			log.Infof("Added recording for '%s' and deleted orphaned recording job", job.Filename)
 		}
 	}
 }

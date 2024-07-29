@@ -1,41 +1,36 @@
 package v1
 
 import (
+	"github.com/srad/streamsink/helpers"
 	"net/http"
 	"strconv"
-	"strings"
-
-	"github.com/srad/streamsink/helpers"
 
 	"github.com/gin-gonic/gin"
 	"github.com/srad/streamsink/app"
-	"github.com/srad/streamsink/database"
+	"github.com/srad/streamsink/models"
 )
 
 // AddJob godoc
 // @Summary     Enqueue a preview job
 // @Description Enqueue a preview job for a video in a channel. For now only preview jobs allowed via REST
 // @Tags        jobs
-// @Param       channelName path string  true  "Channel name"
-// @Param       filename    path string  true  "Filename in channel"
+// @Param       id path string  true  "Recording item id"
 // @Accept      json
 // @Produce     json
-// @Success     200 {object} database.Job
+// @Success     200 {object} models.Job
 // @Failure     400 {} http.StatusBadRequest
 // @Failure     500 {} http.StatusInternalServerError
-// @Router      /jobs/{channelName}/{filename} [post]
+// @Router      /jobs/{id} [post]
 func AddJob(c *gin.Context) {
 	appG := app.Gin{C: c}
 
-	channelName := strings.ToLower(strings.TrimSpace(c.Param("channelName")))
-	filename := strings.ToLower(strings.TrimSpace(c.Param("filename")))
-
-	if channelName == "" || filename == "" {
-		appG.Response(http.StatusBadRequest, nil)
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		appG.Response(http.StatusBadRequest, err)
 		return
 	}
 
-	recording := &database.Recording{ChannelName: channelName, Filename: filename}
+	recording := models.Recording{RecordingId: uint(id)}
 	job, err := recording.EnqueuePreviewJob()
 	if err != nil {
 		appG.Response(http.StatusInternalServerError, err)
@@ -49,7 +44,7 @@ func AddJob(c *gin.Context) {
 // @Summary     Interrupt job gracefully
 // @Description Interrupt job gracefully
 // @Tags        jobs
-// @Param       pid path int  true  "Channel name"
+// @Param       pid path int  true  "Process ID"
 // @Accept      json
 // @Produce     json
 // @Success     200
@@ -65,7 +60,7 @@ func StopJob(c *gin.Context) {
 		return
 	}
 
-	if helpers.Interrupt(pid); err != nil {
+	if err := helpers.Interrupt(pid); err != nil {
 		appG.Response(http.StatusInternalServerError, err)
 		return
 	}
@@ -93,13 +88,16 @@ func DestroyJob(c *gin.Context) {
 		return
 	}
 
-	job, err := database.FindJobById(id)
+	job, err := models.FindJobById(id)
 	if err != nil {
 		appG.Response(http.StatusBadRequest, err)
 		return
 	}
 
-	job.Destroy()
+	if errDestroy := job.Destroy(); errDestroy != nil {
+		appG.Response(http.StatusInternalServerError, errDestroy.Error())
+		return
+	}
 
 	appG.Response(http.StatusOK, id)
 }
@@ -110,12 +108,12 @@ func DestroyJob(c *gin.Context) {
 // @Tags        jobs
 // @Accept      json
 // @Produce     json
-// @Success     200 {object} []database.Job
+// @Success     200 {object} []models.Job
 // @Failure     500 {}  http.StatusInternalServerError
 // @Router      /jobs [get]
 func GetJobs(c *gin.Context) {
 	appG := app.Gin{C: c}
-	jobs, err := database.JobList()
+	jobs, err := models.JobList()
 
 	if err != nil {
 		appG.Response(http.StatusInternalServerError, err)

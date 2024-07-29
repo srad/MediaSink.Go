@@ -1,12 +1,12 @@
 package network
 
 import (
-	"log"
 	"net/http"
 	"sync"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
+	log "github.com/sirupsen/logrus"
 )
 
 var (
@@ -41,7 +41,7 @@ func (d *wsDispatcher) addWs(ws wsConnection) {
 func (d *wsDispatcher) notify(msg SocketEvent) {
 	for _, l := range d.listeners {
 		if err := l.send(msg); err != nil {
-			log.Printf("[notify] %v", err)
+			log.Errorf("[notify] %s", err)
 		}
 	}
 }
@@ -85,13 +85,13 @@ func WsHandler(c *gin.Context) {
 	defer ws.Close()
 
 	if err != nil {
-		log.Printf("error get connection: %v", err)
+		log.Errorf("error get connection: %s", err)
 		return
 	}
 
 	dispatcher.addWs(wsConnection{ws: ws})
 	ws.SetCloseHandler(func(code int, text string) error {
-		log.Println("[WsHandler] Removing ws")
+		log.Infoln("[WsHandler] Removing ws")
 		dispatcher.rmWs(ws)
 		return nil
 	})
@@ -100,9 +100,9 @@ func WsHandler(c *gin.Context) {
 		msg := &SocketEvent{}
 		err := ws.ReadJSON(&msg)
 		if err != nil {
-			log.Printf("[WsHandler] error read message: %v", err)
+			log.Errorf("[WsHandler] error read message: %s", err)
 			return
 		}
-		log.Printf("[Socket] %v", msg)
+		log.Infof("[Socket] %v", msg)
 	}
 }

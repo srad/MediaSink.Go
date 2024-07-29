@@ -23,17 +23,18 @@ import (
 // @Router      /info/{seconds} [get]
 func GetInfo(c *gin.Context) {
 	appG := app.Gin{C: c}
+	cfg := conf.Read()
 
 	secs := c.Param("seconds")
 	val, err := strconv.ParseUint(secs, 10, 64)
 	if err != nil {
-		appG.Response(http.StatusInternalServerError, err.Error())
+		appG.Response(http.StatusInternalServerError, err)
 	}
 
-	data, err := helpers.Info(conf.AppCfg.DataDisk, conf.AppCfg.NetworkDev, val)
+	data, err := helpers.Info(cfg.DataDisk, cfg.NetworkDev, val)
 
 	if err != nil {
-		appG.Response(http.StatusInternalServerError, err.Error())
+		appG.Response(http.StatusInternalServerError, err)
 		return
 	}
 
@@ -52,10 +53,12 @@ func GetInfo(c *gin.Context) {
 func GetDiskInfo(c *gin.Context) {
 	appG := app.Gin{C: c}
 
-	info, err := helpers.DiskUsage(conf.AppCfg.DataDisk)
+	cfg := conf.Read()
+
+	info, err := helpers.DiskUsage(cfg.DataDisk)
 
 	if err != nil {
-		appG.Response(http.StatusInternalServerError, err.Error())
+		appG.Response(http.StatusInternalServerError, err)
 		return
 	}
 

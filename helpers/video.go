@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"os"
 	"os/exec"
 	"path"
@@ -14,7 +13,14 @@ import (
 	"time"
 
 	"github.com/astaxie/beego/utils"
+	log "github.com/sirupsen/logrus"
 	"github.com/srad/streamsink/conf"
+)
+
+var (
+	VideosFolder  = "videos"
+	StripesFolder = "stripes"
+	PostersFolder = "posters"
 )
 
 // Video Represent a video to which operations can be applied.
@@ -33,11 +39,12 @@ type CutArgs struct {
 }
 
 type VideoConversionArgs struct {
-	OnStart     func(*CommandInfo)
-	OnProgress  func(*ProcessInfo)
-	OnEnd       func()
-	ChannelName string
-	Filename    string
+	OnStart    func(*CommandInfo)
+	OnProgress func(*ProcessInfo)
+	OnEnd      func()
+	InputPath  string
+	OutputPath string
+	Filename   string
 }
 
 type ProcessInfo struct {
@@ -72,23 +79,21 @@ type FFProbeInfo struct {
 }
 
 type ConversionResult struct {
-	ChannelName  string
-	Filename     string
-	PathRelative string
-	Filepath     string
-	CreatedAt    time.Time
+	ChannelName string
+	Filename    string
+	Filepath    string
+	CreatedAt   time.Time
 }
 
 type PreviewResult struct {
 	//ScreensPath    string
 	StripeFilePath string
 	VideoFilePath  string
-	ChannelName    string
 	Filename       string
 }
 
 func (video *Video) CreatePreviewStripe(errListener func(string), outputDir, outFile string, frameDistance, frameHeight uint, fps float64) error {
-	dir := filepath.Join(video.FilePath, conf.StripesFolder)
+	dir := filepath.Join(outputDir, StripesFolder)
 	if err := os.MkdirAll(dir, 0777); err != nil {
 		return err
 	}
@@ -105,7 +110,7 @@ func (video *Video) CreatePreviewStripe(errListener func(string), outputDir, out
 }
 
 func (video *Video) CreatePreviewPoster(outputDir, filename string) error {
-	dirPoster := filepath.Join(outputDir, conf.PostersFolder)
+	dirPoster := filepath.Join(outputDir, PostersFolder)
 	if err := os.MkdirAll(dirPoster, 0777); err != nil {
 		return err
 	}
@@ -114,7 +119,7 @@ func (video *Video) CreatePreviewPoster(outputDir, filename string) error {
 }
 
 func (video *Video) CreatePreviewVideo(pipeInfo func(info PipeMessage), outputDir, outFile string, frameDistance, frameHeight uint, fps float64) (string, error) {
-	dir := filepath.Join(outputDir, conf.VideosFolder)
+	dir := filepath.Join(outputDir, VideosFolder)
 	if err := os.MkdirAll(dir, 0777); err != nil {
 		return "", err
 	}
@@ -155,30 +160,27 @@ func ExtractFirstFrame(input, height, outputPathPoster string) error {
 	})
 
 	if err != nil {
-		return fmt.Errorf("[ExtractFirstFrame] Error extracting frame: %v", err.Error())
+		return fmt.Errorf("error extracting frame '%s'", err)
 	}
 
 	return nil
 }
 
 func ConvertVideo(args *VideoConversionArgs, mediaType string) (*ConversionResult, error) {
-	absoluteChannelFolder := conf.AbsoluteChannelPath(args.ChannelName)
-	input := filepath.Join(absoluteChannelFolder, args.Filename)
+	input := filepath.Join(args.OutputPath, args.Filename)
 	if !utils.FileExists(input) {
-		return nil, fmt.Errorf("file %s does not exit", input)
+		return nil, fmt.Errorf("file '%s' does not exit", input)
 	}
 
 	// Might seem redundant, but since we have no dependent types...
 	if mediaType == "mp3" {
 		mp3Filename := fmt.Sprintf("%s.mp3", FileNameWithoutExtension(args.Filename))
-		outputAbsoluteMp3 := filepath.Join(absoluteChannelFolder, mp3Filename)
+		outputAbsoluteMp3 := filepath.Join(args.OutputPath, mp3Filename)
 
 		result := &ConversionResult{
-			ChannelName:  args.ChannelName,
-			Filename:     mp3Filename,
-			PathRelative: conf.ChannelPath(args.ChannelName, mp3Filename),
-			CreatedAt:    time.Now(),
-			Filepath:     outputAbsoluteMp3,
+			Filename:  mp3Filename,
+			CreatedAt: time.Now(),
+			Filepath:  outputAbsoluteMp3,
 		}
 
 		err := ExecSync(&ExecArgs{
@@ -196,14 +198,12 @@ func ConvertVideo(args *VideoConversionArgs, mediaType string) (*ConversionResul
 		// video, anything else is a resolution
 		// Create new filename
 		name := fmt.Sprintf("%s_%s.mp4", FileNameWithoutExtension(args.Filename), mediaType)
-		output := filepath.Join(absoluteChannelFolder, name)
+		output := filepath.Join(args.OutputPath, name)
 
 		result := &ConversionResult{
-			ChannelName:  args.ChannelName,
-			Filename:     name,
-			PathRelative: conf.ChannelPath(args.ChannelName, name),
-			CreatedAt:    time.Now(),
-			Filepath:     output,
+			Filename:  name,
+			CreatedAt: time.Now(),
+			Filepath:  output,
 		}
 
 		err := ExecSync(&ExecArgs{
@@ -239,10 +239,10 @@ func ConvertVideo(args *VideoConversionArgs, mediaType string) (*ConversionResul
 	}
 }
 
-func (video *Video) CreatePreview(args *VideoConversionArgs, outputDir string, extractCount int, frameHeight, videoHeight uint) (*PreviewResult, error) {
+func (video *Video) CreatePreview(args *VideoConversionArgs, extractCount int, frameHeight, videoHeight uint) (*PreviewResult, error) {
 	totalFrameCount, err := video.GetFrameCount()
 	if err != nil {
-		return nil, fmt.Errorf("error getting frame count for %s: %s", video.FilePath, err.Error())
+		return nil, fmt.Errorf("error getting frame count for %s '%s'", video.FilePath, err)
 	}
 
 	info, err := video.GetVideoInfo()
@@ -256,10 +256,10 @@ func (video *Video) CreatePreview(args *VideoConversionArgs, outputDir string, e
 
 	if err := video.CreatePreviewStripe(func(s string) {
 		if strings.Contains(s, "frame") {
-			log.Printf("[createPreviewStripe] %s", s)
+			log.Infof("[createPreviewStripe] %s", s)
 		}
-	}, outputDir, filename+".jpg", frameDistance, frameHeight, info.Fps); err != nil {
-		return nil, fmt.Errorf("error generating stripe for '%s': %s", video.FilePath, err.Error())
+	}, args.OutputPath, filename+".jpg", frameDistance, frameHeight, info.Fps); err != nil {
+		return nil, fmt.Errorf("error generating stripe for '%s': %s", video.FilePath, err)
 	}
 
 	//dir, err := video.CreatePreviewShots(func(s string) {}, outputDir, filename, frameDistance, frameHeight, info.Fps)
@@ -273,22 +273,21 @@ func (video *Video) CreatePreview(args *VideoConversionArgs, outputDir string, e
 			args.OnProgress(&ProcessInfo{Frame: i, Raw: info.Output, Total: extractCount})
 			i++
 		}
-	}, outputDir, filename+".mp4", frameDistance, videoHeight, info.Fps)
+	}, args.OutputPath, filename+".mp4", frameDistance, videoHeight, info.Fps)
 
 	if err != nil {
-		return nil, fmt.Errorf("error generating preview video for %s: %s", video.FilePath, err.Error())
+		return nil, fmt.Errorf("error generating preview video for %s: %s", video.FilePath, err)
 	}
 
-	if err := video.CreatePreviewPoster(outputDir, filename+".jpg"); err != nil {
-		return nil, fmt.Errorf("error generating poster for '%s': %s", video.FilePath, err.Error())
+	if err := video.CreatePreviewPoster(args.OutputPath, filename+".jpg"); err != nil {
+		return nil, fmt.Errorf("error generating poster for '%s': %s", video.FilePath, err)
 	}
 
 	return &PreviewResult{
-		ChannelName: args.ChannelName,
-		Filename:    args.Filename,
+		Filename: args.Filename,
 		//ScreensPath:    dir,
 		VideoFilePath:  previewVideoDir,
-		StripeFilePath: path.Join(outputDir, filename+".jpg"),
+		StripeFilePath: path.Join(args.OutputPath, filename+".jpg"),
 	}, nil
 }
 
@@ -391,10 +390,10 @@ func (video *Video) GetVideoInfo() (*FFProbeInfo, error) {
 }
 
 func MergeVideos(outputListener func(string), absoluteMergeTextfile, absoluteOutputFilepath string) error {
-	log.Println("---------------------------------------------- Merge Job ----------------------------------------------")
-	log.Println(absoluteMergeTextfile)
-	log.Println(absoluteOutputFilepath)
-	log.Println("---------------------------------------------------------------------------------------------------------")
+	log.Infoln("---------------------------------------------- Merge Job ----------------------------------------------")
+	log.Infoln(absoluteMergeTextfile)
+	log.Infoln(absoluteOutputFilepath)
+	log.Infoln("---------------------------------------------------------------------------------------------------------")
 
 	return ExecSync(&ExecArgs{
 		Command:     "ffmpeg",
@@ -409,12 +408,12 @@ func MergeVideos(outputListener func(string), absoluteMergeTextfile, absoluteOut
 }
 
 func CutVideo(args *CuttingJob, absoluteFilepath, absoluteOutputFilepath, startIntervals, endIntervals string) error {
-	log.Println("---------------------------------------------- Cutting Job ----------------------------------------------")
-	log.Println(absoluteFilepath)
-	log.Println(absoluteOutputFilepath)
-	log.Println(startIntervals)
-	log.Println(endIntervals)
-	log.Println("---------------------------------------------------------------------------------------------------------")
+	log.Infoln("---------------------------------------------- Cutting Job ----------------------------------------------")
+	log.Infoln(absoluteFilepath)
+	log.Infoln(absoluteOutputFilepath)
+	log.Infoln(startIntervals)
+	log.Infoln(endIntervals)
+	log.Infoln("---------------------------------------------------------------------------------------------------------")
 
 	return ExecSync(&ExecArgs{
 		Command:     "ffmpeg",
@@ -450,13 +449,11 @@ func CheckVideo(filepath string) error {
 }
 
 func GeneratePreviews(args *VideoConversionArgs) (*PreviewResult, error) {
-	inputPath := filepath.Join(conf.AppCfg.RecordingsAbsolutePath, args.ChannelName, args.Filename)
+	log.Infoln("---------------------------------------------- Preview Job ----------------------------------------------")
+	log.Infoln(args.InputPath, args.Filename)
+	log.Infoln("---------------------------------------------------------------------------------------------------------")
 
-	log.Println("---------------------------------------------- Preview Job ----------------------------------------------")
-	log.Println(inputPath)
-	log.Println("---------------------------------------------------------------------------------------------------------")
+	video := &Video{FilePath: args.InputPath + "/" + args.Filename}
 
-	video := &Video{FilePath: inputPath}
-
-	return video.CreatePreview(args, conf.AbsoluteDataPath(args.ChannelName), conf.FrameCount, 128, 256)
+	return video.CreatePreview(args, conf.FrameCount, 128, 256)
 }

@@ -2,11 +2,11 @@ package services
 
 import (
 	"context"
-	"log"
 	"time"
 
-	"github.com/srad/streamsink/database"
+	log "github.com/sirupsen/logrus"
 	"github.com/srad/streamsink/helpers"
+	"github.com/srad/streamsink/models"
 	"github.com/srad/streamsink/network"
 )
 
@@ -37,7 +37,7 @@ func DispatchRecorder(ctx context.Context) {
 			network.SendSocket(m.Name, m.Message)
 			return
 		case <-ctx.Done():
-			log.Println("[dispatchMessages] stopped")
+			log.Infoln("[dispatchMessages] stopped")
 			return
 		}
 	}
@@ -48,13 +48,13 @@ func startThumbnailWorker(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			log.Println("[startThumbnailWorker] stopped")
+			log.Infoln("[startThumbnailWorker] stopped")
 			return
 		case <-time.After(captureThumbInterval):
-			for channelName, info := range database.GetStreamInfo() {
+			for channelName, info := range models.GetStreamInfo() {
 				if info.Url != "" {
 					if err := info.Screenshot(); err != nil {
-						log.Printf("[Recorder] Error extracting first frame of channel | file: %s", channelName)
+						log.Errorf("[Recorder] Error extracting first frame of channel | file: %s", channelName)
 					} else {
 						SendMessage(network.EventMessage{Name: "channel:thumbnail", Message: channelName})
 					}
@@ -68,11 +68,11 @@ func startStreamWorker(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			log.Println("[startStreamWorker] stopped")
+			log.Infoln("[startStreamWorker] stopped")
 			return
 		case <-time.After(breakBetweenCheckStreams):
 			checkStreams()
-			log.Println("Sleeping between stream checks zzz...")
+			log.Infoln("Sleeping between stream checks zzz...")
 		}
 	}
 }
@@ -82,9 +82,9 @@ func checkStreams() {
 	if isPaused {
 		return
 	}
-	channels, err := database.EnabledChannelList()
+	channels, err := models.EnabledChannelList()
 	if err != nil {
-		log.Println(err)
+		log.Errorln(err)
 		return
 	}
 	for _, channel := range channels {
@@ -92,28 +92,26 @@ func checkStreams() {
 			return
 		}
 
-		// Get the current database value, in case it case been updated meanwhile.
-		channel, err := database.GetChannelByName(channel.ChannelName)
+		// Get the current models value, in case it case been updated meanwhile.
+		result, err := models.GetChannelByName(channel.ChannelName.String())
 
 		if err != nil {
-			log.Printf("[checkStreams] Error channel %s: %s", channel.ChannelName, err)
+			log.Errorf("[checkStreams] Error channel %s: %s", channel.ChannelName, err)
 			continue
 		}
 
-		if channel.IsRecording() || channel.IsPaused {
-			log.Printf("[checkStreams] Already recording or paused: %s", channel.ChannelName)
+		if result.IsRecording() || result.IsPaused {
+			log.Infof("[checkStreams] Already recording or paused: %s", result.ChannelName)
 			continue
 		}
 
-		if err := channel.Start(); err != nil {
-			// log.Printf("[checkStreams] Start error: %v | %s\n", channel, err)
-			SendMessage(network.EventMessage{Name: "channel:offline", Message: channel.ChannelName})
+		if err := result.Start(); err != nil {
+			// log.Printf("[checkStreams] Start error: %v | %s", channel, err)
+			SendMessage(network.EventMessage{Name: "channel:offline", Message: result.ChannelName})
 		} else {
-			SendMessage(network.EventMessage{Name: "channel:online", Message: channel.ChannelName})
-			SendMessage(network.EventMessage{Name: "channel:start", Message: channel.ChannelName})
+			SendMessage(network.EventMessage{Name: "channel:online", Message: result.ChannelName})
+			SendMessage(network.EventMessage{Name: "channel:start", Message: result.ChannelName})
 		}
-
-		log.Println(channel.ChannelName)
 
 		// StopRecorder between each check
 		time.Sleep(streamCheckBreak)
@@ -133,24 +131,24 @@ func StartRecorder() {
 	go startStreamWorker(ctx)
 	go startThumbnailWorker(ctx)
 
-	log.Printf("[Recorder] StartRecorder recording thread")
+	log.Infoln("[Recorder] StartRecorder recording thread")
 }
 
 func StopRecorder() error {
-	log.Printf("[StopRecorder] Stopping recorder ...")
+	log.Infoln("[StopRecorder] Stopping recorder ...")
 
 	isPaused = true
 	cancel()
-	database.TerminateAll()
+	models.TerminateAll()
 
 	return nil
 }
 
 func GeneratePosters() error {
-	log.Println("[Recorder] Updating all recordings info")
-	recordings, err := database.RecordingsList()
+	log.Infoln("[Recorder] Updating all recordings info")
+	recordings, err := models.RecordingsList()
 	if err != nil {
-		log.Printf("Error %v", err)
+		log.Errorln(err)
 		return err
 	}
 	count := len(recordings)
@@ -158,12 +156,12 @@ func GeneratePosters() error {
 	i := 1
 	for _, rec := range recordings {
 		filepath := rec.FilePath()
-		log.Printf("[] %s (%d/%d)", filepath, i, count)
+		log.Infof("[GeneratePosters] %s (%d/%d)", filepath, i, count)
 
 		video := &helpers.Video{FilePath: filepath}
 
 		if err := video.CreatePreviewPoster(rec.DataFolder(), helpers.FileNameWithoutExtension(rec.Filename)+".jpg"); err != nil {
-			log.Printf("[GeneratePosters] Error creating poster: %s", err.Error())
+			log.Errorf("[GeneratePosters] Error creating poster: %s", err)
 		}
 		i++
 	}

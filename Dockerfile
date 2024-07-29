@@ -18,6 +18,10 @@ RUN pip install youtube-dl --break-system-packages
 #RUN wget -q https://yt-dl.org/downloads/latest/youtube-dl -O /usr/local/bin/youtube-dl
 #RUN chmod a+rx /usr/local/bin/youtube-dl
 
+# Cross compilation issues since some unknown version of debian or go, unclear.
+# https://github.com/confluentinc/confluent-kafka-go/issues/898
+RUN apt install g++-x86-64-linux-gnu libc6-dev-amd64-cross -y
+
 # Start ffmpeg build
 RUN apt install -y nasm git gcc binutils libunistring-dev libx264-dev libx265-dev libnuma-dev libvpx-dev libfaac-dev libfdk-aac-dev libmp3lame-dev libopus-dev
 RUN apt -y install \
@@ -99,9 +103,11 @@ RUN go mod vendor
 RUN GOFLAGS="-g -O2 -Wno-return-local-addr"
 
 ENV CGO_ENABLED=1
+ENV GOOS=$TARGETOS
+ENV GOARCH=$TARGETARCH
 
-ARG TARGETOS TARGETARCH
-RUN GOOS=$TARGETOS GOARCH=$TARGETARCH go build -o ./streamsink
+ARG TARGETOS=TARGETARCH
+RUN go build -o ./streamsink
 
 EXPOSE 3000
 

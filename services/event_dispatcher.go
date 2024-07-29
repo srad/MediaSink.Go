@@ -2,9 +2,9 @@ package services
 
 import (
 	"context"
-	"log"
 
-	"github.com/srad/streamsink/database"
+	log "github.com/sirupsen/logrus"
+	"github.com/srad/streamsink/models"
 	"github.com/srad/streamsink/network"
 )
 
@@ -24,17 +24,17 @@ func StopDispatch() {
 func dispatchMessages(ctx context.Context) {
 	go dispatchJobInfo(ctx)
 	go DispatchRecorder(ctx)
-	go database.DispatchJob(ctx)
+	go models.DispatchJob(ctx)
 }
 
 func dispatchJobInfo(ctx context.Context) {
 	for {
 		select {
-		case m := <-database.JobInfoChannel:
+		case m := <-models.JobInfoChannel:
 			network.SendSocket(m.Name, m.Message)
 			return
 		case <-ctx.Done():
-			log.Println("[dispatchMessages] stopped")
+			log.Infoln("[dispatchMessages] stopped")
 			return
 		}
 	}

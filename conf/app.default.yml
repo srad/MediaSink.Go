@@ -6,5 +6,3 @@ dirs:
 sys:
   network: ''
   disk: ''
-settings:
-  minrecmin: 15

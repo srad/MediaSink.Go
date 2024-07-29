@@ -1,7 +1,7 @@
 package v1
 
 import (
-	"log"
+	log "github.com/sirupsen/logrus"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -34,7 +34,6 @@ func IsRecording(c *gin.Context) {
 func StopRecorder(c *gin.Context) {
 	appG := app.Gin{C: c}
 
-	log.Println("Pausing recorder")
 	go services.StopRecorder()
 
 	appG.Response(http.StatusOK, nil)
@@ -48,7 +47,7 @@ func StopRecorder(c *gin.Context) {
 func StartRecorder(c *gin.Context) {
 	appG := app.Gin{C: c}
 
-	log.Println("Resuming recorder")
+	log.Infoln("Resuming recorder")
 	services.StartRecorder()
 	appG.Response(http.StatusOK, nil)
 }

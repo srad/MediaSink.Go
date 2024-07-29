@@ -3,10 +3,10 @@ package services
 import (
 	"context"
 	"fmt"
+	log "github.com/sirupsen/logrus"
 	"github.com/srad/streamsink/conf"
-	"github.com/srad/streamsink/database"
 	"github.com/srad/streamsink/helpers"
-	"log"
+	"github.com/srad/streamsink/models"
 	"os"
 	"path/filepath"
 )
@@ -30,7 +30,11 @@ func IsImporting() bool {
 
 func runImport() {
 	importing = true
-	ImportChannels(ctx)
+
+	if err := ImportChannels(ctx); err != nil {
+		log.Errorln(err)
+	}
+
 	importing = false
 }
 
@@ -41,99 +45,110 @@ func runImport() {
 // 3. Then search on each folder for media files to import as recordings.
 // 4. If the recordings do not contain previews, their creation will be scheduled.
 func ImportChannels(context.Context) error {
-	log.Println("################################## ImportRecordings ##################################")
-	log.Printf("[Import] Importing files from recordingFolder system: %s", conf.AppCfg.RecordingsAbsolutePath)
+	cfg := conf.Read()
 
-	recordingFolder, err := os.Open(conf.AppCfg.RecordingsAbsolutePath)
+	log.Infoln("------------------------------------------------------------------------------------------")
+	log.Infof("Scanning file system for media: %s", cfg.RecordingsAbsolutePath)
+	log.Infoln("------------------------------------------------------------------------------------------")
+
+	recordingFolder, err := os.Open(cfg.RecordingsAbsolutePath)
 	if err != nil {
-		log.Printf("->[Import] Failed opening directory '%s': %v\n", conf.AppCfg.RecordingsAbsolutePath, err)
-		return err
+		return fmt.Errorf("failed opening directory '%s': %s", cfg.RecordingsAbsolutePath, err)
 	}
 	defer func(file *os.File) {
 		if err := file.Close(); err != nil {
-			log.Printf("Error closing folder %s", file.Name())
+			log.Errorf("error closing folder %s", file.Name())
 		}
 	}(recordingFolder)
 
+	// ---------------------------------------------------------------------------------
 	// Traverse folders (channels)
+	// ---------------------------------------------------------------------------------
 	channelFolders, _ := recordingFolder.Readdirnames(0)
-	for _, channelName := range channelFolders {
+	var i = 0
+	for _, name := range channelFolders {
+		i++
+		channelName := models.ChannelName(name)
+		log.Infof("Import/%s (%d/%d)] Scanning folder", channelName, i, len(channelFolders))
 		// Is no directory, skip
-		if dir, err := os.Stat(conf.AbsoluteChannelPath(channelName)); err != nil || !dir.IsDir() {
+		if dir, err := os.Stat(channelName.AbsoluteChannelPath()); err != nil || !dir.IsDir() {
 			continue
 		}
 
-		log.Printf("[Import] Reading folder: %s\n", channelName)
+		log.Infof("[Import/%s (%d/%d)] Reading folder", channelName, i, len(channelFolders))
 
-		channel := &database.Channel{
-			ChannelName: channelName,
-			DisplayName: channelName,
-			SkipStart:   0,
-			Url:         "https://" + channelName,
-			Tags:        "",
-			Fav:         false,
-			IsPaused:    false,
-			Deleted:     false,
-		}
+		channel := models.NewChannel(channelName, channelName.String(), "https://"+channelName.String())
 
 		// Import from JSON file, if found.
-		if channel.ExistsJson() {
-			if json, err2 := channel.ReadJson(); err2 == nil {
-				fmt.Printf("json: %v", json)
-				channel.ChannelName = json.ChannelName
-				channel.DisplayName = json.DisplayName
-				channel.SkipStart = json.SkipStart
-				channel.Url = json.Url
-				channel.Tags = json.Tags
-				channel.Fav = json.Fav
-			}
+		//if channel.ExistsJson() {
+		//	if json, err2 := channel.ReadJson(); err2 == nil {
+		//		log.Infof("[Import/%s] json: %v", channelName, json)
+		//		channel.ChannelId = json.ChannelId
+		//		channel.ChannelName = json.ChannelName
+		//		channel.DisplayName = json.DisplayName
+		//		channel.SkipStart = json.SkipStart
+		//		channel.Url = json.Url
+		//		channel.Tags = json.Tags
+		//		channel.Fav = json.Fav
+		//	}
+		//}
+
+		if err4 := channel.Create(); err4 != nil {
+			log.Errorf("[Import/%s (%d/%d)] Error adding  channel: %s", channelName, err4, i, len(channelFolders))
 		}
 
-		if _, err := channel.Create(nil); err != nil {
-			log.Printf(" + Error adding channel channel '%s': %v", channelName, err)
-		}
-
+		// ---------------------------------------------------------------------------------
 		// Import individual files
-		files, err := os.ReadDir(conf.AbsoluteChannelPath(channelName))
-		if err != nil {
-			log.Printf("[Import] Error reading '%s': %v", channelName, err)
+		// ---------------------------------------------------------------------------------
+		files, err2 := os.ReadDir(channelName.AbsoluteChannelPath())
+		if err2 != nil {
+			log.Errorf("[Import/%s] Error reading: %s", channelName, err2)
 			continue
 		}
-		// Traverse all mp4 files and add to database if not existent
+
+		// ---------------------------------------------------------------------------------
+		// Traverse all mp4 files and add to models if not existent
+		// ---------------------------------------------------------------------------------
+		var j = 0
 		for _, file := range files {
+			j++
 			mp4File := !file.IsDir() && filepath.Ext(file.Name()) == ".mp4"
 			if !mp4File {
 				continue
 			}
 
-			recording := &database.Recording{ChannelName: channelName, Filename: file.Name()}
+			recording := models.Recording{ChannelId: channel.ChannelId, ChannelName: channelName, Filename: file.Name()}
 
-			log.Printf("  [Import] Checking recordingFolder: %s, %s", channelName, file.Name())
+			log.Infof("[Import/%s (%d/%d) (%d/%d)] Checking file: %s", channelName, i, len(channelFolders), j, len(files), file.Name())
 
-			video := &helpers.Video{FilePath: conf.AbsoluteChannelFilePath(channelName, file.Name())}
-			if _, err := video.GetVideoInfo(); err != nil {
-				log.Printf("    [Import] File '%s' seems corrupted, deleting ...", file.Name())
-				if err := channel.DeleteRecordingsFile(file.Name()); err != nil {
-					log.Printf("    [Import] Error deleting '%s'", file.Name())
+			video := &helpers.Video{FilePath: channelName.AbsoluteChannelFilePath(file.Name())}
+
+			if _, errVideoInfo := video.GetVideoInfo(); errVideoInfo != nil {
+				log.Errorf("[Import/%s] File '%s' seems corrupted, deleting: %s", channelName, file.Name(), errVideoInfo)
+				if errDestroy := recording.Destroy(); errDestroy != nil {
+					log.Errorf("[Import/%s] Error deleting: %s: %s", channelName, file.Name(), errDestroy)
 				} else {
-					recording.DestroyPreviews()
-					log.Printf("    [Import] Deleted: %s", file.Name())
+					log.Infof("[Import/%s] Deleted: %s", channelName, file.Name())
 				}
 				continue
 			}
-			if _, err := database.AddIfNotExistsRecording(channelName, file.Name()); err != nil {
-				log.Printf("    [Import] Error: %s\n", err.Error())
+
+			// File seems ok, try to add.
+			if errAdd := recording.AddIfNotExists(); errAdd != nil {
+				log.Errorf("[Import/%s] Error: %s", channelName, errAdd)
 				continue
 			}
 
+			// ---------------------------------------------------------------------------------
 			// Not new record inserted and therefore not automatically new previews generated.
 			// So check if the files exist and if not generate them.
 			// Create preview if any not existent
+			// ---------------------------------------------------------------------------------
 			if recording.PreviewsExist() {
-				log.Println("    [Import] Preview files exist")
-				recording.UpdatePreview()
+				log.Infof("[Import/%s] Preview files exist", channelName)
+				recording.AddPreviews()
 			} else {
-				log.Printf("    [Import] Adding job for %s\n", file.Name())
+				log.Infof("[Import/%s] Adding job for: %s", channelName, file.Name())
 				recording.EnqueuePreviewJob()
 			}
 		}
