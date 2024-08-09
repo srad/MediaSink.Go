@@ -54,7 +54,7 @@ func startThumbnailWorker(ctx context.Context) {
 			for channelName, info := range models.GetStreamInfo() {
 				if info.Url != "" {
 					if err := info.Screenshot(); err != nil {
-						log.Errorf("[Recorder] Error extracting first frame of channel | file: %s", channelName)
+						log.Errorf("[Recorder] Error extracting first frame of channel-id %d: %s", channelName, err)
 					} else {
 						SendMessage(network.EventMessage{Name: "channel:thumbnail", Message: channelName})
 					}
@@ -93,19 +93,19 @@ func checkStreams() {
 		}
 
 		// Get the current models value, in case it case been updated meanwhile.
-		result, err := models.GetChannelByName(channel.ChannelName.String())
+		result, err := models.GetChannelByName(channel.ChannelName)
 
 		if err != nil {
 			log.Errorf("[checkStreams] Error channel %s: %s", channel.ChannelName, err)
 			continue
 		}
 
-		if result.IsRecording() || result.IsPaused {
+		if result.ChannelId.IsRecording() || result.IsPaused {
 			log.Infof("[checkStreams] Already recording or paused: %s", result.ChannelName)
 			continue
 		}
 
-		if err := result.Start(); err != nil {
+		if err := result.ChannelId.Start(); err != nil {
 			// log.Printf("[checkStreams] Start error: %v | %s", channel, err)
 			SendMessage(network.EventMessage{Name: "channel:offline", Message: result.ChannelName})
 		} else {
@@ -155,12 +155,12 @@ func GeneratePosters() error {
 
 	i := 1
 	for _, rec := range recordings {
-		filepath := rec.FilePath()
+		filepath := rec.AbsoluteFilePath()
 		log.Infof("[GeneratePosters] %s (%d/%d)", filepath, i, count)
 
 		video := &helpers.Video{FilePath: filepath}
 
-		if err := video.CreatePreviewPoster(rec.DataFolder(), helpers.FileNameWithoutExtension(rec.Filename)+".jpg"); err != nil {
+		if err := video.CreatePreviewPoster(rec.DataFolder(), helpers.FileNameWithoutExtension(rec.Filename.String())+".jpg"); err != nil {
 			log.Errorf("[GeneratePosters] Error creating poster: %s", err)
 		}
 		i++

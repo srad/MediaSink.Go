@@ -14,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"time"
 )
 
 type ChannelRequest struct {
@@ -88,10 +89,10 @@ func GetChannels(c *gin.Context) {
 		response[index] = ChannelResponse{
 			Channel:       *channel,
 			Preview:       filepath.Join(channel.ChannelName.String(), cfg.DataPath, models.SnapshotFilename),
-			IsOnline:      channel.IsOnline(),
-			IsTerminating: channel.IsTerminating(),
-			IsRecording:   channel.IsRecording(),
-			MinRecording:  channel.RecordingMinutes()}
+			IsOnline:      channel.ChannelId.IsOnline(),
+			IsTerminating: channel.ChannelId.IsTerminating(),
+			IsRecording:   channel.ChannelId.IsRecording(),
+			MinRecording:  channel.ChannelId.GetRecordingMinutes()}
 	}
 
 	appG.Response(http.StatusOK, &response)
@@ -116,16 +117,17 @@ func GetChannel(c *gin.Context) {
 		return
 	}
 
-	if channel, err := models.GetChannelById(uint(id)); err != nil {
+	channelId := models.ChannelId(id)
+	if channel, err := channelId.GetChannelById(); err != nil {
 		log.Errorf("[GetChannel] Error getting channel: %s", err)
 		appG.Response(http.StatusInternalServerError, err)
 	} else {
 		res := &ChannelResponse{
 			Channel:       *channel,
-			IsOnline:      channel.IsOnline(),
-			IsTerminating: channel.IsTerminating(),
-			IsRecording:   channel.IsRecording(),
-			MinRecording:  channel.RecordingMinutes()}
+			IsOnline:      channelId.IsOnline(),
+			IsTerminating: channelId.IsTerminating(),
+			IsRecording:   channelId.IsRecording(),
+			MinRecording:  channelId.GetRecordingMinutes()}
 
 		appG.Response(http.StatusOK, &res)
 	}
@@ -158,12 +160,13 @@ func CreateChannel(c *gin.Context) {
 		DisplayName: data.DisplayName,
 		SkipStart:   data.SkipStart,
 		MinDuration: data.MinDuration,
+		CreatedAt:   time.Now(),
 		Url:         data.Url,
 		Fav:         data.Fav,
 		Tags:        data.Tags,
 		IsPaused:    data.IsPaused}
 
-	if err := channel.Create(); errors.Is(err, gorm.ErrDuplicatedKey) {
+	if _, err := channel.CreateChannelDetail(); errors.Is(err, gorm.ErrDuplicatedKey) {
 		errDuplicate := fmt.Errorf("error creating record: %s", err)
 		log.Errorln(errDuplicate)
 		appG.Response(http.StatusInternalServerError, errDuplicate)
@@ -221,7 +224,7 @@ func UpdateChannel(c *gin.Context) {
 	}
 
 	channel := models.Channel{
-		ChannelId:   uint(id),
+		ChannelId:   models.ChannelId(id),
 		ChannelName: models.ChannelName(data.ChannelName),
 		DisplayName: data.DisplayName,
 		SkipStart:   data.SkipStart,
@@ -241,7 +244,7 @@ func UpdateChannel(c *gin.Context) {
 	}
 
 	if channel.IsPaused == true {
-		if err := channel.TerminateProcess(); err != nil {
+		if err := channel.ChannelId.TerminateProcess(); err != nil {
 			message := fmt.Errorf("error stopping stream: %s", err)
 			log.Errorln(message)
 			appG.Response(http.StatusInternalServerError, message)
@@ -259,7 +262,7 @@ func UpdateChannel(c *gin.Context) {
 // @Accept      json
 // @Produce     json
 // @Param       id path uint true  "List of tags"
-// @Success     200 {object} models.Channel
+// @Success     200 {} models.Channel
 // @Failure     500 {}  http.StatusInternalServerError
 // @Router      /channels/{id} [delete]
 func DeleteChannel(c *gin.Context) {
@@ -271,25 +274,19 @@ func DeleteChannel(c *gin.Context) {
 		return
 	}
 
-	channel, err := models.GetChannelById(uint(id))
-	if err != nil {
-		appG.Response(http.StatusInternalServerError, err)
-		return
-	}
+	channelId := models.ChannelId(id)
 
-	log.Infof("Deleting channel: %s", channel.ChannelName)
-
-	if err := channel.TerminateProcess(); err != nil {
+	if err := channelId.TerminateProcess(); err != nil {
 		appG.Response(http.StatusInternalServerError, fmt.Sprintf("Process cound not be terminated: %s", err))
 		return
 	}
 
-	if err := channel.SoftDestroy(); err != nil {
+	if err := channelId.SoftDestroyChannel(); err != nil {
 		appG.Response(http.StatusInternalServerError, fmt.Sprintf("Channel could not be deleted: %s", err))
 		return
 	}
 
-	appG.Response(http.StatusOK, &channel)
+	appG.Response(http.StatusOK, nil)
 }
 
 // TagChannel godoc
@@ -320,7 +317,7 @@ func TagChannel(c *gin.Context) {
 	}
 
 	update := &models.ChannelTagsUpdate{
-		ChannelId: uint(id),
+		ChannelId: models.ChannelId(id),
 		Tags:      request.Tags,
 	}
 
@@ -353,19 +350,14 @@ func ResumeChannel(c *gin.Context) {
 		return
 	}
 
-	channel, err := models.GetChannelById(uint(id))
-	if err != nil {
-		log.Errorf("[ResumeChannel] Error getting channel '%d': %s", id, err)
-		appG.Response(http.StatusInternalServerError, err)
-		return
-	}
+	channelId := models.ChannelId(id)
 
-	if err := channel.Start(); err != nil {
-		log.Errorf("[ResumeChannel] Error resuming channel '%s': %s", channel.ChannelName, err)
+	if err := channelId.Start(); err != nil {
+		log.Errorf("[ResumeChannel] Error resuming channel-id %d: %s", channelId, err)
 		appG.Response(http.StatusInternalServerError, err)
 		return
 	}
-	log.Infof("Resuming channel %s", channel.ChannelName)
+	log.Infof("Resuming channel %d", id)
 	appG.Response(http.StatusOK, nil)
 }
 
@@ -388,9 +380,9 @@ func FavChannel(c *gin.Context) {
 		return
 	}
 
-	channel := models.Channel{ChannelId: uint(id), Fav: true}
+	channelId := models.ChannelId(id)
 
-	if err := channel.FavChannel(); err != nil {
+	if err := channelId.FavChannel(); err != nil {
 		appG.Response(http.StatusInternalServerError, err)
 		return
 	}
@@ -417,8 +409,9 @@ func UnFavChannel(c *gin.Context) {
 		return
 	}
 
-	channel := models.Channel{ChannelId: uint(id), Fav: false}
-	if err := channel.UnFavChannel(); err != nil {
+	channelId := models.ChannelId(id)
+
+	if err := channelId.UnFavChannel(); err != nil {
 		appG.Response(http.StatusInternalServerError, err)
 		return
 	}
@@ -455,9 +448,9 @@ func UploadChannel(c *gin.Context) {
 		return
 	}
 
-	channel := models.Channel{ChannelId: uint(id), Fav: false}
-	recording, outputPath := channel.NewRecording("recording")
-	recording.Create()
+	channelId := models.ChannelId(id)
+	recording, outputPath, err := channelId.NewRecording("recording")
+	models.CreateRecording(recording.ChannelId, recording.Filename, "recording")
 
 	out, err := os.Create(outputPath)
 	if err != nil {
@@ -471,8 +464,12 @@ func UploadChannel(c *gin.Context) {
 		return
 	}
 
-	recording.Save()
-	recording.EnqueuePreviewJob()
+	if err := recording.Save(); err != nil {
+		appG.Response(http.StatusInternalServerError, err)
+		return
+	}
+
+	recording.RecordingId.EnqueuePreviewJob()
 
 	appG.Response(http.StatusOK, recording)
 }
@@ -496,19 +493,13 @@ func PauseChannel(c *gin.Context) {
 		return
 	}
 
-	channel, err := models.GetChannelById(uint(id))
-	log.Infof("Pausing channel %d", id)
+	channelId := models.ChannelId(id)
 
-	if err != nil {
-		appG.Response(http.StatusInternalServerError, err)
-		return
-	}
-
-	if err := channel.TerminateProcess(); err != nil {
+	if err := channelId.TerminateProcess(); err != nil {
 		log.Errorf("Error teminating process: %s", err)
 	}
 
-	if err := channel.Pause(true); err != nil {
+	if err := channelId.PauseChannel(true); err != nil {
 		appG.Response(http.StatusInternalServerError, err)
 		return
 	}

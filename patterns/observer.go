@@ -19,7 +19,3 @@ func (dispatcher *Dispatcher[T]) Notify(name string, data T) {
 		f(msg)
 	}
 }
-
-func NewMessage[T any](name string, data T) Event[T] {
-	return Event[T]{Name: name, Data: data}
-}

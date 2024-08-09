@@ -30,6 +30,11 @@ type DevStat struct {
 	MeasureSeconds   uint64  `json:"measureSeconds"`
 }
 
+type NetTopInfo struct {
+	DRx string `json:"dRx"`
+	DTx string `json:"dTx"`
+}
+
 func GetInfo(dev string) *DevStat {
 	lines, _ := ReadLines("/proc/net/dev")
 
@@ -82,9 +87,4 @@ func ReadLines(filename string) ([]string, error) {
 		ret = append(ret, strings.Trim(line, "\n"))
 	}
 	return ret, nil
-}
-
-type NetTopInfo struct {
-	DRx string `json:"dRx"`
-	DTx string `json:"dTx"`
 }

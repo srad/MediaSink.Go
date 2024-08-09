@@ -30,8 +30,13 @@ func AddJob(c *gin.Context) {
 		return
 	}
 
-	recording := models.Recording{RecordingId: uint(id)}
-	job, err := recording.EnqueuePreviewJob()
+	recording, err := models.RecordingId(id).FindRecordingById()
+	if err != nil {
+		appG.Response(http.StatusBadRequest, err)
+		return
+	}
+
+	job, err := recording.RecordingId.EnqueuePreviewJob()
 	if err != nil {
 		appG.Response(http.StatusInternalServerError, err)
 		return

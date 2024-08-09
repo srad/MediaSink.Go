@@ -16,16 +16,18 @@ var (
 	UpdatingVideoInfo = false
 )
 
-type Recording struct {
-	RecordingId uint `json:"recordingId" gorm:"autoIncrement;primaryKey;column:recording_id" extensions:"!x-nullable"`
+type RecordingId uint
 
-	Channel     Channel     `json:"-" gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE;foreignKey:channel_id;references:channel_id"`
-	ChannelId   uint        `json:"channelId" gorm:"not null;default:null" extensions:"!x-nullable"`
-	ChannelName ChannelName `json:"channelName" gorm:"not null;default:null" extensions:"!x-nullable"`
-	Filename    string      `json:"filename" gorm:"not null;default:null" extensions:"!x-nullable"`
-	Bookmark    bool        `json:"bookmark" gorm:"index:idx_bookmark;not null" extensions:"!x-nullable"`
-	CreatedAt   time.Time   `json:"createdAt" gorm:"not null;default:null;index" extensions:"!x-nullable"`
-	VideoType   string      `json:"videoType" gorm:"default:null;not null" extensions:"!x-nullable"`
+type Recording struct {
+	RecordingId RecordingId `json:"recordingId" gorm:"autoIncrement;primaryKey;column:recording_id" extensions:"!x-nullable"`
+
+	Channel     Channel           `json:"-" gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE;foreignKey:channel_id;references:channel_id"`
+	ChannelId   ChannelId         `json:"channelId" gorm:"not null;default:null" extensions:"!x-nullable"`
+	ChannelName ChannelName       `json:"channelName" gorm:"not null;default:null;index:idx_file,unique" extensions:"!x-nullable"`
+	Filename    RecordingFileName `json:"filename" gorm:"not null;default:null;index:idx_file,unique" extensions:"!x-nullable"`
+	Bookmark    bool              `json:"bookmark" gorm:"index:idx_bookmark;not null" extensions:"!x-nullable"`
+	CreatedAt   time.Time         `json:"createdAt" gorm:"not null;default:null;index" extensions:"!x-nullable"`
+	VideoType   string            `json:"videoType" gorm:"default:null;not null" extensions:"!x-nullable"`
 
 	Packets  uint64  `json:"packets" gorm:"default:0;not null" extensions:"!x-nullable"` // Total number of video packets/frames.
 	Duration float64 `json:"duration" gorm:"default:0;not null" extensions:"!x-nullable"`
@@ -42,18 +44,17 @@ type Recording struct {
 	//PreviewScreens []string `json:"previewScreens" gorm:"serializer:json"`
 }
 
-func (recording *Recording) FindById() error {
-	err := Db.Model(Recording{}).
+func (id RecordingId) FindById() (*Recording, error) {
+	var recording *Recording
+	if err := Db.Model(Recording{}).
 		Select("recordings.*").
-		Where("recordings.recording_id = ?", recording.RecordingId).
+		Where("recordings.recording_id = ?", id).
 		Order("recordings.created_at DESC").
-		Find(&recording).Error
-
-	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
-		return err
+		Find(&recording).Error; err != nil {
+		return nil, err
 	}
 
-	return nil
+	return recording, nil
 }
 
 func FavRecording(id uint, fav bool) error {
@@ -119,12 +120,12 @@ func BookmarkList() ([]*Recording, error) {
 	return recordings, nil
 }
 
-func (recording *Recording) GetPaths() RecordingPaths {
-	return recording.ChannelName.GetRecordingsPaths(recording.Filename)
+func GetPaths(channelName ChannelName, filename RecordingFileName) RecordingPaths {
+	return channelName.GetRecordingsPaths(filename)
 }
 
-func (recording *Recording) PreviewsExist() bool {
-	paths := recording.GetPaths()
+func PreviewsExist(channelName ChannelName, filename RecordingFileName) bool {
+	paths := GetPaths(channelName, filename)
 
 	videoExists := utils.FileExists(paths.AbsoluteVideosPath)
 	stripeExists := utils.FileExists(paths.AbsoluteStripePath)
@@ -133,14 +134,55 @@ func (recording *Recording) PreviewsExist() bool {
 	return videoExists && stripeExists && posterExists
 }
 
-func (recording *Recording) Create() error {
-	info, err := recording.GetVideoInfo()
-	if err != nil {
-		return err
+// CreateStreamRecording Stream recording does not read the video data because it's written life to the disk.
+func CreateStreamRecording(id ChannelId, filename RecordingFileName) (*Recording, error) {
+	channel, errChannel := id.GetChannelById()
+	if errChannel != nil {
+		return nil, errChannel
 	}
 
-	if recording.VideoType == "" {
-		recording.VideoType = "recording"
+	recording := Recording{
+		ChannelId:    id,
+		ChannelName:  channel.ChannelName,
+		Filename:     filename,
+		Bookmark:     false,
+		CreatedAt:    time.Now(),
+		VideoType:    "stream",
+		Packets:      0,
+		Duration:     0,
+		Size:         0,
+		BitRate:      0,
+		Width:        0,
+		Height:       0,
+		PathRelative: channel.ChannelName.ChannelPath(filename),
+	}
+
+	if err := Db.Create(&recording).Error; err != nil {
+		return nil, fmt.Errorf("error creating record: %s", err)
+	}
+
+	return &recording, nil
+}
+
+func CreateRecording(channelId ChannelId, filename RecordingFileName, videoType string) (*Recording, error) {
+	channel, errChannel := channelId.GetChannelById()
+	if errChannel != nil {
+		return nil, errChannel
+	}
+
+	recording := &Recording{
+		ChannelId:    channelId,
+		ChannelName:  channel.ChannelName,
+		Filename:     filename,
+		Bookmark:     false,
+		CreatedAt:    time.Now(),
+		VideoType:    videoType,
+		PathRelative: channel.ChannelName.ChannelPath(filename),
+	}
+
+	info, err := GetVideoInfo(channel.ChannelName, filename)
+	if err != nil {
+		return nil, err
 	}
 
 	recording.Duration = info.Duration
@@ -149,29 +191,37 @@ func (recording *Recording) Create() error {
 	recording.Width = info.Width
 	recording.Height = info.Height
 	recording.Packets = info.PacketCount
-	recording.CreatedAt = time.Now()
 
-	log.Infof("Creating recording %v", recording)
-	if err := Db.Create(&recording).Error; err != nil {
-		return fmt.Errorf("error creating record: %s", err)
+	// Check for existing recording.
+	err = Db.Model(Recording{}).Where("channel_id = ? AND filename = ?", channelId, filename).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		if err := Db.Model(Recording{}).Create(&recording).Error; err != nil {
+			return nil, fmt.Errorf("error creating record: %s", err)
+		}
+	} else {
+		if err := Db.Model(Recording{}).
+			Where("channel_id = ? AND filename = ?", channelId, filename).
+			Updates(&recording).Error; err != nil {
+			return nil, fmt.Errorf("error creating record: %s", err)
+		}
 	}
 
-	return nil
+	return recording, nil
 }
 
 // Destroy Deletes all recording related files, jobs, and database item.
 func (recording *Recording) Destroy() error {
 	// Try to find and destroy all related items: jobs, file, previews, db entry.
 
-	if err := recording.DestroyJobs(); err != nil {
+	if err := recording.ChannelId.DestroyJobs(); err != nil {
 		log.Errorf("Error destroying jobs: %s", err)
 	}
 
-	if err := recording.DeleteFile(); err != nil {
+	if err := DeleteFile(recording.ChannelName, recording.Filename); err != nil {
 		log.Errorf("Error deleting file: %s", err)
 	}
 
-	if err := recording.DestroyPreviews(); err != nil {
+	if err := recording.RecordingId.DestroyPreviews(); err != nil {
 		log.Errorf("Error destroying preview: %s", err)
 	}
 
@@ -183,8 +233,8 @@ func (recording *Recording) Destroy() error {
 	return nil
 }
 
-func (recording *Recording) DestroyJobs() error {
-	if jobs, err := recording.FindJobs(); err == nil {
+func (channelId ChannelId) DestroyJobs() error {
+	if jobs, err := channelId.FindJobs(); err == nil {
 		for _, job := range *jobs {
 			if destroyErr := job.Destroy(); destroyErr != nil {
 				log.Errorf("Error destroying job-id: %d", job.JobId)
@@ -194,8 +244,8 @@ func (recording *Recording) DestroyJobs() error {
 	return nil
 }
 
-func (recording *Recording) DeleteFile() error {
-	paths := recording.ChannelName.GetRecordingsPaths(recording.Filename)
+func DeleteFile(channelName ChannelName, filename RecordingFileName) error {
+	paths := channelName.GetRecordingsPaths(filename)
 
 	if err := os.Remove(paths.Filepath); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("error deleting recording: %s", err)
@@ -204,14 +254,14 @@ func (recording *Recording) DeleteFile() error {
 	return nil
 }
 
-func (channel *Channel) Filename() string {
-	return recInfo[channel.ChannelName].Filename
+func (channelId ChannelId) Filename() RecordingFileName {
+	return recInfo[channelId].Filename
 }
 
-func FindRecording(id uint) (*Recording, error) {
+func (recordingId RecordingId) FindRecordingById() (*Recording, error) {
 	var recording *Recording
 	err := Db.Table("recordings").
-		Where("recording_id = ?", id).
+		Where("recording_id = ?", recordingId).
 		First(&recording).Error
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, err
@@ -220,10 +270,22 @@ func FindRecording(id uint) (*Recording, error) {
 	return recording, nil
 }
 
-func (recording *Recording) FindJobs() (*[]Job, error) {
+func FindRecording(channelId ChannelId, filename RecordingFileName) (*Recording, error) {
+	var recording *Recording
+	err := Db.Table("recordings").
+		Where("channel_id = ? AND filename = ?", channelId, filename).
+		First(&recording).Error
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, err
+	}
+
+	return recording, nil
+}
+
+func (channelId ChannelId) FindJobs() (*[]Job, error) {
 	var jobs *[]Job
 	err := Db.Model(&Job{}).
-		Where("recording_id = ?", recording.RecordingId).
+		Where("channel_id = ?", channelId).
 		Find(&jobs).Error
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, err
@@ -232,23 +294,29 @@ func (recording *Recording) FindJobs() (*[]Job, error) {
 	return jobs, nil
 }
 
-func (recording *Recording) AddIfNotExists() error {
-	if err := Db.Where("channel_name = ? AND filename = ?", recording.ChannelName, recording.Filename).
-		First(&recording).Error; err != nil && errors.Is(err, gorm.ErrRecordNotFound) {
-		log.Infof("No recording found, creeting: Recording(channel-id: %d, channel-name: '%s', filename: '%s')", recording.ChannelId, recording.ChannelName, recording.Filename)
+func AddIfNotExists(channelId ChannelId, channelName ChannelName, filename RecordingFileName) (*Recording, error) {
+	var recording *Recording
 
-		if err := recording.Create(); err != nil {
-			return fmt.Errorf("error creating recording '%s'", err)
+	err := Db.Model(Recording{}).
+		Where("channel_name = ? AND filename = ?", channelName, filename).
+		First(&recording).Error
+
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		log.Infof("No recording found, creating: Recording(channel-name: %s, filename: '%s')", channelName, filename)
+
+		if created, errCreate := CreateRecording(channelId, filename, "recording"); errCreate != nil {
+			return nil, fmt.Errorf("error creating recording '%s'", errCreate)
 		} else {
-			log.Infof("Created recording %s/%s", recording.ChannelName, recording.Filename)
+			log.Infof("Created recording %s/%s", channelName, filename)
+			return created, nil
 		}
 	}
 
-	return nil
+	return recording, nil
 }
 
-func (recording *Recording) GetVideoInfo() (*helpers.FFProbeInfo, error) {
-	video := helpers.Video{FilePath: recording.ChannelName.AbsoluteChannelFilePath(recording.Filename)}
+func GetVideoInfo(channelName ChannelName, filename RecordingFileName) (*helpers.FFProbeInfo, error) {
+	video := helpers.Video{FilePath: channelName.AbsoluteChannelFilePath(filename)}
 	return video.GetVideoInfo()
 }
 
@@ -256,7 +324,7 @@ func (recording *Recording) UpdateInfo(info *helpers.FFProbeInfo) error {
 	return Db.Updates(&Recording{ChannelName: recording.ChannelName, Filename: recording.Filename, Duration: info.Duration, BitRate: info.BitRate, Size: info.Size, Width: info.Width, Height: info.Height, Packets: info.PacketCount}).Error
 }
 
-func (recording *Recording) FilePath() string {
+func (recording *Recording) AbsoluteFilePath() string {
 	return recording.ChannelName.AbsoluteChannelFilePath(recording.Filename)
 }
 
@@ -264,21 +332,31 @@ func (recording *Recording) DataFolder() string {
 	return recording.ChannelName.AbsoluteChannelDataPath()
 }
 
-func (recording *Recording) AddPreviews() error {
+func (recordingId RecordingId) AddPreviews() error {
+	recording, err := recordingId.FindRecordingById()
+	if err != nil {
+		return err
+	}
+
 	paths := recording.ChannelName.GetRecordingsPaths(recording.Filename)
 
-	if err := Db.
-		Model(&Recording{}).Where("recording_id = ?", recording.RecordingId).
-		Update("preview_video", paths.VideosPath).
-		Update("preview_stripe", paths.StripePath).
-		Update("preview_cover", paths.CoverPath).Error; err != nil {
+	updates := map[string]interface{}{"preview_video": paths.VideosPath, "preview_stripe": paths.StripePath, "preview_cover": paths.CoverPath}
+
+	if err := Db.Model(Recording{}).Where("recording_id = ?", recordingId).Updates(updates).Error; err != nil {
 		return err
+	} else {
+		log.Infof("Updated preview for record %d", recordingId)
 	}
 
 	return nil
 }
 
-func (recording *Recording) DestroyPreviews() error {
+func (recordingId RecordingId) DestroyPreviews() error {
+	recording, err := recordingId.FindRecordingById()
+	if err != nil {
+		return err
+	}
+
 	paths := recording.ChannelName.GetRecordingsPaths(recording.Filename)
 
 	if err := os.Remove(paths.VideosPath); err != nil && !os.IsNotExist(err) {
@@ -291,8 +369,8 @@ func (recording *Recording) DestroyPreviews() error {
 		log.Errorf("[DestroyPreviews] Error deleting '%s' from channel '%s': %v", paths.CoverPath, recording.ChannelName, err)
 	}
 
-	err := Db.Model(&Recording{}).
-		Where("recording_id = ?", recording.RecordingId).
+	err = Db.Model(&Recording{}).
+		Where("recording_id = ?", recordingId).
 		First(&recording).Error
 
 	// Nothing found to destroy.
@@ -317,12 +395,12 @@ func (recording *Recording) DestroyPreviews() error {
 	return nil
 }
 
-func (recording *Recording) Save() error {
-	if err := Db.Model(&recording).Save(&recording).Error; err != nil {
-		return err
-	}
+func (id RecordingId) UpdateVideoType(videoType string) error {
+	return Db.Model(Recording{}).Where("recording_id = ?", id).Update("video_type", videoType).Error
+}
 
-	return nil
+func (recording *Recording) Save() error {
+	return Db.Model(&recording).Save(&recording).Error
 }
 
 func UpdateVideoInfo() error {
@@ -337,7 +415,7 @@ func UpdateVideoInfo() error {
 
 	i := 1
 	for _, rec := range recordings {
-		info, err := rec.GetVideoInfo()
+		info, err := GetVideoInfo(rec.ChannelName, rec.Filename)
 		if err != nil {
 			log.Errorf("[UpdateVideoInfo] Error updating video info: %s", err)
 			continue

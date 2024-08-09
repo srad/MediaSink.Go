@@ -305,18 +305,18 @@ func (video *Video) CreatePreview(args *VideoConversionArgs, extractCount int, f
 //			errListener(info.Output)
 //		},
 //		Command:     "ffmpeg",
-//		CommandArgs: []string{"-i", video.FilePath, "-y", "-progress", "pipe:2", "-q:v", "0", "-threads", fmt.Sprint(conf.ThreadCount), "-an", "-vf", fmt.Sprintf("select=not(mod(n\\,%d)),scale=-2:%d", frameDistance, frameHeight), "-hide_banner", "-loglevel", "error", "-stats", "-fps_mode", "vfr", filepath.Join(dirPreview, outFile)},
+//		CommandArgs: []string{"-i", video.AbsoluteFilePath, "-y", "-progress", "pipe:2", "-q:v", "0", "-threads", fmt.Sprint(conf.ThreadCount), "-an", "-vf", fmt.Sprintf("select=not(mod(n\\,%d)),scale=-2:%d", frameDistance, frameHeight), "-hide_banner", "-loglevel", "error", "-stats", "-fps_mode", "vfr", filepath.Join(dirPreview, outFile)},
 //	})
 //}
 
 // GetFrameCount This requires an entire video passthrough
 func (video *Video) GetFrameCount() (uint64, error) {
 	cmd := exec.Command("ffprobe", "-v", "error", "-show_entries", "stream=nb_read_packets", "-of", "csv=p=0", "-select_streams", "v:0", "-count_packets", video.FilePath)
-	stdout, err := cmd.Output()
+	stdout, err := cmd.CombinedOutput()
 	output := strings.TrimSpace(string(stdout))
 
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("error getting frame count for '%s': %s", video.FilePath, stdout)
 	}
 
 	fps, err := strconv.ParseUint(output, 10, 64)
@@ -334,7 +334,7 @@ func (video *Video) GetVideoInfo() (*FFProbeInfo, error) {
 	output := strings.TrimSpace(string(stdout))
 
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error ffprobe: %s: %s", err, output)
 	}
 
 	parsed := &JsonFFProbeInfo{}

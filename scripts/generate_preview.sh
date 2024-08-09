@@ -16,7 +16,6 @@ csv=.previews/info.csv
 # Recreate all files
 if [ $# -eq 2 ] && [ "$2" = "-f" ]; then
   echo "Force recreate"
-  rm -fr .previews/
   rm -fr .previews
   rm -fr .montages
   rm -fr .stripes

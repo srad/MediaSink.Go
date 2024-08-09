@@ -37,77 +37,74 @@ type RecordingPaths struct {
 }
 
 // Scan Restores the channel type from the database
-func (c *ChannelName) Scan(src any) error {
+func (channelName *ChannelName) Scan(src any) error {
 	channelNameString, ok := src.(string)
 	if !ok {
 		return errors.New("src value cannot cast to string")
 	}
-	*c = ChannelName(channelNameString)
+	*channelName = ChannelName(channelNameString)
 	return nil
 }
 
 // Value Stores the channel name in the database.
-func (c *ChannelName) Value() (driver.Value, error) {
-	if c == nil {
+func (channelName *ChannelName) Value() (driver.Value, error) {
+	if channelName == nil {
 		return nil, nil
 	}
 
-	if err := c.IsValid(); err != nil {
+	if err := channelName.IsValid(); err != nil {
 		return nil, err
 	}
 
-	channelName := c.normalize()
+	normalizedName := channelName.normalize()
 
-	if !validChannelName.MatchString(channelName) {
+	if !validChannelName.MatchString(normalizedName.String()) {
 		return nil, fmt.Errorf("invalid channel name %s", channelName)
 	}
 
-	return channelName, nil
+	return normalizedName, nil
 }
 
-func (c *ChannelName) IsValid() error {
-	if c == nil {
+func (channelName *ChannelName) IsValid() error {
+	if channelName == nil {
 		return errors.New("channel name is nil")
 	}
 
-	str := c.normalize()
-	if !validChannelName.MatchString(str) {
+	str := channelName.normalize()
+	if !validChannelName.MatchString(str.String()) {
 		return fmt.Errorf("invalid normalized channel name %s", str)
 	}
 
 	return nil
 }
 
-func (c *ChannelName) normalize() string {
-	if c != nil {
-		return strings.ToLower(strings.TrimSpace(string(*c)))
-	}
-	return ""
+func (channelName ChannelName) normalize() ChannelName {
+	return ChannelName(strings.ToLower(strings.TrimSpace(string(channelName))))
 }
 
-func (c *ChannelName) String() string {
-	return string(*c)
+func (channelName ChannelName) String() string {
+	return string(channelName)
 }
 
-func (c *ChannelName) AbsoluteChannelDataPath() string {
+func (channelName ChannelName) AbsoluteChannelDataPath() string {
 	cfg := conf.Read()
-	return filepath.Join(cfg.RecordingsAbsolutePath, c.String(), cfg.DataPath)
+	return filepath.Join(cfg.RecordingsAbsolutePath, channelName.String(), cfg.DataPath)
 }
 
-func (c *ChannelName) AbsoluteChannelPath() string {
+func (channelName ChannelName) AbsoluteChannelPath() string {
 	cfg := conf.Read()
-	return filepath.Join(cfg.RecordingsAbsolutePath, c.String())
+	return filepath.Join(cfg.RecordingsAbsolutePath, channelName.String())
 }
 
-func (c *ChannelName) MkDir() error {
-	dir := c.AbsoluteChannelPath()
+func (channelName ChannelName) MkDir() error {
+	dir := channelName.AbsoluteChannelPath()
 	if _, err := os.Stat(dir); os.IsNotExist(err) {
 		log.Infoln("Creating folder: " + dir)
 		if err := os.MkdirAll(dir, os.ModePerm); err != nil {
 			return fmt.Errorf("error creating folder: '%s': %s", dir, err)
 		}
 	}
-	dataPath := c.AbsoluteChannelDataPath()
+	dataPath := channelName.AbsoluteChannelDataPath()
 	if _, err := os.Stat(dataPath); os.IsNotExist(err) {
 		log.Infoln("Creating folder: " + dataPath)
 		if err := os.MkdirAll(dataPath, os.ModePerm); err != nil {
@@ -157,7 +154,8 @@ func check(err error) {
 	}
 }
 
-func (c *ChannelName) GetRecordingsPaths(filename string) RecordingPaths {
+func (channelName ChannelName) GetRecordingsPaths(name RecordingFileName) RecordingPaths {
+	filename := name.String()
 	posterJpg := strings.TrimSuffix(filename, filepath.Ext(filename)) + ".jpg"
 	stripeJpg := strings.TrimSuffix(filename, filepath.Ext(filename)) + ".jpg"
 	mp4 := strings.TrimSuffix(filename, filepath.Ext(filename)) + ".mp4"
@@ -167,41 +165,40 @@ func (c *ChannelName) GetRecordingsPaths(filename string) RecordingPaths {
 	return RecordingPaths{
 		AbsoluteRecordingsPath: cfg.RecordingsAbsolutePath,
 
-		Filepath:   c.AbsoluteChannelFilePath(filename),
-		VideosPath: filepath.Join(c.RelativeDataPath(), helpers.VideosFolder, mp4),
-		StripePath: filepath.Join(c.RelativeDataPath(), helpers.StripesFolder, stripeJpg),
-		CoverPath:  filepath.Join(c.RelativeDataPath(), helpers.PostersFolder, posterJpg),
-		//ScreensPath:        filepath.Join(c.RelativeDataPath(), ScreensFolder, filename),
-		AbsoluteVideosPath: filepath.Join(c.AbsoluteChannelDataPath(), helpers.VideosFolder, mp4),
-		AbsoluteStripePath: filepath.Join(c.AbsoluteChannelDataPath(), helpers.StripesFolder, stripeJpg),
-		AbsolutePosterPath: filepath.Join(c.AbsoluteChannelDataPath(), helpers.PostersFolder, posterJpg),
+		Filepath:           channelName.AbsoluteChannelFilePath(name),
+		VideosPath:         filepath.Join(channelName.RelativeDataPath(), helpers.VideosFolder, mp4),
+		StripePath:         filepath.Join(channelName.RelativeDataPath(), helpers.StripesFolder, stripeJpg),
+		CoverPath:          filepath.Join(channelName.RelativeDataPath(), helpers.PostersFolder, posterJpg),
+		AbsoluteVideosPath: filepath.Join(channelName.AbsoluteChannelDataPath(), helpers.VideosFolder, mp4),
+		AbsoluteStripePath: filepath.Join(channelName.AbsoluteChannelDataPath(), helpers.StripesFolder, stripeJpg),
+		AbsolutePosterPath: filepath.Join(channelName.AbsoluteChannelDataPath(), helpers.PostersFolder, posterJpg),
 		JPG:                stripeJpg,
 		MP4:                mp4,
 	}
 }
 
-func (c *ChannelName) RelativeDataPath() string {
+func (channelName ChannelName) RelativeDataPath() string {
 	cfg := conf.Read()
-	return filepath.Join(c.String(), cfg.DataPath)
+	return filepath.Join(channelName.String(), cfg.DataPath)
 }
 
-func (c *ChannelName) ChannelPath(filename string) string {
-	return filepath.Join(c.String(), filename)
+func (channelName ChannelName) ChannelPath(filename RecordingFileName) string {
+	return filepath.Join(channelName.String(), filename.String())
 }
 
-func (c *ChannelName) AbsoluteChannelFilePath(filename string) string {
+func (channelName ChannelName) AbsoluteChannelFilePath(filename RecordingFileName) string {
 	cfg := conf.Read()
-	return filepath.Join(cfg.RecordingsAbsolutePath, c.String(), filename)
+	return filepath.Join(cfg.RecordingsAbsolutePath, channelName.String(), filename.String())
 }
 
-func (c *ChannelName) MakeRecordingFilename() (string, time.Time) {
+func (channelName ChannelName) MakeRecordingFilename() (RecordingFileName, time.Time) {
 	now := time.Now()
 	stamp := now.Format("2006_01_02_15_04_05")
-	return fmt.Sprintf("%s_%s.mp4", c.String(), stamp), now
+	return RecordingFileName(fmt.Sprintf("%s_%s.mp4", channelName.String(), stamp)), now
 }
 
-func (c *ChannelName) MakeMp3Filename() (string, time.Time) {
+func (channelName ChannelName) MakeMp3Filename() (RecordingFileName, time.Time) {
 	now := time.Now()
 	stamp := now.Format("2006_01_02_15_04_05")
-	return fmt.Sprintf("%s_%s.mp3", c.String(), stamp), now
+	return RecordingFileName(fmt.Sprintf("%s_%s.mp3", channelName.String(), stamp)), now
 }

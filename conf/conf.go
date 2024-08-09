@@ -1,6 +1,7 @@
 package conf
 
 import (
+	"fmt"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
 	"os"
@@ -35,10 +36,10 @@ type VideoPaths struct {
 	Filepath string
 }
 
-func getConfInt(key, envKey string) int {
+func getConfInt(key, envKey string) (int, error) {
 	val := os.Getenv(envKey)
 	if val == "" {
-		return viper.GetInt(key)
+		return 0, fmt.Errorf("%s env variable is empty", envKey)
 	}
 
 	n, err := strconv.Atoi(val)
@@ -46,21 +47,21 @@ func getConfInt(key, envKey string) int {
 		log.Errorf("[getConfInt] Error parsing env variable '%s': %s", envKey, err)
 	}
 
-	return n
+	return n, nil
 }
 
-func getConfString(key, envKey string) string {
+func getConfString(key, envKey string) (string, error) {
 	val := os.Getenv(envKey)
 	if val == "" {
 		val = viper.GetString(key)
 	}
 	if val == "" {
-		log.Errorf("Missing config file value for key %s", key)
+		return "", fmt.Errorf("%s env variable is empty", envKey)
 	}
-	return val
+	return val, nil
 }
 
-func Read() *Cfg {
+func Read() Cfg {
 	viper.SetConfigName("conf/app") // name of config file (without extension)
 	viper.AddConfigPath("./")       // path to look for the config file in
 	err := viper.ReadInConfig()     // Find and read the config file
@@ -68,12 +69,38 @@ func Read() *Cfg {
 		log.Warnf("config file not found, will try to find env varibles: %s", err)
 	}
 
-	return &Cfg{
-		DbFileName:             getConfString("db.filename", "DB_FILENAME"),
-		RecordingsAbsolutePath: getConfString("dirs.recordings", "REC_PATH"),
-		DataPath:               getConfString("dirs.data", "DATA_DIR"),
-		DataDisk:               getConfString("sys.disk", "DATA_DISK"),
-		NetworkDev:             getConfString("sys.network", "NET_ADAPTER"),
+	// If any needed configuration is missing, panic.
+	db, err := getConfString("db.filename", "DB_FILENAME")
+	if err != nil {
+		log.Panicln(err)
+	}
+
+	path, err := getConfString("dirs.recordings", "REC_PATH")
+	if err != nil {
+		log.Panicln(err)
+	}
+
+	dataPath, err := getConfString("dirs.data", "DATA_DIR")
+	if err != nil {
+		log.Panicln(err)
+	}
+
+	dataDisk, err := getConfString("sys.disk", "DATA_DISK")
+	if err != nil {
+		log.Panicln(err)
+	}
+
+	network, err := getConfString("sys.network", "NET_ADAPTER")
+	if err != nil {
+		log.Panicln(err)
+	}
+
+	return Cfg{
+		DbFileName:             db,
+		RecordingsAbsolutePath: path,
+		DataPath:               dataPath,
+		DataDisk:               dataDisk,
+		NetworkDev:             network,
 	}
 }
 

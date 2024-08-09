@@ -59,34 +59,35 @@ func DispatchJob(ctx context.Context) {
 			network.SendSocket(m.Name, m.Message)
 			return
 		case <-ctx.Done():
-			log.Infoln("[dispatchMessages] stopped")
+			log.Infoln("[DispatchJob] stopped")
 			return
 		}
 	}
 }
 
 type JobMessage struct {
-	JobId       uint        `json:"jobId,omitempty" extensions:"!x-nullable"`
-	RecordingId uint        `json:"recordingId,omitempty" extensions:"!x-nullable"`
-	ChannelName string      `json:"channelName,omitempty" extensions:"!x-nullable"`
-	Filename    string      `json:"filename,omitempty"`
-	Type        string      `json:"type,omitempty"`
-	Data        interface{} `json:"data,omitempty"`
+	JobId       uint              `json:"jobId,omitempty" extensions:"!x-nullable"`
+	RecordingId RecordingId       `json:"recordingId,omitempty" extensions:"!x-nullable"`
+	ChannelId   ChannelId         `json:"channelId,omitempty" extensions:"!x-nullable"`
+	ChannelName string            `json:"channelName,omitempty" extensions:"!x-nullable"`
+	Filename    RecordingFileName `json:"filename,omitempty"`
+	Type        string            `json:"type,omitempty"`
+	Data        interface{}       `json:"data,omitempty"`
 }
 
 type Job struct {
-	Recording Recording `json:"-" gorm:"foreignKey:recording_id;references:recording_id;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
-	Channel   Channel   `json:"-" gorm:"foreignKey:channel_id;references:channel_id;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
+	Channel   Channel   `json:"-" gorm:"foreignKey:channel_id;references:channel_id;"`
+	Recording Recording `json:"-" gorm:"foreignKey:recording_id;references:recording_id"`
 
 	JobId uint `json:"jobId" gorm:"autoIncrement" extensions:"!x-nullable"`
 
-	ChannelId   uint `json:"channelId" gorm:"column:channel_id;not null;default:null" extensions:"!x-nullable"`
-	RecordingId uint `json:"recordingId" gorm:"column:recording_id;not null;default:null" extensions:"!x-nullable"`
+	ChannelId   ChannelId   `json:"channelId" gorm:"column:channel_id;not null;default:null" extensions:"!x-nullable"`
+	RecordingId RecordingId `json:"recordingId" gorm:"column:recording_id;not null;default:null" extensions:"!x-nullable"`
 
 	// Unique entry, this is the actual primary key
-	ChannelName ChannelName `json:"channelName" gorm:"not null;default:null" extensions:"!x-nullable"`
-	Filename    string      `json:"filename" gorm:"not null;default:null" extensions:"!x-nullable"`
-	Status      string      `json:"status" gorm:"not null;default:null" extensions:"!x-nullable"`
+	ChannelName ChannelName       `json:"channelName" gorm:"not null;default:null" extensions:"!x-nullable"`
+	Filename    RecordingFileName `json:"filename" gorm:"not null;default:null" extensions:"!x-nullable"`
+	Status      string            `json:"status" gorm:"not null;default:null" extensions:"!x-nullable"`
 
 	Filepath  string    `json:"pathRelative" gorm:"not null;default:null;" extensions:"!x-nullable"`
 	Active    bool      `json:"active" gorm:"not null;default:false" extensions:"!x-nullable"`
@@ -100,31 +101,45 @@ type Job struct {
 	Args     *string `json:"args" gorm:"default:null"`
 }
 
-func (recording *Recording) EnqueueRecordingJob(outputPath string) (*Job, error) {
-	return addJob(recording.ChannelId, recording.RecordingId, recording.ChannelName, recording.Filename, outputPath, StatusRecording, nil)
+func EnqueueRecordingJob(id RecordingId, outputPath string) (*Job, error) {
+	recording, err := id.FindRecordingById()
+	if err != nil {
+		return nil, err
+	}
+	return addJob(recording, StatusRecording, &outputPath)
 }
 
-func (recording *Recording) EnqueueConversionJob(mediaType string) (*Job, error) {
-	filepath := recording.ChannelName.AbsoluteChannelFilePath(recording.Filename)
-	return addJob(recording.ChannelId, recording.RecordingId, recording.ChannelName, recording.Filename, filepath, StatusConvert, &mediaType)
+func EnqueueConversionJob(id RecordingId, mediaType string) (*Job, error) {
+	recording, err := id.FindRecordingById()
+	if err != nil {
+		return nil, err
+	}
+	return addJob(recording, StatusConvert, &mediaType)
 }
 
-func (recording *Recording) EnqueuePreviewJob() (*Job, error) {
-	return addJob(recording.ChannelId, recording.RecordingId, recording.ChannelName, recording.Filename, recording.ChannelName.AbsoluteChannelFilePath(recording.Filename), StatusPreview, nil)
+func (id RecordingId) EnqueuePreviewJob() (*Job, error) {
+	recording, err := id.FindRecordingById()
+	if err != nil {
+		return nil, err
+	}
+	return addJob(recording, StatusPreview, nil)
 }
 
-func (recording *Recording) EnqueueCuttingJob(intervals string) (*Job, error) {
-	filepath := recording.ChannelName.AbsoluteChannelFilePath(recording.Filename)
-	return addJob(recording.ChannelId, recording.RecordingId, recording.ChannelName, recording.Filename, filepath, StatusCut, &intervals)
+func EnqueueCuttingJob(id RecordingId, intervals string) (*Job, error) {
+	recording, err := id.FindRecordingById()
+	if err != nil {
+		return nil, err
+	}
+	return addJob(recording, StatusCut, &intervals)
 }
 
-func addJob(channelId, recordingId uint, channelName ChannelName, filename, filepath, status string, args *string) (*Job, error) {
+func addJob(recording *Recording, status string, args *string) (*Job, error) {
 	job := Job{
-		ChannelId:   channelId,
-		RecordingId: recordingId,
-		ChannelName: channelName,
-		Filename:    filename,
-		Filepath:    filepath,
+		ChannelId:   recording.ChannelId,
+		ChannelName: recording.ChannelName,
+		RecordingId: recording.RecordingId,
+		Filename:    recording.Filename,
+		Filepath:    recording.ChannelName.AbsoluteChannelFilePath(recording.Filename),
 		Status:      status,
 		Args:        args,
 		Active:      false,
@@ -132,12 +147,12 @@ func addJob(channelId, recordingId uint, channelName ChannelName, filename, file
 	}
 
 	if err := Db.Create(&job).Error; err != nil {
-		log.Errorf("[Job] Error enqueing job: '%s/%s' -> %s: %s", channelName, filename, status, err)
+		log.Errorf("[Job] Error enqueing job: '%s/%s' -> %s: %s", recording.ChannelName, recording.Filename, status, err)
 		return &job, err
 	}
-	log.Infof("[Job] Enqueued job: '%s/%s' -> %s", channelName, filename, status)
+	log.Infof("[Job] Enqueued job: '%s/%s' -> %s", recording.ChannelName, recording.Filename, status)
 
-	SendJobChannel("job:create", JobMessage{JobId: job.JobId, Type: status, ChannelName: job.ChannelName.String(), Filename: job.Filename})
+	SendJobChannel("job:create", JobMessage{JobId: job.JobId, Type: status, ChannelId: job.ChannelId, ChannelName: job.ChannelName.String(), Filename: job.Filename})
 
 	return &job, nil
 }
@@ -175,7 +190,7 @@ func (job *Job) Destroy() error {
 	}
 	log.Infof("[Job] Job id delete %d", job.JobId)
 
-	SendJobChannel("job:destroy", JobMessage{JobId: job.JobId, ChannelName: job.ChannelName.String(), Filename: job.Filename})
+	SendJobChannel("job:destroy", JobMessage{JobId: job.JobId, ChannelId: job.ChannelId, ChannelName: job.ChannelName.String(), Filename: job.Filename})
 
 	return nil
 }
@@ -198,10 +213,10 @@ func GetJobsByStatus(status string) ([]*Job, error) {
 	return jobs, nil
 }
 
+// GetNextJob Any job is attached to a recording which it will process.
 func GetNextJob(status string) (*Job, error) {
 	var job *Job
 	err := Db.Where("status = ?", status).
-		Joins("Recording").
 		Order("jobs.created_at asc").First(&job).Error
 
 	if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -238,7 +253,7 @@ func (job *Job) Activate() error {
 
 	SendJobChannel("job:active", JobMessage{
 		JobId:       job.JobId,
-		RecordingId: job.RecordingId,
+		ChannelId:   job.ChannelId,
 		ChannelName: job.ChannelName.String(),
 		Filename:    job.Filename,
 		Type:        job.Status,
@@ -254,11 +269,14 @@ func previewJobs() error {
 		return errNextJob
 	}
 
-	recording := &Recording{ChannelId: job.ChannelId, ChannelName: job.ChannelName, Filename: job.Filename}
-	log.Infof("[Job] Recording: %v", job)
+	recording, err := job.RecordingId.FindRecordingById()
+	if err != nil {
+		return err
+	}
+	log.Infof("[previewJobs] Recording: %v", recording)
 
 	// Delete any old previews first
-	if err := recording.DestroyPreviews(); err != nil {
+	if err := recording.RecordingId.DestroyPreviews(); err != nil {
 		log.Errorf("[Job] Error deleting existing previews: %s", err)
 	}
 
@@ -276,6 +294,7 @@ func previewJobs() error {
 			SendJobChannel("job:start", JobMessage{
 				JobId:       job.JobId,
 				RecordingId: job.RecordingId,
+				ChannelId:   job.ChannelId,
 				ChannelName: job.ChannelName.String(),
 				Filename:    job.Filename,
 				Type:        job.Status,
@@ -284,14 +303,14 @@ func previewJobs() error {
 		OnProgress: func(info *helpers.ProcessInfo) {
 			SendJobChannel("job:progress", JobMessage{
 				JobId:       job.JobId,
-				RecordingId: job.RecordingId,
+				ChannelId:   job.ChannelId,
 				ChannelName: job.ChannelName.String(),
 				Filename:    job.Filename,
-				Data:        JobVideoInfo{Frame: info.Frame, Packets: job.Recording.Packets}})
+				Data:        JobVideoInfo{Frame: info.Frame, Packets: uint64(info.Total)}})
 		},
 		InputPath:  job.ChannelName.AbsoluteChannelPath(),
 		OutputPath: job.ChannelName.AbsoluteChannelDataPath(),
-		Filename:   job.Filename,
+		Filename:   job.Filename.String(),
 	}
 
 	// 1. First check if input file is corrupt.
@@ -299,7 +318,7 @@ func previewJobs() error {
 		// 2. Delete the file if it is corrupted
 		checkFileErr := helpers.CheckVideo(job.ChannelName.GetRecordingsPaths(job.Filename).Filepath)
 		if checkFileErr != nil {
-			if rec, errJob := FindRecording(job.RecordingId); errJob != nil && rec != nil {
+			if rec, errJob := job.RecordingId.FindRecordingById(); errJob != nil && rec != nil {
 				_ = rec.Destroy()
 			}
 			log.Errorf("[Job] File corrupted, deleting '%s', %v", job.Filename, checkFileErr)
@@ -311,13 +330,11 @@ func previewJobs() error {
 	}
 
 	// 4. Went ok.
-	if err := recording.AddPreviews(); err != nil {
+	if err := recording.RecordingId.AddPreviews(); err != nil {
 		return fmt.Errorf("error adding previews: %v", err)
 	}
 
-	if _, err := FindRecording(job.RecordingId); err != nil {
-		SendJobChannel("job:preview:done", JobMessage{JobId: job.JobId, ChannelName: job.ChannelName.String(), Filename: job.Filename})
-	}
+	SendJobChannel("job:preview:done", JobMessage{JobId: job.JobId, RecordingId: job.RecordingId, ChannelId: job.ChannelId, ChannelName: job.ChannelName.String(), Filename: job.Filename})
 
 	if errDestroy := job.Destroy(); errDestroy != nil {
 		return fmt.Errorf("error deleting job: %v", errDestroy)
@@ -336,19 +353,21 @@ func conversionJobs() error {
 		log.Errorf("Error activating job: %s", err)
 	}
 
+	log.Infof("Job info: %v", job)
+
 	result, err := helpers.ConvertVideo(&helpers.VideoConversionArgs{
 		OnStart: func(info *helpers.CommandInfo) {
 			_ = job.UpdateInfo(info.Pid, info.Command)
 		},
 		OnProgress: func(info *helpers.ProcessInfo) {
-			if err := job.UpdateProgress(fmt.Sprintf("%f", float32(info.Frame)/float32(job.Recording.Packets)*100)); err != nil {
+			if err := job.UpdateProgress(fmt.Sprintf("%f", float32(info.Frame)/float32(info.Total)*100)); err != nil {
 				log.Errorf("Error updating job progress: %s", err)
 			}
 
-			SendJobChannel("job:progress", JobMessage{JobId: job.JobId, Data: JobVideoInfo{Packets: job.Recording.Packets, Frame: info.Frame}, Type: job.Status, ChannelName: job.ChannelName.String(), Filename: job.Filename})
+			SendJobChannel("job:progress", JobMessage{JobId: job.JobId, ChannelId: job.ChannelId, Data: JobVideoInfo{Packets: uint64(info.Total), Frame: info.Frame}, Type: job.Status, ChannelName: job.ChannelName.String(), Filename: job.Filename})
 		},
 		InputPath:  job.ChannelName.AbsoluteChannelPath(),
-		Filename:   job.Filename,
+		Filename:   job.Filename.String(),
 		OutputPath: job.ChannelName.AbsoluteChannelPath(),
 	}, *job.Args)
 
@@ -369,21 +388,14 @@ func conversionJobs() error {
 		log.Errorf("[conversionJobs] Error deleting job: %s", err)
 	}
 
-	// All good now, save the record.
-	recording := &Recording{
-		ChannelId:    job.ChannelId,
-		ChannelName:  job.ChannelName,
-		Filename:     result.Filename,
-		PathRelative: job.ChannelName.ChannelPath(result.Filename),
-	}
 	// Also, when fails, destroy it, some reason it is foul.
-	if err := recording.Create(); err != nil {
+	if _, err := CreateRecording(job.ChannelId, RecordingFileName(result.Filename), "recording"); err != nil {
 		if errRemove := os.Remove(result.Filepath); errRemove != nil {
 			log.Errorf("Error deleting file '%s': %s", result.Filepath, errRemove)
 			return errRemove
 		}
 	} else {
-		if _, errJob := recording.EnqueuePreviewJob(); errJob != nil {
+		if _, errJob := job.RecordingId.EnqueuePreviewJob(); errJob != nil {
 			log.Errorf("Error enqueing preview job: %s", errJob)
 			return errJob
 		}
@@ -454,7 +466,7 @@ func cuttingJobs() error {
 	// Filenames
 	now := time.Now()
 	stamp := now.Format("2006_01_02_15_04_05")
-	filename := fmt.Sprintf("%s_cut_%s.mp4", job.ChannelName, stamp)
+	filename := RecordingFileName(fmt.Sprintf("%s_cut_%s.mp4", job.ChannelName, stamp))
 	inputPath := job.ChannelName.AbsoluteChannelFilePath(job.Filename)
 	outputFile := job.ChannelName.AbsoluteChannelFilePath(filename)
 	segFiles := make([]string, len(cutArgs.Starts))
@@ -463,7 +475,7 @@ func cuttingJobs() error {
 	// Cut
 	segmentFilename := fmt.Sprintf("%s_cut_%s", job.ChannelName, stamp)
 	for i, start := range cutArgs.Starts {
-		segFiles[i] = job.ChannelName.AbsoluteChannelFilePath(fmt.Sprintf("%s_%04d.mp4", segmentFilename, i))
+		segFiles[i] = job.ChannelName.AbsoluteChannelFilePath(RecordingFileName(fmt.Sprintf("%s_%04d.mp4", segmentFilename, i)))
 		err = helpers.CutVideo(&helpers.CuttingJob{
 			OnStart: func(info *helpers.CommandInfo) {
 				_ = job.UpdateInfo(info.Pid, info.Command)
@@ -489,7 +501,7 @@ func cuttingJobs() error {
 	for i, file := range segFiles {
 		mergeFileContent[i] = fmt.Sprintf("file '%s'", file)
 	}
-	mergeTextFile := job.ChannelName.AbsoluteChannelFilePath(fmt.Sprintf("%s.txt", segmentFilename))
+	mergeTextFile := job.ChannelName.AbsoluteChannelFilePath(RecordingFileName(fmt.Sprintf("%s.txt", segmentFilename)))
 	err = os.WriteFile(mergeTextFile, []byte(strings.Join(mergeFileContent, "\n")), 0644)
 	if err != nil {
 		log.Errorf("[Job] Error writing concat text file '%s': %s", mergeTextFile, err)
@@ -503,8 +515,7 @@ func cuttingJobs() error {
 		return err
 	}
 
-	err = helpers.MergeVideos(func(s string) { log.Errorf("[MergeVideos] %s\n", s) }, mergeTextFile, outputFile)
-	if err != nil {
+	if err = helpers.MergeVideos(func(s string) { log.Errorf("[MergeVideos] %s\n", s) }, mergeTextFile, outputFile); err != nil {
 		// Job failed, destroy all files.
 		log.Errorf("[Job] Error merging file '%s': %s", mergeTextFile, err)
 		for _, file := range segFiles {
@@ -526,44 +537,23 @@ func cuttingJobs() error {
 	}
 
 	outputVideo := &helpers.Video{FilePath: outputFile}
-	info, err := outputVideo.GetVideoInfo()
-	if err != nil {
+	if _, err := outputVideo.GetVideoInfo(); err != nil {
 		log.Errorf("[Job] Error reading video information for file '%s': %s", filename, err)
 	}
 
-	// Cutting written to dist, add record to models
-	newRec := Recording{
-		RecordingId:  job.RecordingId,
-		ChannelName:  job.ChannelName,
-		Filename:     filename,
-		PathRelative: job.ChannelName.ChannelPath(filename),
-		Duration:     info.Duration,
-		Width:        info.Width,
-		Height:       info.Height,
-		Size:         info.Size,
-		BitRate:      info.BitRate,
-		Packets:      info.PacketCount,
-		CreatedAt:    time.Now(),
-		Bookmark:     false,
-		VideoType:    "cut",
-	}
-
-	err = newRec.Create()
-	if err != nil {
+	if _, err = CreateRecording(job.ChannelId, job.Filename, "cut"); err != nil {
 		log.Errorf("[Job] Error creating: %s\n", err)
 		return err
 	}
 
 	// Successfully added cut record, enqueue preview job
-	_, err = newRec.EnqueuePreviewJob()
-	if err != nil {
+	if _, err = job.RecordingId.EnqueuePreviewJob(); err != nil {
 		log.Errorf("[Job] Error adding preview for cutting job %d: %s", job.JobId, err)
 		return err
 	}
 
 	// Finished, destroy job
-	err = job.Destroy()
-	if err != nil {
+	if err = job.Destroy(); err != nil {
 		log.Errorf("[Job] Error deleteing job: %s", err)
 		return err
 	}

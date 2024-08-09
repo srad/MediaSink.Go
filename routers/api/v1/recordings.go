@@ -111,8 +111,8 @@ func GetRecording(c *gin.Context) {
 		return
 	}
 
-	recording := models.Recording{RecordingId: uint(id)}
-	if err := recording.FindById(); err != nil {
+	recording, err := models.RecordingId(id).FindById()
+	if err != nil {
 		appG.Response(http.StatusInternalServerError, err)
 		return
 	}
@@ -161,12 +161,12 @@ func GeneratePreview(c *gin.Context) {
 		return
 	}
 
-	recording := models.Recording{RecordingId: uint(id)}
-	if err := recording.FindById(); err != nil {
+	recordingId := models.RecordingId(id)
+	if err != nil {
 		appG.Response(http.StatusInternalServerError, err)
 	}
 
-	job, err := recording.EnqueuePreviewJob()
+	job, err := recordingId.EnqueuePreviewJob()
 	if err != nil {
 		appG.Response(http.StatusInternalServerError, err)
 		return
@@ -264,11 +264,7 @@ func CutRecording(c *gin.Context) {
 		return
 	}
 
-	recording := models.Recording{RecordingId: uint(id)}
-	if err := recording.FindById(); err != nil {
-		appG.Response(http.StatusInternalServerError, err)
-	}
-	job, err := recording.EnqueueCuttingJob(string(cut))
+	job, err := models.EnqueueCuttingJob(models.RecordingId(id), string(cut))
 	if err != nil {
 		appG.Response(http.StatusInternalServerError, err)
 		return
@@ -299,11 +295,7 @@ func Convert(c *gin.Context) {
 	}
 	mediaType := c.Param("mediaType")
 
-	recording := models.Recording{RecordingId: uint(id)}
-	if err := recording.FindById(); err != nil {
-		appG.Response(http.StatusInternalServerError, err)
-	}
-	job, err := recording.EnqueueConversionJob(mediaType)
+	job, err := models.EnqueueConversionJob(models.RecordingId(id), mediaType)
 	if err != nil {
 		appG.Response(http.StatusInternalServerError, err)
 		return
@@ -387,7 +379,7 @@ func GetRandomRecordings(c *gin.Context) {
 // @Router      /recordings/{channelName}/{filename}/download [get]
 func DownloadRecording(c *gin.Context) {
 	channelName := models.ChannelName(c.Param("channelName"))
-	c.FileAttachment(channelName.AbsoluteChannelFilePath(c.Param("filename")), c.Param("filename"))
+	c.FileAttachment(channelName.AbsoluteChannelFilePath(models.RecordingFileName(c.Param("filename"))), c.Param("filename"))
 }
 
 // DeleteRecording godoc
@@ -410,7 +402,7 @@ func DeleteRecording(c *gin.Context) {
 		return
 	}
 
-	rec, err := models.FindRecording(uint(id))
+	rec, err := models.RecordingId(id).FindRecordingById()
 	if err != nil {
 		appG.Response(http.StatusInternalServerError, err)
 		return

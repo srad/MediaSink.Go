@@ -77,8 +77,6 @@ func ImportChannels(context.Context) error {
 
 		log.Infof("[Import/%s (%d/%d)] Reading folder", channelName, i, len(channelFolders))
 
-		channel := models.NewChannel(channelName, channelName.String(), "https://"+channelName.String())
-
 		// Import from JSON file, if found.
 		//if channel.ExistsJson() {
 		//	if json, err2 := channel.ReadJson(); err2 == nil {
@@ -93,13 +91,15 @@ func ImportChannels(context.Context) error {
 		//	}
 		//}
 
-		if err4 := channel.Create(); err4 != nil {
-			log.Errorf("[Import/%s (%d/%d)] Error adding  channel: %s", channelName, err4, i, len(channelFolders))
+		newChannel, err4 := models.CreateChannel(channelName, channelName.String(), "https://"+channelName.String())
+		if err4 != nil {
+			log.Errorf("[Import/%s (%d/%d)] Error adding %s", channelName, i, len(channelFolders), err4)
 		}
 
 		// ---------------------------------------------------------------------------------
 		// Import individual files
 		// ---------------------------------------------------------------------------------
+		log.Infof("[Import/%s (%d/%d)] Import individual files ...", channelName, i, len(channelFolders))
 		files, err2 := os.ReadDir(channelName.AbsoluteChannelPath())
 		if err2 != nil {
 			log.Errorf("[Import/%s] Error reading: %s", channelName, err2)
@@ -110,6 +110,7 @@ func ImportChannels(context.Context) error {
 		// Traverse all mp4 files and add to models if not existent
 		// ---------------------------------------------------------------------------------
 		var j = 0
+		log.Infof("[Import/%s (%d/%d)] Traverse all mp4 files and add to models if not existent (files: %d) ...", channelName, i, len(channelFolders), len(files))
 		for _, file := range files {
 			j++
 			mp4File := !file.IsDir() && filepath.Ext(file.Name()) == ".mp4"
@@ -117,11 +118,11 @@ func ImportChannels(context.Context) error {
 				continue
 			}
 
-			recording := models.Recording{ChannelId: channel.ChannelId, ChannelName: channelName, Filename: file.Name()}
-
 			log.Infof("[Import/%s (%d/%d) (%d/%d)] Checking file: %s", channelName, i, len(channelFolders), j, len(files), file.Name())
 
-			video := &helpers.Video{FilePath: channelName.AbsoluteChannelFilePath(file.Name())}
+			recording := models.Recording{ChannelId: newChannel.ChannelId, ChannelName: channelName, Filename: models.RecordingFileName(file.Name())}
+
+			video := &helpers.Video{FilePath: channelName.AbsoluteChannelFilePath(models.RecordingFileName(file.Name()))}
 
 			if _, errVideoInfo := video.GetVideoInfo(); errVideoInfo != nil {
 				log.Errorf("[Import/%s] File '%s' seems corrupted, deleting: %s", channelName, file.Name(), errVideoInfo)
@@ -134,7 +135,8 @@ func ImportChannels(context.Context) error {
 			}
 
 			// File seems ok, try to add.
-			if errAdd := recording.AddIfNotExists(); errAdd != nil {
+			newRecording, errAdd := models.AddIfNotExists(newChannel.ChannelId, newChannel.ChannelName, models.RecordingFileName(file.Name()))
+			if errAdd != nil {
 				log.Errorf("[Import/%s] Error: %s", channelName, errAdd)
 				continue
 			}
@@ -144,12 +146,12 @@ func ImportChannels(context.Context) error {
 			// So check if the files exist and if not generate them.
 			// Create preview if any not existent
 			// ---------------------------------------------------------------------------------
-			if recording.PreviewsExist() {
+			if models.PreviewsExist(newRecording.ChannelName, newRecording.Filename) {
 				log.Infof("[Import/%s] Preview files exist", channelName)
-				recording.AddPreviews()
+				newRecording.RecordingId.AddPreviews()
 			} else {
 				log.Infof("[Import/%s] Adding job for: %s", channelName, file.Name())
-				recording.EnqueuePreviewJob()
+				newRecording.RecordingId.EnqueuePreviewJob()
 			}
 		}
 	}

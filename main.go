@@ -15,12 +15,6 @@ import (
 	"github.com/srad/streamsink/services"
 )
 
-var (
-	WarningLog *log.Logger
-	InfoLog    *log.Logger
-	ErrorLog   *log.Logger
-)
-
 func main() {
 	log.SetFormatter(&log.TextFormatter{})
 

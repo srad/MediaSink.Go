@@ -1,7 +1,5 @@
 #!/bin/bash
 
-#!/bin/bash
-
 script_dir="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 echo "Current folder: '$(pwd)'"
 
@@ -22,10 +20,10 @@ for d in $folders; do
   # Generate previews for all MP4 files.
   for i in *.mp4; do
       echo "($file_counter/$files_total) $i -> ${i%.*}.fast.mp4 -> ${i%.*}.mp4"
-      if /home/saman/src/StreamSink.Go/scripts/mp4_to_faststart.sh .; then
+      if ./mp4_to_faststart.sh .; then
         echo "completed $i"
         cd .previews/videos
-        if /home/saman/src/StreamSink.Go/scripts/mp4_to_faststart.sh .; then
+        if ./mp4_to_faststart.sh .; then
           echo "ok previews $i"
         else
           echo "error preview $i"

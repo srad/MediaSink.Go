@@ -10,6 +10,7 @@ import (
 )
 
 var (
+	// Queue size.
 	socketChannel = make(chan SocketEvent, 1000)
 	upGrader      = websocket.Upgrader{CheckOrigin: func(r *http.Request) bool {
 		return true
@@ -22,11 +23,12 @@ type SocketEvent struct {
 	Name string      `json:"name"`
 }
 
+// SendSocket Dispatches message asynchronously.
 func SendSocket(name string, data interface{}) {
-	go channelDispatcher(SocketEvent{Name: name, Data: data})
+	go SocketEvent{Name: name, Data: data}.channelDispatcher()
 }
 
-func channelDispatcher(event SocketEvent) {
+func (event SocketEvent) channelDispatcher() {
 	socketChannel <- event
 }
 
@@ -59,10 +61,6 @@ func (d *wsDispatcher) rmWs(ws *websocket.Conn) {
 			break
 		}
 	}
-}
-
-func NewSocketEvent(event string, data interface{}) SocketEvent {
-	return SocketEvent{Name: event, Data: data}
 }
 
 type wsConnection struct {
