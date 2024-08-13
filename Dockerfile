@@ -104,7 +104,7 @@ RUN swag init
 RUN go mod tidy
 RUN go mod vendor
 
-ENV CGO_ENABLED=0
+ENV CGO_ENABLED=1
 ENV GOOS=${TARGETOS}
 ENV GOARCH=${TARGETARCH}
 
