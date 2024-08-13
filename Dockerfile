@@ -16,7 +16,7 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get install build-essential libsqlite3-de
 RUN sed -i -e 's/# en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen && \
     dpkg-reconfigure --frontend=noninteractive locales && \
     update-locale LANG=en_US.UTF-8
-ENV LANG en_US.UTF-8
+ENV LANG=en_US.UTF-8
 
 RUN pip install youtube-dl --break-system-packages
 
@@ -104,10 +104,7 @@ RUN swag init
 RUN go mod tidy
 RUN go mod vendor
 
-# https://github.com/mattn/go-sqlite3/issues/803
-RUN GOFLAGS="-g -O2 -Wno-return-local-addr"
-
-ENV CGO_ENABLED=1
+ENV CGO_ENABLED=0
 ENV GOOS=${TARGETOS}
 ENV GOARCH=${TARGETARCH}
 
