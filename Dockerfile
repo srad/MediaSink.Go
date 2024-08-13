@@ -1,5 +1,10 @@
 FROM --platform=$BUILDPLATFORM golang:1-bookworm
 
+ARG BUILDPLATFORM
+ARG TARGETPLATFORM
+ARG TARGETOS
+ARG TARGETARCH
+
 ENV TZ=Europe/Berlin
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
@@ -102,12 +107,7 @@ RUN go mod vendor
 # https://github.com/mattn/go-sqlite3/issues/803
 RUN GOFLAGS="-g -O2 -Wno-return-local-addr"
 
-ENV CGO_ENABLED=1
-ENV GOOS=$TARGETOS
-ENV GOARCH=$TARGETARCH
-
-ARG TARGETOS=TARGETARCH
-RUN go build -o ./streamsink
+RUN CGO_ENABLED=1 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -o ./streamsink
 
 EXPOSE 3000
 
