@@ -107,7 +107,11 @@ RUN go mod vendor
 # https://github.com/mattn/go-sqlite3/issues/803
 RUN GOFLAGS="-g -O2 -Wno-return-local-addr"
 
-RUN CGO_ENABLED=1 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -o ./streamsink
+ENV CGO_ENABLED=1
+ENV GOOS=${TARGETOS}
+ENV GOARCH=${TARGETARCH}
+
+RUN go build -o ./streamsink
 
 EXPOSE 3000
 
