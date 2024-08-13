@@ -541,13 +541,14 @@ func cuttingJobs() error {
 		log.Errorf("[Job] Error reading video information for file '%s': %s", filename, err)
 	}
 
-	if _, err = CreateRecording(job.ChannelId, job.Filename, "cut"); err != nil {
-		log.Errorf("[Job] Error creating: %s\n", err)
-		return err
+	cutRecording, errCreate := CreateRecording(job.ChannelId, filename, "cut")
+	if errCreate != nil {
+		log.Errorf("[Job] Error creating: %s\n", errCreate)
+		return errCreate
 	}
 
 	// Successfully added cut record, enqueue preview job
-	if _, err = job.RecordingId.EnqueuePreviewJob(); err != nil {
+	if _, err = cutRecording.RecordingId.EnqueuePreviewJob(); err != nil {
 		log.Errorf("[Job] Error adding preview for cutting job %d: %s", job.JobId, err)
 		return err
 	}

@@ -193,7 +193,7 @@ func CreateRecording(channelId ChannelId, filename RecordingFileName, videoType 
 	recording.Packets = info.PacketCount
 
 	// Check for existing recording.
-	err = Db.Model(Recording{}).Where("channel_id = ? AND filename = ?", channelId, filename).Error
+	err = Db.Model(Recording{}).Where("channel_id = ? AND filename = ?", channelId, filename).First(&recording).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		if err := Db.Model(Recording{}).Create(&recording).Error; err != nil {
 			return nil, fmt.Errorf("error creating record: %s", err)
@@ -312,7 +312,7 @@ func AddIfNotExists(channelId ChannelId, channelName ChannelName, filename Recor
 		}
 	}
 
-	return recording, nil
+	return recording, err
 }
 
 func GetVideoInfo(channelName ChannelName, filename RecordingFileName) (*helpers.FFProbeInfo, error) {
