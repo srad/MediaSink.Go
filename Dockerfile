@@ -117,7 +117,7 @@ RUN swag init
 
 RUN go mod tidy
 RUN go mod vendor
-/home/devops/src/sedrad/docker-garbage.sh
+
 ENV CGO_ENABLED=1
 ENV GOOS=${TARGETOS}
 ENV GOARCH=${TARGETARCH}
