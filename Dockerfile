@@ -123,8 +123,9 @@ ENV GOOS=${TARGETOS}
 ENV GOARCH=${TARGETARCH}
 
 # ARM64 specific compilation
-RUN if [ "$TARGETPLATFORM" = "linux/arm64" ]; then apt install gcc-aarch64-linux-gnu -y; fi
-RUN if [ "$TARGETPLATFORM" = "linux/arm64" ]; then CC=aarch64-linux-gnu-gcc CXX=aarch64-linux-gnu-g++ go build -o ./streamsink; else go build -o ./streamsink ; fi
+RUN if [ "$TARGETPLATFORM" = "linux/arm64" ]; then apt install gccgo-arm-linux-gnueabihf binutils-arm-linux-gnueabi gcc-aarch64-linux-gnu -y; fi
+# Go cross compile issue with env variables, see: https://github.com/golang/go/issues/64190#issuecomment-1813243547
+RUN if [ "$TARGETPLATFORM" = "linux/arm64" ]; then GOARCH='arm' GOHOSTARCH='arm' CC=arm-linux-gnueabihf-gcc CXX=arm-linux-gnueabi-g++ go build -o ./streamsink; else go build -o ./streamsink ; fi
 
 EXPOSE 80
 
