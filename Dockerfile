@@ -28,7 +28,7 @@ RUN pip install youtube-dl --break-system-packages
 RUN apt install g++-x86-64-linux-gnu libc6-dev-amd64-cross -y
 
 # Start ffmpeg build
-RUN apt install -y nasm git gcc binutils libunistring-dev libx264-dev libx265-dev libnuma-dev libvpx-dev libfaac-dev libfdk-aac-dev libmp3lame-dev libopus-dev
+RUN apt install -y nasm git gcc-x86-64-linux-gnu libc6-dev-amd64-cross binutils libunistring-dev libx264-dev libx265-dev libnuma-dev libvpx-dev libfaac-dev libfdk-aac-dev libmp3lame-dev libopus-dev
 RUN apt -y install \
       autoconf \
       automake \
