@@ -5,6 +5,9 @@ ARG TARGETPLATFORM
 ARG TARGETOS
 ARG TARGETARCH
 
+# -----------------------------------------------------------------------------------
+# Image OS environment
+# -----------------------------------------------------------------------------------
 ENV TZ=Europe/Berlin
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
@@ -18,17 +21,22 @@ RUN sed -i -e 's/# en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen && \
     update-locale LANG=en_US.UTF-8
 ENV LANG=en_US.UTF-8
 
-RUN pip install youtube-dl --break-system-packages
+# -----------------------------------------------------------------------------------
+# Build y-dl
+# -----------------------------------------------------------------------------------
+RUN apt -y install git zip pandoc man python-is-python3
+RUN git clone https://github.com/ytdl-org/youtube-dl.git /youtube-dl
+WORKDIR /youtube-dl
+RUN make
+RUN make install
 
-#RUN wget -q https://yt-dl.org/downloads/latest/youtube-dl -O /usr/local/bin/youtube-dl
-#RUN chmod a+rx /usr/local/bin/youtube-dl
-
+# -----------------------------------------------------------------------------------
+# Build ffmpeg
+# -----------------------------------------------------------------------------------
 # Cross compilation issues since some unknown version of debian or go, unclear.
 # https://github.com/confluentinc/confluent-kafka-go/issues/898
-RUN apt install g++-x86-64-linux-gnu libc6-dev-amd64-cross -y
-
-# Start ffmpeg build
-RUN apt install -y nasm git gcc-x86-64-linux-gnu libc6-dev-amd64-cross binutils libunistring-dev libx264-dev libx265-dev libnuma-dev libvpx-dev libfaac-dev libfdk-aac-dev libmp3lame-dev libopus-dev
+# -----------------------------------------------------------------------------------
+RUN apt install -y nasm git g++-x86-64-linux-gnu gcc-x86-64-linux-gnu libc6-dev-amd64-cross binutils libunistring-dev libx264-dev libx265-dev libnuma-dev libvpx-dev libfaac-dev libfdk-aac-dev libmp3lame-dev libopus-dev
 RUN apt -y install \
       autoconf \
       automake \
@@ -81,9 +89,15 @@ RUN make distclean
 RUN apt autoremove -y
 # End ffmpeg build
 
+# -----------------------------------------------------------------------------------
+# Mountable folders
+# -----------------------------------------------------------------------------------
 RUN mkdir -p /recordings
 RUN mkdir -p /disk
 
+# -----------------------------------------------------------------------------------
+# Building app
+# -----------------------------------------------------------------------------------
 WORKDIR /app
 RUN mkdir -p docs
 
@@ -103,13 +117,15 @@ RUN swag init
 
 RUN go mod tidy
 RUN go mod vendor
-
+/home/devops/src/sedrad/docker-garbage.sh
 ENV CGO_ENABLED=1
 ENV GOOS=${TARGETOS}
 ENV GOARCH=${TARGETARCH}
 
-RUN go build -o ./streamsink
+# ARM64 specific compilation
+RUN if [ "$TARGETPLATFORM" = "linux/arm64" ]; then apt install gcc-aarch64-linux-gnu -y; fi
+RUN if [ "$TARGETPLATFORM" = "linux/arm64" ]; then CC=aarch64-linux-gnu-gcc CXX=aarch64-linux-gnu-g++ go build -o ./streamsink; else go build -o ./streamsink ; fi
 
-EXPOSE 3000
+EXPOSE 80
 
 CMD [ "./streamsink" ]
