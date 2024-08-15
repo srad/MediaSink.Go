@@ -85,8 +85,8 @@ func CreateChannel(channelName ChannelName, displayName, url string) (*Channel, 
 	return channel, nil
 }
 
-func (channel *Channel) CreateChannelDetail() (*Channel, error) {
-	if err := Db.FirstOrCreate(&channel).Error; err != nil {
+func CreateChannelDetail(channel Channel) (*Channel, error) {
+	if err := Db.Create(&channel).Error; err != nil {
 		return nil, err
 	}
 
@@ -95,7 +95,7 @@ func (channel *Channel) CreateChannelDetail() (*Channel, error) {
 	}
 	//channel.WriteJson()
 
-	return channel, nil
+	return &channel, nil
 }
 
 func (channel *Channel) ExistsJson() bool {

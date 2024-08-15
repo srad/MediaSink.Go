@@ -126,9 +126,10 @@ ENV GOARCH=${TARGETARCH}
 # Multiple arm cross compilation issues, see:
 # https://github.com/golang/go/issues/64715
 # https://github.com/golang/go/issues/64190#issuecomment-1813243547
+# https://stackoverflow.com/questions/58244095/gcc-7-error-unrecognized-command-line-option-m64
 RUN if [ "$TARGETPLATFORM" = "linux/arm64" ]; then apt install gccgo-arm-linux-gnueabihf binutils-arm-linux-gnueabi gcc-aarch64-linux-gnu -y; fi
 RUN if [ "$TARGETPLATFORM" = "linux/arm64" ]; then GOARCH='arm' GOHOSTARCH='arm' CC=arm-linux-gnueabihf-gcc GOGCCFLAGS="-march=armv8-a" CXX=arm-linux-gnueabi-g++ go build -gcflags="-l -N" -o ./streamsink; else go build -o ./streamsink ; fi
 
-EXPOSE 80
+EXPOSE 3000
 
 CMD [ "./streamsink" ]

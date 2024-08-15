@@ -166,31 +166,31 @@ func CreateChannel(c *gin.Context) {
 		Tags:        data.Tags,
 		IsPaused:    data.IsPaused}
 
-	if _, err := channel.CreateChannelDetail(); errors.Is(err, gorm.ErrDuplicatedKey) {
-		errDuplicate := fmt.Errorf("error creating record: %s", err)
-		log.Errorln(errDuplicate)
-		appG.Response(http.StatusInternalServerError, errDuplicate)
-		return
-	} else if err != nil {
-		errCreate := fmt.Errorf("error creating record: %s", err)
-		log.Errorln(errCreate)
-		appG.Response(http.StatusInternalServerError, errCreate)
+	newChannel, err := models.CreateChannelDetail(channel)
+	if err != nil {
+		if errors.Is(err, gorm.ErrDuplicatedKey) {
+			err = fmt.Errorf("error creating record: %s", err)
+		}
+
+		log.Errorln(err)
+		appG.Response(http.StatusInternalServerError, err)
 		return
 	}
 
+	// Success
 	cfg := conf.Read()
 
-	res := &ChannelResponse{
-		Channel:      channel,
+	res := ChannelResponse{
+		Channel:      *newChannel,
 		IsRecording:  false,
 		IsOnline:     false,
-		Preview:      filepath.Join(channel.ChannelName.AbsoluteChannelPath(), cfg.DataPath, models.SnapshotFilename),
+		Preview:      filepath.Join(newChannel.ChannelName.AbsoluteChannelPath(), cfg.DataPath, models.SnapshotFilename),
 		MinRecording: 0,
 	}
 
 	log.Infof("New channel: %v", res)
 
-	appG.Response(http.StatusOK, &res)
+	appG.Response(http.StatusOK, res)
 }
 
 // UpdateChannel godoc
