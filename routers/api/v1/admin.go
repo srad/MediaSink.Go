@@ -1,6 +1,7 @@
 package v1
 
 import (
+	"github.com/srad/streamsink/routers/api/v1/response"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -16,7 +17,7 @@ import (
 // @Accept      json
 // @Produce     json
 // @Success     200
-// @Failure     500 {}  http.StatusInternalServerError
+// @Failure     500 {} http.StatusInternalServerError
 // @Router      /admin/import [post]
 func TriggerImport(c *gin.Context) {
 	appG := app.Gin{C: c}
@@ -27,17 +28,47 @@ func TriggerImport(c *gin.Context) {
 	appG.Response(http.StatusOK, nil)
 }
 
-// IsImporting godoc
-// @Summary     Run once the import of mp4 files in the recordings folder, which are not yet in the system
+// GetImportInfo godoc
+// @Summary     Returns server version information
 // @Schemes
-// @Description Return a list of channels
+// @Description version information
 // @Tags        admin
 // @Accept      json
 // @Produce     json
-// @Success     200 {boolean} Importing flag
-// @Router      /admin/importing [get]
-func IsImporting(c *gin.Context) {
+// @Success     200 {object} response.ImportInfo
+// @Failure     500 {} http.StatusInternalServerError
+// @Router      /admin/import [get]
+func GetImportInfo(c *gin.Context) {
 	appG := app.Gin{C: c}
 
-	appG.Response(http.StatusOK, services.IsImporting())
+	progress, size := services.GetImportProgress()
+
+	info := response.ImportInfo{
+		IsImporting: services.IsImporting(),
+		Progress:    progress,
+		Size:        size,
+	}
+
+	appG.Response(http.StatusOK, info)
+}
+
+// GetVersion godoc
+// @Summary     Returns server version information
+// @Schemes
+// @Description version information
+// @Tags        admin
+// @Accept      json
+// @Produce     json
+// @Success     200 {object} response.ServerInfo
+// @Failure     500 {} http.StatusInternalServerError
+// @Router      /admin/version [get]
+func GetVersion(version, commit string) func(c *gin.Context) {
+	return func(c *gin.Context) {
+		appG := app.Gin{C: c}
+
+		appG.Response(http.StatusOK, response.ServerInfo{
+			Commit:  commit,
+			Version: version,
+		})
+	}
 }

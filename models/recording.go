@@ -180,31 +180,17 @@ func CreateRecording(channelId ChannelId, filename RecordingFileName, videoType 
 		PathRelative: channel.ChannelName.ChannelPath(filename),
 	}
 
-	info, err := GetVideoInfo(channel.ChannelName, filename)
-	if err != nil {
-		return nil, err
-	}
-
-	recording.Duration = info.Duration
-	recording.Size = info.Size
-	recording.BitRate = info.BitRate
-	recording.Width = info.Width
-	recording.Height = info.Height
-	recording.Packets = info.PacketCount
-
 	// Check for existing recording.
-	err = Db.Model(Recording{}).Where("channel_id = ? AND filename = ?", channelId, filename).First(&recording).Error
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		if err := Db.Model(Recording{}).Create(&recording).Error; err != nil {
-			return nil, fmt.Errorf("error creating record: %s", err)
-		}
-	} else {
-		if err := Db.Model(Recording{}).
-			Where("channel_id = ? AND filename = ?", channelId, filename).
-			Updates(&recording).Error; err != nil {
-			return nil, fmt.Errorf("error creating record: %s", err)
-		}
+	if errFind := Db.Model(recording).Where("channel_id = ? AND filename = ?", channelId, filename).FirstOrCreate(recording).Error; errors.Is(errFind, gorm.ErrRecordNotFound) {
+		return nil, fmt.Errorf("error creating record: %s", errFind)
 	}
+
+	info, err := GetVideoInfo(recording.ChannelName, recording.Filename)
+	if err != nil {
+		return nil, fmt.Errorf("[UpdateVideoInfo] Error updating video info: %s", err)
+	}
+
+	recording.UpdateInfo(info)
 
 	return recording, nil
 }
@@ -321,7 +307,7 @@ func GetVideoInfo(channelName ChannelName, filename RecordingFileName) (*helpers
 }
 
 func (recording *Recording) UpdateInfo(info *helpers.FFProbeInfo) error {
-	return Db.Updates(&Recording{ChannelName: recording.ChannelName, Filename: recording.Filename, Duration: info.Duration, BitRate: info.BitRate, Size: info.Size, Width: info.Width, Height: info.Height, Packets: info.PacketCount}).Error
+	return Db.Model(recording).Where("recording_id = ?", recording.RecordingId).Updates(&Recording{ChannelName: recording.ChannelName, Filename: recording.Filename, Duration: info.Duration, BitRate: info.BitRate, Size: info.Size, Width: info.Width, Height: info.Height, Packets: info.PacketCount}).Error
 }
 
 func (recording *Recording) AbsoluteFilePath() string {

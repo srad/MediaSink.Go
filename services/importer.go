@@ -12,8 +12,10 @@ import (
 )
 
 var (
-	ctx, cancelImport = context.WithCancel(context.Background())
-	importing         = false
+	ctx, cancelImport     = context.WithCancel(context.Background())
+	importing             = false
+	importSize        int = 0
+	importProgress    int = 0
 )
 
 func StartImport() {
@@ -26,6 +28,10 @@ func StopImport() {
 
 func IsImporting() bool {
 	return importing
+}
+
+func GetImportProgress() (int, int) {
+	return importProgress, importSize
 }
 
 func runImport() {
@@ -65,17 +71,18 @@ func ImportChannels(context.Context) error {
 	// Traverse folders (channels)
 	// ---------------------------------------------------------------------------------
 	channelFolders, _ := recordingFolder.Readdirnames(0)
-	var i = 0
+	importSize = len(channelFolders)
+	importProgress = 0
 	for _, name := range channelFolders {
-		i++
+		importProgress++
 		channelName := models.ChannelName(name)
-		log.Infof("Import/%s (%d/%d)] Scanning folder", channelName, i, len(channelFolders))
+		log.Infof("Import/%s (%d/%d)] Scanning folder", channelName, importProgress, importSize)
 		// Is no directory, skip
 		if dir, err := os.Stat(channelName.AbsoluteChannelPath()); err != nil || !dir.IsDir() {
 			continue
 		}
 
-		log.Infof("[Import/%s (%d/%d)] Reading folder", channelName, i, len(channelFolders))
+		log.Infof("[Import/%s (%d/%d)] Reading folder", channelName, importProgress, importSize)
 
 		// Import from JSON file, if found.
 		//if channel.ExistsJson() {
@@ -93,13 +100,13 @@ func ImportChannels(context.Context) error {
 
 		newChannel, err4 := models.CreateChannel(channelName, channelName.String(), "https://"+channelName.String())
 		if err4 != nil {
-			log.Errorf("[Import/%s (%d/%d)] Error adding %s", channelName, i, len(channelFolders), err4)
+			log.Errorf("[Import/%s (%d/%d)] Error adding %s", channelName, importProgress, importSize, err4)
 		}
 
 		// ---------------------------------------------------------------------------------
 		// Import individual files
 		// ---------------------------------------------------------------------------------
-		log.Infof("[Import/%s (%d/%d)] Import individual files ...", channelName, i, len(channelFolders))
+		log.Infof("[Import/%s (%d/%d)] Import individual files ...", channelName, importProgress, len(channelFolders))
 		files, err2 := os.ReadDir(channelName.AbsoluteChannelPath())
 		if err2 != nil {
 			log.Errorf("[Import/%s] Error reading: %s", channelName, err2)
@@ -110,7 +117,7 @@ func ImportChannels(context.Context) error {
 		// Traverse all mp4 files and add to models if not existent
 		// ---------------------------------------------------------------------------------
 		var j = 0
-		log.Infof("[Import/%s (%d/%d)] Traverse all mp4 files and add to models if not existent (files: %d) ...", channelName, i, len(channelFolders), len(files))
+		log.Infof("[Import/%s (%d/%d)] Traverse all mp4 files and add to models if not existent (files: %d) ...", channelName, importProgress, importSize, len(files))
 		for _, file := range files {
 			j++
 			mp4File := !file.IsDir() && filepath.Ext(file.Name()) == ".mp4"
@@ -118,7 +125,7 @@ func ImportChannels(context.Context) error {
 				continue
 			}
 
-			log.Infof("[Import/%s (%d/%d) (%d/%d)] Checking file: %s", channelName, i, len(channelFolders), j, len(files), file.Name())
+			log.Infof("[Import/%s (%d/%d) (%d/%d)] Checking file: %s", channelName, importProgress, importSize, j, len(files), file.Name())
 
 			recording := models.Recording{ChannelId: newChannel.ChannelId, ChannelName: channelName, Filename: models.RecordingFileName(file.Name())}
 
