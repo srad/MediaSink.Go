@@ -5,6 +5,7 @@ ARG TARGETPLATFORM
 ARG TARGETOS
 ARG TARGETARCH
 ARG VERSION="1.0.0-alpha-$TARGETARCH"
+ARG COMMIT="0"
 
 # -----------------------------------------------------------------------------------
 # Image OS environment
@@ -131,7 +132,6 @@ ENV GOARCH=${TARGETARCH}
 #RUN if [ "$TARGETPLATFORM" = "linux/arm64" ]; then apt install gccgo-arm-linux-gnueabihf binutils-arm-linux-gnueabi gcc-aarch64-linux-gnu -y; fi
 #RUN if [ "$TARGETPLATFORM" = "linux/arm64" ]; then GOARCH='arm' GOHOSTARCH='arm' CC=arm-linux-gnueabihf-gcc GOGCCFLAGS="-march=armv8-a" CXX=arm-linux-gnueabi-g++ go build -gcflags="-l -N" -o ./streamsink; else go build -o ./streamsink ; fi
 
-COMMIT="$(git rev-parse --short HEAD)"
 RUN go build -o ./streamsink -ldflags="-X 'main.Version=$VERSION' -X 'main.Commit=$COMMIT'"
 
 EXPOSE 3000
