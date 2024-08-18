@@ -25,7 +25,6 @@ const (
 )
 
 var (
-	jobChannel         = make(chan network.EventMessage, 1000)
 	JobInfoChannel     = make(chan network.EventMessage, 1000)
 	sleepBetweenRounds = 1 * time.Second
 	ctx, cancel        = context.WithCancel(context.Background())
@@ -42,27 +41,6 @@ func StopWorker() {
 type JobVideoInfo struct {
 	Packets uint64 `json:"packets"`
 	Frame   uint64 `json:"frame"`
-}
-
-func SendJobChannel(name string, data interface{}) {
-	go sendChannel(name, data)
-}
-
-func sendChannel(name string, data interface{}) {
-	jobChannel <- network.EventMessage{Name: name, Message: data}
-}
-
-func DispatchJob(ctx context.Context) {
-	for {
-		select {
-		case m := <-jobChannel:
-			network.SendSocket(m.Name, m.Message)
-			return
-		case <-ctx.Done():
-			log.Infoln("[DispatchJob] stopped")
-			return
-		}
-	}
 }
 
 type JobMessage struct {
@@ -152,7 +130,7 @@ func addJob(recording *Recording, status string, args *string) (*Job, error) {
 	}
 	log.Infof("[Job] Enqueued job: '%s/%s' -> %s", recording.ChannelName, recording.Filename, status)
 
-	SendJobChannel("job:create", JobMessage{JobId: job.JobId, Type: status, ChannelId: job.ChannelId, ChannelName: job.ChannelName.String(), Filename: job.Filename})
+	network.BroadCastClients("job:create", JobMessage{JobId: job.JobId, Type: status, ChannelId: job.ChannelId, ChannelName: job.ChannelName.String(), Filename: job.Filename})
 
 	return &job, nil
 }
@@ -190,7 +168,7 @@ func (job *Job) Destroy() error {
 	}
 	log.Infof("[Job] Job id delete %d", job.JobId)
 
-	SendJobChannel("job:destroy", JobMessage{JobId: job.JobId, ChannelId: job.ChannelId, ChannelName: job.ChannelName.String(), Filename: job.Filename})
+	network.BroadCastClients("job:destroy", JobMessage{JobId: job.JobId, ChannelId: job.ChannelId, ChannelName: job.ChannelName.String(), Filename: job.Filename})
 
 	return nil
 }
@@ -251,7 +229,7 @@ func (job *Job) Activate() error {
 		return err
 	}
 
-	SendJobChannel("job:active", JobMessage{
+	network.BroadCastClients("job:active", JobMessage{
 		JobId:       job.JobId,
 		ChannelId:   job.ChannelId,
 		ChannelName: job.ChannelName.String(),
@@ -291,7 +269,7 @@ func previewJobs() error {
 			_ = job.UpdateInfo(info.Pid, info.Command)
 			log.Infof("Updating job %d pid=%d, command=%s", job.JobId, job.Pid, info.Command)
 
-			SendJobChannel("job:start", JobMessage{
+			network.BroadCastClients("job:start", JobMessage{
 				JobId:       job.JobId,
 				RecordingId: job.RecordingId,
 				ChannelId:   job.ChannelId,
@@ -301,7 +279,7 @@ func previewJobs() error {
 			})
 		},
 		OnProgress: func(info *helpers.ProcessInfo) {
-			SendJobChannel("job:progress", JobMessage{
+			network.BroadCastClients("job:progress", JobMessage{
 				JobId:       job.JobId,
 				ChannelId:   job.ChannelId,
 				ChannelName: job.ChannelName.String(),
@@ -334,7 +312,7 @@ func previewJobs() error {
 		return fmt.Errorf("error adding previews: %v", err)
 	}
 
-	SendJobChannel("job:preview:done", JobMessage{JobId: job.JobId, RecordingId: job.RecordingId, ChannelId: job.ChannelId, ChannelName: job.ChannelName.String(), Filename: job.Filename})
+	network.BroadCastClients("job:preview:done", JobMessage{JobId: job.JobId, RecordingId: job.RecordingId, ChannelId: job.ChannelId, ChannelName: job.ChannelName.String(), Filename: job.Filename})
 
 	if errDestroy := job.Destroy(); errDestroy != nil {
 		return fmt.Errorf("error deleting job: %v", errDestroy)
@@ -364,7 +342,7 @@ func conversionJobs() error {
 				log.Errorf("Error updating job progress: %s", err)
 			}
 
-			SendJobChannel("job:progress", JobMessage{JobId: job.JobId, ChannelId: job.ChannelId, Data: JobVideoInfo{Packets: uint64(info.Total), Frame: info.Frame}, Type: job.Status, ChannelName: job.ChannelName.String(), Filename: job.Filename})
+			network.BroadCastClients("job:progress", JobMessage{JobId: job.JobId, ChannelId: job.ChannelId, Data: JobVideoInfo{Packets: uint64(info.Total), Frame: info.Frame}, Type: job.Status, ChannelName: job.ChannelName.String(), Filename: job.Filename})
 		},
 		InputPath:  job.ChannelName.AbsoluteChannelPath(),
 		Filename:   job.Filename.String(),

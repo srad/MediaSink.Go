@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/srad/streamsink/network"
 	"io"
 	"os"
 	"os/exec"
@@ -586,6 +587,7 @@ func (id ChannelId) CaptureChannel(url string, skip uint) error {
 
 		// Video can now be marked as a regular recording.
 		createRecording.RecordingId.UpdateVideoType("recording")
+		network.BroadCastClients("recording:add", createRecording)
 
 		if job, err := createRecording.RecordingId.EnqueuePreviewJob(); err != nil {
 			log.Errorf("[FinishRecording] Error enqueuing job for %s", err)

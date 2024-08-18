@@ -17,31 +17,9 @@ const (
 )
 
 var (
-	isPaused         = false
-	cancel           context.CancelFunc
-	recorderMessages = make(chan network.EventMessage, 1000)
+	isPaused = false
+	cancel   context.CancelFunc
 )
-
-func SendMessage(event network.EventMessage) {
-	go messageSend(event)
-}
-
-func messageSend(event network.EventMessage) {
-	recorderMessages <- event
-}
-
-func DispatchRecorder(ctx context.Context) {
-	for {
-		select {
-		case m := <-recorderMessages:
-			network.SendSocket(m.Name, m.Message)
-			return
-		case <-ctx.Done():
-			log.Infoln("[dispatchMessages] stopped")
-			return
-		}
-	}
-}
 
 // startThumbnailWorker Creates in intervals snapshots of the video as a preview.
 func startThumbnailWorker(ctx context.Context) {
@@ -51,12 +29,12 @@ func startThumbnailWorker(ctx context.Context) {
 			log.Infoln("[startThumbnailWorker] stopped")
 			return
 		case <-time.After(captureThumbInterval):
-			for channelName, info := range models.GetStreamInfo() {
+			for channelId, info := range models.GetStreamInfo() {
 				if info.Url != "" {
 					if err := info.Screenshot(); err != nil {
-						log.Errorf("[Recorder] Error extracting first frame of channel-id %d: %s", channelName, err)
+						log.Errorf("[Recorder] Error extracting first frame of channel-id %d: %s", channelId, err)
 					} else {
-						SendMessage(network.EventMessage{Name: "channel:thumbnail", Message: channelName})
+						network.BroadCastClients("channel:thumbnail", channelId)
 					}
 				}
 			}
@@ -107,10 +85,10 @@ func checkStreams() {
 
 		if err := result.ChannelId.Start(); err != nil {
 			// log.Printf("[checkStreams] Start error: %v | %s", channel, err)
-			SendMessage(network.EventMessage{Name: "channel:offline", Message: result.ChannelName})
+			network.BroadCastClients("channel:offline", result.ChannelId)
 		} else {
-			SendMessage(network.EventMessage{Name: "channel:online", Message: result.ChannelName})
-			SendMessage(network.EventMessage{Name: "channel:start", Message: result.ChannelName})
+			network.BroadCastClients("channel:online", result.ChannelId)
+			network.BroadCastClients("channel:start", result.ChannelId)
 		}
 
 		// StopRecorder between each check

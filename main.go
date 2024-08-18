@@ -1,86 +1,84 @@
 package main
 
 import (
-    "fmt"
-    "net/http"
-    "os"
-    "os/signal"
-    "syscall"
-    "time"
+	"fmt"
+	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
-    "github.com/gin-gonic/gin"
-    log "github.com/sirupsen/logrus"
-    "github.com/srad/streamsink/models"
-    "github.com/srad/streamsink/routers"
-    "github.com/srad/streamsink/services"
+	"github.com/gin-gonic/gin"
+	log "github.com/sirupsen/logrus"
+	"github.com/srad/streamsink/models"
+	"github.com/srad/streamsink/routers"
+	"github.com/srad/streamsink/services"
 )
 
 var (
-    Version string
-    Commit  string
+	Version string
+	Commit  string
 )
 
 func main() {
-    log.Infof("Version: %s, Commit: %s", Version, Commit)
+	log.Infof("Version: %s, Commit: %s", Version, Commit)
 
-    log.SetFormatter(&log.TextFormatter{})
+	log.SetFormatter(&log.TextFormatter{})
 
-    c := make(chan os.Signal)
-    signal.Notify(c, os.Interrupt, syscall.SIGTERM)
-    go func() {
-        <-c
-        cleanup()
-        os.Exit(1)
-    }()
+	c := make(chan os.Signal)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-c
+		cleanup()
+		os.Exit(1)
+	}()
 
-    models.Init()
-    // models.StartMetrics(conf.AppCfg.NetworkDev)
-    setupFolders()
+	models.Init()
+	// models.StartMetrics(conf.AppCfg.NetworkDev)
+	setupFolders()
 
-    services.StartDispatch()
-    services.StartUpJobs()
-    services.StartRecorder()
-    models.StartWorker()
+	services.StartUpJobs()
+	services.StartRecorder()
+	models.StartWorker()
 
-    gin.SetMode("release")
-    endPoint := fmt.Sprintf("0.0.0.0:%d", 3000)
+	gin.SetMode("release")
+	endPoint := fmt.Sprintf("0.0.0.0:%d", 3000)
 
-    log.Infof("[main] start http server listening %s", endPoint)
+	log.Infof("[main] start http server listening %s", endPoint)
 
-    server := &http.Server{
-        Addr:           endPoint,
-        Handler:        routers.Setup(Version, Commit),
-        ReadTimeout:    12 * time.Hour,
-        WriteTimeout:   12 * time.Hour,
-        MaxHeaderBytes: 0,
-    }
+	server := &http.Server{
+		Addr:           endPoint,
+		Handler:        routers.Setup(Version, Commit),
+		ReadTimeout:    12 * time.Hour,
+		WriteTimeout:   12 * time.Hour,
+		MaxHeaderBytes: 0,
+	}
 
-    go func() {
-        if err := server.ListenAndServe(); err != nil {
-            log.Fatalln(err)
-        } else {
-            log.Infof("[main] start http server listening %s", endPoint)
-        }
-    }()
+	go func() {
+		if err := server.ListenAndServe(); err != nil {
+			log.Fatalln(err)
+		} else {
+			log.Infof("[main] start http server listening %s", endPoint)
+		}
+	}()
 
-    <-c
+	<-c
 }
 
 func cleanup() {
-    log.Infoln("cleanup ...")
-    models.StopWorker()
-    services.StopRecorder()
-    services.StopDispatch()
-    log.Infoln("cleanup complete")
+	log.Infoln("cleanup ...")
+	models.StopWorker()
+	services.StopRecorder()
+	log.Infoln("cleanup complete")
 }
 
 func setupFolders() {
-    channels, err := models.ChannelList()
-    if err != nil {
-        log.Errorln(err)
-        return
-    }
-    for _, channel := range channels {
-        channel.ChannelName.MkDir()
-    }
+	channels, err := models.ChannelList()
+	if err != nil {
+		log.Errorln(err)
+		return
+	}
+	for _, channel := range channels {
+		channel.ChannelName.MkDir()
+	}
 }
