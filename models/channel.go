@@ -70,6 +70,14 @@ type ChannelFile struct {
 	CreatedAt   time.Time `json:"createdAt" extensions:"!x-nullable"`
 }
 
+type ProcessInfo struct {
+	Id     ChannelId `json:"id"`
+	Pid    int       `json:"pid"`
+	Path   string    `json:"path"`
+	Args   string    `json:"args"`
+	Output string    `json:"output"`
+}
+
 func CreateChannel(channelName ChannelName, displayName, url string) (*Channel, error) {
 	var channel *Channel
 	if err := Db.Model(Channel{}).Where("channel_name = ?", channelName).First(&channel).Error; err != nil {
@@ -445,6 +453,25 @@ func (id ChannelId) DestroyData() {
 	delete(streams, id)
 	delete(recInfo, id)
 	delete(streamInfo, id)
+}
+
+func ProcessList() []*ProcessInfo {
+	var info []*ProcessInfo
+
+	for id, cmd := range streams {
+		output, _ := cmd.CombinedOutput()
+		args := strings.Join(cmd.Args, " ")
+
+		info = append(info, &ProcessInfo{
+			Id:     id,
+			Pid:    cmd.Process.Pid,
+			Path:   cmd.Path,
+			Args:   strings.TrimSpace(args),
+			Output: strings.TrimSpace(string(output)),
+		})
+	}
+
+	return info
 }
 
 func (id ChannelId) NewRecording(videoType string) (*Recording, string, error) {

@@ -1,45 +1,45 @@
 package v1
 
 import (
-	"errors"
-	"fmt"
-	"github.com/gin-gonic/gin"
-	log "github.com/sirupsen/logrus"
-	"github.com/srad/streamsink/app"
-	"github.com/srad/streamsink/conf"
-	"github.com/srad/streamsink/models"
-	"gorm.io/gorm"
-	"io"
-	"net/http"
-	"os"
-	"path/filepath"
-	"strconv"
-	"time"
+    "errors"
+    "fmt"
+    "github.com/gin-gonic/gin"
+    log "github.com/sirupsen/logrus"
+    "github.com/srad/streamsink/app"
+    "github.com/srad/streamsink/conf"
+    "github.com/srad/streamsink/models"
+    "gorm.io/gorm"
+    "io"
+    "net/http"
+    "os"
+    "path/filepath"
+    "strconv"
+    "time"
 )
 
 type ChannelRequest struct {
-	ChannelName string       `json:"channelName" extensions:"!x-nullable"`
-	DisplayName string       `json:"displayName" extensions:"!x-nullable"`
-	SkipStart   uint         `json:"skipStart" extensions:"!x-nullable"`
-	MinDuration uint         `json:"minDuration" extensions:"!x-nullable"`
-	Url         string       `json:"url" extensions:"!x-nullable"`
-	IsPaused    bool         `json:"isPaused" extensions:"!x-nullable"`
-	Tags        *models.Tags `json:"tags"`
-	Fav         bool         `json:"fav"`
-	Deleted     bool         `json:"deleted"`
+    ChannelName string       `json:"channelName" extensions:"!x-nullable"`
+    DisplayName string       `json:"displayName" extensions:"!x-nullable"`
+    SkipStart   uint         `json:"skipStart" extensions:"!x-nullable"`
+    MinDuration uint         `json:"minDuration" extensions:"!x-nullable"`
+    Url         string       `json:"url" extensions:"!x-nullable"`
+    IsPaused    bool         `json:"isPaused" extensions:"!x-nullable"`
+    Tags        *models.Tags `json:"tags"`
+    Fav         bool         `json:"fav"`
+    Deleted     bool         `json:"deleted"`
 }
 
 type ChannelResponse struct {
-	models.Channel
-	IsRecording   bool    `json:"isRecording" extensions:"!x-nullable"`
-	IsOnline      bool    `json:"isOnline" extensions:"!x-nullable"`
-	IsTerminating bool    `json:"isTerminating" extensions:"!x-nullable"`
-	Preview       string  `json:"preview" extensions:"!x-nullable"`
-	MinRecording  float64 `json:"minRecording" extensions:"!x-nullable"`
+    models.Channel
+    IsRecording   bool    `json:"isRecording" extensions:"!x-nullable"`
+    IsOnline      bool    `json:"isOnline" extensions:"!x-nullable"`
+    IsTerminating bool    `json:"isTerminating" extensions:"!x-nullable"`
+    Preview       string  `json:"preview" extensions:"!x-nullable"`
+    MinRecording  float64 `json:"minRecording" extensions:"!x-nullable"`
 }
 
 type ChannelTagsUpdateRequest struct {
-	Tags *models.Tags `json:"tags"`
+    Tags *models.Tags `json:"tags"`
 }
 
 // https://github.com/swaggo/swag/blob/master/README.md#declarative-comments-format
@@ -73,29 +73,45 @@ type ChannelTagsUpdateRequest struct {
 // @Failure     500 {}  http.StatusInternalServerError
 // @Router      /channels [get]
 func GetChannels(c *gin.Context) {
-	appG := app.Gin{C: c}
-	channels, err := models.ChannelListNotDeleted()
-	if err != nil {
-		appG.Response(http.StatusInternalServerError, err)
-		return
-	}
+    appG := app.Gin{C: c}
+    channels, err := models.ChannelListNotDeleted()
+    if err != nil {
+        appG.Response(http.StatusInternalServerError, err)
+        return
+    }
 
-	response := make([]ChannelResponse, len(channels))
+    response := make([]ChannelResponse, len(channels))
 
-	cfg := conf.Read()
+    cfg := conf.Read()
 
-	for index, channel := range channels {
-		// Add to each channel current system information
-		response[index] = ChannelResponse{
-			Channel:       *channel,
-			Preview:       filepath.Join(channel.ChannelName.String(), cfg.DataPath, models.SnapshotFilename),
-			IsOnline:      channel.ChannelId.IsOnline(),
-			IsTerminating: channel.ChannelId.IsTerminating(),
-			IsRecording:   channel.ChannelId.IsRecording(),
-			MinRecording:  channel.ChannelId.GetRecordingMinutes()}
-	}
+    for index, channel := range channels {
+        // Add to each channel current system information
+        response[index] = ChannelResponse{
+            Channel:       *channel,
+            Preview:       filepath.Join(channel.ChannelName.String(), cfg.DataPath, models.SnapshotFilename),
+            IsOnline:      channel.ChannelId.IsOnline(),
+            IsTerminating: channel.ChannelId.IsTerminating(),
+            IsRecording:   channel.ChannelId.IsRecording(),
+            MinRecording:  channel.ChannelId.GetRecordingMinutes()}
+    }
 
-	appG.Response(http.StatusOK, &response)
+    appG.Response(http.StatusOK, &response)
+}
+
+// GetProcesses godoc
+// @Summary     Return a list of streaming processes
+// @Schemes
+// @Description Return a list of streaming processes
+// @Tags        processes
+// @Accept      json
+// @Produce     json
+// @Success     200 {object} []models.ProcessInfo
+// @Failure     500 {}  http.StatusInternalServerError
+// @Router      /processes [get]
+func GetProcesses(c *gin.Context) {
+    appG := app.Gin{C: c}
+
+    appG.Response(http.StatusOK, models.ProcessList())
 }
 
 // GetChannel godoc
@@ -109,28 +125,28 @@ func GetChannels(c *gin.Context) {
 // @Failure     500 {}  http.StatusInternalServerError
 // @Router      /channels/{id} [get]
 func GetChannel(c *gin.Context) {
-	appG := app.Gin{C: c}
+    appG := app.Gin{C: c}
 
-	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
-	if err != nil {
-		appG.Response(http.StatusBadRequest, err)
-		return
-	}
+    id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+    if err != nil {
+        appG.Response(http.StatusBadRequest, err)
+        return
+    }
 
-	channelId := models.ChannelId(id)
-	if channel, err := channelId.GetChannelById(); err != nil {
-		log.Errorf("[GetChannel] Error getting channel: %s", err)
-		appG.Response(http.StatusInternalServerError, err)
-	} else {
-		res := &ChannelResponse{
-			Channel:       *channel,
-			IsOnline:      channelId.IsOnline(),
-			IsTerminating: channelId.IsTerminating(),
-			IsRecording:   channelId.IsRecording(),
-			MinRecording:  channelId.GetRecordingMinutes()}
+    channelId := models.ChannelId(id)
+    if channel, err := channelId.GetChannelById(); err != nil {
+        log.Errorf("[GetChannel] Error getting channel: %s", err)
+        appG.Response(http.StatusInternalServerError, err)
+    } else {
+        res := &ChannelResponse{
+            Channel:       *channel,
+            IsOnline:      channelId.IsOnline(),
+            IsTerminating: channelId.IsTerminating(),
+            IsRecording:   channelId.IsRecording(),
+            MinRecording:  channelId.GetRecordingMinutes()}
 
-		appG.Response(http.StatusOK, &res)
-	}
+        appG.Response(http.StatusOK, &res)
+    }
 }
 
 // CreateChannel godoc
@@ -145,52 +161,52 @@ func GetChannel(c *gin.Context) {
 // @Failure     500 {} http.StatusInternalServerError
 // @Router      /channels [post]
 func CreateChannel(c *gin.Context) {
-	appG := app.Gin{C: c}
+    appG := app.Gin{C: c}
 
-	data := &ChannelRequest{}
-	if err := c.BindJSON(&data); err != nil {
-		errReq := fmt.Errorf("error parsing request: %s", err)
-		log.Errorln(errReq)
-		appG.Response(http.StatusInternalServerError, errReq)
-		return
-	}
+    data := &ChannelRequest{}
+    if err := c.BindJSON(&data); err != nil {
+        errReq := fmt.Errorf("error parsing request: %s", err)
+        log.Errorln(errReq)
+        appG.Response(http.StatusInternalServerError, errReq)
+        return
+    }
 
-	channel := models.Channel{
-		ChannelName: models.ChannelName(data.ChannelName),
-		DisplayName: data.DisplayName,
-		SkipStart:   data.SkipStart,
-		MinDuration: data.MinDuration,
-		CreatedAt:   time.Now(),
-		Url:         data.Url,
-		Fav:         data.Fav,
-		Tags:        data.Tags,
-		IsPaused:    data.IsPaused}
+    channel := models.Channel{
+        ChannelName: models.ChannelName(data.ChannelName),
+        DisplayName: data.DisplayName,
+        SkipStart:   data.SkipStart,
+        MinDuration: data.MinDuration,
+        CreatedAt:   time.Now(),
+        Url:         data.Url,
+        Fav:         data.Fav,
+        Tags:        data.Tags,
+        IsPaused:    data.IsPaused}
 
-	newChannel, err := models.CreateChannelDetail(channel)
-	if err != nil {
-		if errors.Is(err, gorm.ErrDuplicatedKey) {
-			err = fmt.Errorf("error creating record: %s", err)
-		}
+    newChannel, err := models.CreateChannelDetail(channel)
+    if err != nil {
+        if errors.Is(err, gorm.ErrDuplicatedKey) {
+            err = fmt.Errorf("error creating record: %s", err)
+        }
 
-		log.Errorln(err)
-		appG.Response(http.StatusInternalServerError, err)
-		return
-	}
+        log.Errorln(err)
+        appG.Response(http.StatusInternalServerError, err)
+        return
+    }
 
-	// Success
-	cfg := conf.Read()
+    // Success
+    cfg := conf.Read()
 
-	res := ChannelResponse{
-		Channel:      *newChannel,
-		IsRecording:  false,
-		IsOnline:     false,
-		Preview:      filepath.Join(newChannel.ChannelName.AbsoluteChannelPath(), cfg.DataPath, models.SnapshotFilename),
-		MinRecording: 0,
-	}
+    res := ChannelResponse{
+        Channel:      *newChannel,
+        IsRecording:  false,
+        IsOnline:     false,
+        Preview:      filepath.Join(newChannel.ChannelName.AbsoluteChannelPath(), cfg.DataPath, models.SnapshotFilename),
+        MinRecording: 0,
+    }
 
-	log.Infof("New channel: %v", res)
+    log.Infof("New channel: %v", res)
 
-	appG.Response(http.StatusOK, res)
+    appG.Response(http.StatusOK, res)
 }
 
 // UpdateChannel godoc
@@ -206,53 +222,53 @@ func CreateChannel(c *gin.Context) {
 // @Failure     500 {} http.StatusInternalServerError
 // @Router      /channels/{id} [patch]
 func UpdateChannel(c *gin.Context) {
-	appG := app.Gin{C: c}
+    appG := app.Gin{C: c}
 
-	// Id
-	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
-	if err != nil {
-		appG.Response(http.StatusBadRequest, err)
-		return
-	}
+    // Id
+    id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+    if err != nil {
+        appG.Response(http.StatusBadRequest, err)
+        return
+    }
 
-	// Body
-	data := &ChannelRequest{}
-	if err := c.BindJSON(&data); err != nil {
-		log.Errorf("[UpdateChannel] Error parsing request: %s", err)
-		appG.Response(http.StatusInternalServerError, err)
-		return
-	}
+    // Body
+    data := &ChannelRequest{}
+    if err := c.BindJSON(&data); err != nil {
+        log.Errorf("[UpdateChannel] Error parsing request: %s", err)
+        appG.Response(http.StatusInternalServerError, err)
+        return
+    }
 
-	channel := models.Channel{
-		ChannelId:   models.ChannelId(id),
-		ChannelName: models.ChannelName(data.ChannelName),
-		DisplayName: data.DisplayName,
-		SkipStart:   data.SkipStart,
-		MinDuration: data.MinDuration,
-		Url:         data.Url,
-		Tags:        data.Tags,
-		Fav:         data.Fav,
-		IsPaused:    data.IsPaused,
-		Deleted:     data.Deleted,
-	}
+    channel := models.Channel{
+        ChannelId:   models.ChannelId(id),
+        ChannelName: models.ChannelName(data.ChannelName),
+        DisplayName: data.DisplayName,
+        SkipStart:   data.SkipStart,
+        MinDuration: data.MinDuration,
+        Url:         data.Url,
+        Tags:        data.Tags,
+        Fav:         data.Fav,
+        IsPaused:    data.IsPaused,
+        Deleted:     data.Deleted,
+    }
 
-	if err := channel.Update(); err != nil {
-		message := fmt.Errorf("error creating record: %s", err)
-		log.Errorln(message)
-		appG.Response(http.StatusInternalServerError, message)
-		return
-	}
+    if err := channel.Update(); err != nil {
+        message := fmt.Errorf("error creating record: %s", err)
+        log.Errorln(message)
+        appG.Response(http.StatusInternalServerError, message)
+        return
+    }
 
-	if channel.IsPaused == true {
-		if err := channel.ChannelId.TerminateProcess(); err != nil {
-			message := fmt.Errorf("error stopping stream: %s", err)
-			log.Errorln(message)
-			appG.Response(http.StatusInternalServerError, message)
-			return
-		}
-	}
+    if channel.IsPaused == true {
+        if err := channel.ChannelId.TerminateProcess(); err != nil {
+            message := fmt.Errorf("error stopping stream: %s", err)
+            log.Errorln(message)
+            appG.Response(http.StatusInternalServerError, message)
+            return
+        }
+    }
 
-	appG.Response(http.StatusOK, &channel)
+    appG.Response(http.StatusOK, &channel)
 }
 
 // DeleteChannel godoc
@@ -266,27 +282,27 @@ func UpdateChannel(c *gin.Context) {
 // @Failure     500 {}  http.StatusInternalServerError
 // @Router      /channels/{id} [delete]
 func DeleteChannel(c *gin.Context) {
-	appG := app.Gin{C: c}
+    appG := app.Gin{C: c}
 
-	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
-	if err != nil {
-		appG.Response(http.StatusBadRequest, err)
-		return
-	}
+    id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+    if err != nil {
+        appG.Response(http.StatusBadRequest, err)
+        return
+    }
 
-	channelId := models.ChannelId(id)
+    channelId := models.ChannelId(id)
 
-	if err := channelId.TerminateProcess(); err != nil {
-		appG.Response(http.StatusInternalServerError, fmt.Sprintf("Process cound not be terminated: %s", err))
-		return
-	}
+    if err := channelId.TerminateProcess(); err != nil {
+        appG.Response(http.StatusInternalServerError, fmt.Sprintf("Process cound not be terminated: %s", err))
+        return
+    }
 
-	if err := channelId.SoftDestroyChannel(); err != nil {
-		appG.Response(http.StatusInternalServerError, fmt.Sprintf("Channel could not be deleted: %s", err))
-		return
-	}
+    if err := channelId.SoftDestroyChannel(); err != nil {
+        appG.Response(http.StatusInternalServerError, fmt.Sprintf("Channel could not be deleted: %s", err))
+        return
+    }
 
-	appG.Response(http.StatusOK, nil)
+    appG.Response(http.StatusOK, nil)
 }
 
 // TagChannel godoc
@@ -301,33 +317,33 @@ func DeleteChannel(c *gin.Context) {
 // @Failure     400 {}  http.StatusBadRequest
 // @Router      /channels/{id}/tags [patch]
 func TagChannel(c *gin.Context) {
-	appG := app.Gin{C: c}
+    appG := app.Gin{C: c}
 
-	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
-	if err != nil {
-		appG.Response(http.StatusBadRequest, err)
-		return
-	}
+    id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+    if err != nil {
+        appG.Response(http.StatusBadRequest, err)
+        return
+    }
 
-	request := &ChannelTagsUpdateRequest{}
-	if err := c.BindJSON(&request); err != nil {
-		log.Errorf("[TagChannel] Error parsing request: %s", err)
-		appG.Response(http.StatusInternalServerError, err)
-		return
-	}
+    request := &ChannelTagsUpdateRequest{}
+    if err := c.BindJSON(&request); err != nil {
+        log.Errorf("[TagChannel] Error parsing request: %s", err)
+        appG.Response(http.StatusInternalServerError, err)
+        return
+    }
 
-	update := &models.ChannelTagsUpdate{
-		ChannelId: models.ChannelId(id),
-		Tags:      request.Tags,
-	}
+    update := &models.ChannelTagsUpdate{
+        ChannelId: models.ChannelId(id),
+        Tags:      request.Tags,
+    }
 
-	if err := update.TagChannel(); err != nil {
-		log.Errorln(err)
-		appG.Response(http.StatusInternalServerError, err)
-		return
-	}
+    if err := update.TagChannel(); err != nil {
+        log.Errorln(err)
+        appG.Response(http.StatusInternalServerError, err)
+        return
+    }
 
-	appG.Response(http.StatusOK, nil)
+    appG.Response(http.StatusOK, nil)
 }
 
 // ResumeChannel godoc
@@ -342,23 +358,23 @@ func TagChannel(c *gin.Context) {
 // @Failure     500 {} http.StatusInternalServerError
 // @Router      /channels/{id}/resume [post]
 func ResumeChannel(c *gin.Context) {
-	appG := app.Gin{C: c}
+    appG := app.Gin{C: c}
 
-	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
-	if err != nil {
-		appG.Response(http.StatusBadRequest, err)
-		return
-	}
+    id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+    if err != nil {
+        appG.Response(http.StatusBadRequest, err)
+        return
+    }
 
-	channelId := models.ChannelId(id)
+    channelId := models.ChannelId(id)
 
-	if err := channelId.Start(); err != nil {
-		log.Errorf("[ResumeChannel] Error resuming channel-id %d: %s", channelId, err)
-		appG.Response(http.StatusInternalServerError, err)
-		return
-	}
-	log.Infof("Resuming channel %d", id)
-	appG.Response(http.StatusOK, nil)
+    if err := channelId.Start(); err != nil {
+        log.Errorf("[ResumeChannel] Error resuming channel-id %d: %s", channelId, err)
+        appG.Response(http.StatusInternalServerError, err)
+        return
+    }
+    log.Infof("Resuming channel %d", id)
+    appG.Response(http.StatusOK, nil)
 }
 
 // FavChannel godoc
@@ -372,22 +388,22 @@ func ResumeChannel(c *gin.Context) {
 // @Failure     500 {} http.StatusInternalServerError
 // @Router       /channels/{id}/fav [patch]
 func FavChannel(c *gin.Context) {
-	appG := app.Gin{C: c}
+    appG := app.Gin{C: c}
 
-	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
-	if err != nil {
-		appG.Response(http.StatusBadRequest, err)
-		return
-	}
+    id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+    if err != nil {
+        appG.Response(http.StatusBadRequest, err)
+        return
+    }
 
-	channelId := models.ChannelId(id)
+    channelId := models.ChannelId(id)
 
-	if err := channelId.FavChannel(); err != nil {
-		appG.Response(http.StatusInternalServerError, err)
-		return
-	}
+    if err := channelId.FavChannel(); err != nil {
+        appG.Response(http.StatusInternalServerError, err)
+        return
+    }
 
-	appG.Response(http.StatusOK, nil)
+    appG.Response(http.StatusOK, nil)
 }
 
 // UnFavChannel godoc
@@ -401,22 +417,22 @@ func FavChannel(c *gin.Context) {
 // @Failure     500 {} http.StatusInternalServerError
 // @Router      /channels/{id}/unfav [patch]
 func UnFavChannel(c *gin.Context) {
-	appG := app.Gin{C: c}
+    appG := app.Gin{C: c}
 
-	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
-	if err != nil {
-		appG.Response(http.StatusBadRequest, err)
-		return
-	}
+    id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+    if err != nil {
+        appG.Response(http.StatusBadRequest, err)
+        return
+    }
 
-	channelId := models.ChannelId(id)
+    channelId := models.ChannelId(id)
 
-	if err := channelId.UnFavChannel(); err != nil {
-		appG.Response(http.StatusInternalServerError, err)
-		return
-	}
+    if err := channelId.UnFavChannel(); err != nil {
+        appG.Response(http.StatusInternalServerError, err)
+        return
+    }
 
-	appG.Response(http.StatusOK, nil)
+    appG.Response(http.StatusOK, nil)
 }
 
 // Parameters that separated by spaces: | param name | param type | data type | is mandatory? | comment attribute(optional) |
@@ -434,44 +450,44 @@ func UnFavChannel(c *gin.Context) {
 // @Failure     500 {} http.StatusInternalServerError
 // @Router      /channels/{id}/upload [post]
 func UploadChannel(c *gin.Context) {
-	appG := app.Gin{C: c}
+    appG := app.Gin{C: c}
 
-	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
-	if err != nil {
-		appG.Response(http.StatusBadRequest, err)
-		return
-	}
+    id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+    if err != nil {
+        appG.Response(http.StatusBadRequest, err)
+        return
+    }
 
-	file, _, err := c.Request.FormFile("file")
-	if err != nil {
-		appG.Response(http.StatusBadRequest, err)
-		return
-	}
+    file, _, err := c.Request.FormFile("file")
+    if err != nil {
+        appG.Response(http.StatusBadRequest, err)
+        return
+    }
 
-	channelId := models.ChannelId(id)
-	recording, outputPath, err := channelId.NewRecording("recording")
-	models.CreateRecording(recording.ChannelId, recording.Filename, "recording")
+    channelId := models.ChannelId(id)
+    recording, outputPath, err := channelId.NewRecording("recording")
+    models.CreateRecording(recording.ChannelId, recording.Filename, "recording")
 
-	out, err := os.Create(outputPath)
-	if err != nil {
-		appG.Response(http.StatusInternalServerError, err)
-		return
-	}
-	defer out.Close()
-	_, err = io.Copy(out, file)
-	if err != nil {
-		appG.Response(http.StatusInternalServerError, err)
-		return
-	}
+    out, err := os.Create(outputPath)
+    if err != nil {
+        appG.Response(http.StatusInternalServerError, err)
+        return
+    }
+    defer out.Close()
+    _, err = io.Copy(out, file)
+    if err != nil {
+        appG.Response(http.StatusInternalServerError, err)
+        return
+    }
 
-	if err := recording.Save(); err != nil {
-		appG.Response(http.StatusInternalServerError, err)
-		return
-	}
+    if err := recording.Save(); err != nil {
+        appG.Response(http.StatusInternalServerError, err)
+        return
+    }
 
-	recording.RecordingId.EnqueuePreviewJob()
+    recording.RecordingId.EnqueuePreviewJob()
 
-	appG.Response(http.StatusOK, recording)
+    appG.Response(http.StatusOK, recording)
 }
 
 // PauseChannel godoc
@@ -485,24 +501,24 @@ func UploadChannel(c *gin.Context) {
 // @Failure     500 {} http.StatusInternalServerError
 // @Router      /channels/{id}/pause [post]
 func PauseChannel(c *gin.Context) {
-	appG := app.Gin{C: c}
+    appG := app.Gin{C: c}
 
-	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
-	if err != nil {
-		appG.Response(http.StatusBadRequest, err)
-		return
-	}
+    id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+    if err != nil {
+        appG.Response(http.StatusBadRequest, err)
+        return
+    }
 
-	channelId := models.ChannelId(id)
+    channelId := models.ChannelId(id)
 
-	if err := channelId.TerminateProcess(); err != nil {
-		log.Errorf("Error teminating process: %s", err)
-	}
+    if err := channelId.TerminateProcess(); err != nil {
+        log.Errorf("Error teminating process: %s", err)
+    }
 
-	if err := channelId.PauseChannel(true); err != nil {
-		appG.Response(http.StatusInternalServerError, err)
-		return
-	}
+    if err := channelId.PauseChannel(true); err != nil {
+        appG.Response(http.StatusInternalServerError, err)
+        return
+    }
 
-	appG.Response(http.StatusOK, nil)
+    appG.Response(http.StatusOK, nil)
 }

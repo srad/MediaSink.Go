@@ -129,6 +129,8 @@ func Setup(version, commit string) http.Handler {
 		apiv1.GET("/metric/cpu", v1.GetCpu)
 		apiv1.GET("/metric/net", v1.GetNet)
 
+		apiv1.GET("/processes", v1.GetProcesses)
+
 		go network.WsListen()
 		apiv1.GET("/ws", network.WsHandler)
 	}
