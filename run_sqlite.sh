@@ -2,4 +2,4 @@
 
 #rm streamsink.sqlite3
 ./build.sh
-./streamsink
+REC_PATH= DATA_DIR=".previews" DB_FILENAME= ./streamsink

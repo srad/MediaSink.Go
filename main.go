@@ -10,7 +10,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	log "github.com/sirupsen/logrus"
-	"github.com/srad/streamsink/models"
+	"github.com/srad/streamsink/database"
 	"github.com/srad/streamsink/routers"
 	"github.com/srad/streamsink/services"
 )
@@ -33,13 +33,13 @@ func main() {
 		os.Exit(1)
 	}()
 
-	models.Init()
+	database.Init()
 	// models.StartMetrics(conf.AppCfg.NetworkDev)
 	setupFolders()
 
 	services.StartUpJobs()
 	services.StartRecorder()
-	models.StartWorker()
+	services.StartJobProcessing()
 
 	gin.SetMode("release")
 	endPoint := fmt.Sprintf("0.0.0.0:%d", 3000)
@@ -67,13 +67,13 @@ func main() {
 
 func cleanup() {
 	log.Infoln("cleanup ...")
-	models.StopWorker()
+	services.StopJobProcessing()
 	services.StopRecorder()
 	log.Infoln("cleanup complete")
 }
 
 func setupFolders() {
-	channels, err := models.ChannelList()
+	channels, err := database.ChannelList()
 	if err != nil {
 		log.Errorln(err)
 		return

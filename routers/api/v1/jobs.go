@@ -2,12 +2,13 @@ package v1
 
 import (
 	"github.com/srad/streamsink/helpers"
+	"github.com/srad/streamsink/services"
 	"net/http"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"github.com/srad/streamsink/app"
-	"github.com/srad/streamsink/models"
+	"github.com/srad/streamsink/database"
 )
 
 // AddJob godoc
@@ -17,7 +18,7 @@ import (
 // @Param       id path string  true  "Recording item id"
 // @Accept      json
 // @Produce     json
-// @Success     200 {object} models.Job
+// @Success     200 {object} database.Job
 // @Failure     400 {} http.StatusBadRequest
 // @Failure     500 {} http.StatusInternalServerError
 // @Router      /jobs/{id} [post]
@@ -30,13 +31,13 @@ func AddJob(c *gin.Context) {
 		return
 	}
 
-	recording, err := models.RecordingId(id).FindRecordingById()
+	recording, err := database.RecordingId(id).FindRecordingById()
 	if err != nil {
 		appG.Response(http.StatusBadRequest, err)
 		return
 	}
 
-	job, err := recording.RecordingId.EnqueuePreviewJob()
+	job, err := services.EnqueuePreviewJob(recording.RecordingId)
 	if err != nil {
 		appG.Response(http.StatusInternalServerError, err)
 		return
@@ -87,13 +88,13 @@ func StopJob(c *gin.Context) {
 func DestroyJob(c *gin.Context) {
 	appG := app.Gin{C: c}
 
-	id, err := strconv.Atoi(c.Param("id"))
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
 		appG.Response(http.StatusBadRequest, err)
 		return
 	}
 
-	job, err := models.FindJobById(id)
+	job, err := database.FindJobById(uint(id))
 	if err != nil {
 		appG.Response(http.StatusBadRequest, err)
 		return
@@ -113,12 +114,12 @@ func DestroyJob(c *gin.Context) {
 // @Tags        jobs
 // @Accept      json
 // @Produce     json
-// @Success     200 {object} []models.Job
+// @Success     200 {object} []database.Job
 // @Failure     500 {}  http.StatusInternalServerError
 // @Router      /jobs [get]
 func GetJobs(c *gin.Context) {
 	appG := app.Gin{C: c}
-	jobs, err := models.JobList()
+	jobs, err := database.JobList()
 
 	if err != nil {
 		appG.Response(http.StatusInternalServerError, err)

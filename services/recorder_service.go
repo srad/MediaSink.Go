@@ -5,8 +5,8 @@ import (
 	"time"
 
 	log "github.com/sirupsen/logrus"
+	"github.com/srad/streamsink/database"
 	"github.com/srad/streamsink/helpers"
-	"github.com/srad/streamsink/models"
 	"github.com/srad/streamsink/network"
 )
 
@@ -17,30 +17,9 @@ const (
 )
 
 var (
-	isPaused = false
-	cancel   context.CancelFunc
+	isPaused       = false
+	cancelRecorder context.CancelFunc
 )
-
-// startThumbnailWorker Creates in intervals snapshots of the video as a preview.
-func startThumbnailWorker(ctx context.Context) {
-	for {
-		select {
-		case <-ctx.Done():
-			log.Infoln("[startThumbnailWorker] stopped")
-			return
-		case <-time.After(captureThumbInterval):
-			for channelId, info := range models.GetStreamInfo() {
-				if info.Url != "" {
-					if err := info.Screenshot(); err != nil {
-						log.Errorf("[Recorder] Error extracting first frame of channel-id %d: %s", channelId, err)
-					} else {
-						network.BroadCastClients("channel:thumbnail", channelId)
-					}
-				}
-			}
-		}
-	}
-}
 
 func startStreamWorker(ctx context.Context) {
 	for {
@@ -60,39 +39,37 @@ func checkStreams() {
 	if isPaused {
 		return
 	}
-	channels, err := models.EnabledChannelList()
+
+	channels, err := database.EnabledChannelList()
 	if err != nil {
 		log.Errorln(err)
 		return
 	}
+
 	for _, channel := range channels {
 		if isPaused {
 			return
 		}
 
 		// Get the current models value, in case it case been updated meanwhile.
-		result, err := models.GetChannelByName(channel.ChannelName)
-
-		if err != nil {
+		if result, err := channel.ChannelId.GetChannelById(); err != nil {
 			log.Errorf("[checkStreams] Error channel %s: %s", channel.ChannelName, err)
 			continue
-		}
-
-		if result.ChannelId.IsRecording() || result.IsPaused {
-			log.Infof("[checkStreams] Already recording or paused: %s", result.ChannelName)
-			continue
-		}
-
-		if err := result.ChannelId.Start(); err != nil {
-			// log.Printf("[checkStreams] Start error: %v | %s", channel, err)
-			network.BroadCastClients("channel:offline", result.ChannelId)
 		} else {
-			network.BroadCastClients("channel:online", result.ChannelId)
-			network.BroadCastClients("channel:start", result.ChannelId)
-		}
+			if IsRecordingStream(result.ChannelId) || result.IsPaused {
+				continue
+			}
 
-		// StopRecorder between each check
-		time.Sleep(streamCheckBreak)
+			if err := Start(result.ChannelId); err != nil {
+				network.BroadCastClients("channel:offline", result.ChannelId)
+			} else {
+				network.BroadCastClients("channel:online", result.ChannelId)
+				network.BroadCastClients("channel:start", result.ChannelId)
+			}
+
+			// StopRecorder between each check
+			time.Sleep(streamCheckBreak)
+		}
 	}
 }
 
@@ -104,7 +81,7 @@ func StartRecorder() {
 	isPaused = false
 
 	ctx, c := context.WithCancel(context.Background())
-	cancel = c
+	cancelRecorder = c
 
 	go startStreamWorker(ctx)
 	go startThumbnailWorker(ctx)
@@ -116,15 +93,15 @@ func StopRecorder() error {
 	log.Infoln("[StopRecorder] Stopping recorder ...")
 
 	isPaused = true
-	cancel()
-	models.TerminateAll()
+	cancelRecorder()
+	TerminateAll()
 
 	return nil
 }
 
 func GeneratePosters() error {
 	log.Infoln("[Recorder] Updating all recordings info")
-	recordings, err := models.RecordingsList()
+	recordings, err := database.RecordingsList()
 	if err != nil {
 		log.Errorln(err)
 		return err

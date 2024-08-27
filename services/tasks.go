@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"github.com/astaxie/beego/utils"
 	log "github.com/sirupsen/logrus"
+	"github.com/srad/streamsink/database"
 	"github.com/srad/streamsink/helpers"
-	"github.com/srad/streamsink/models"
 	"gorm.io/gorm"
 	"os"
 )
@@ -23,7 +23,7 @@ func StartUpJobs() error {
 }
 
 func deleteOrphanedRecordings() error {
-	recordings, err := models.RecordingsList()
+	recordings, err := database.RecordingsList()
 	if err != nil {
 		return err
 	}
@@ -39,7 +39,7 @@ func deleteOrphanedRecordings() error {
 }
 
 func deleteChannels() error {
-	channels, err := models.ChannelList()
+	channels, err := database.ChannelList()
 	if err != nil {
 		log.Errorf("[DeleteChannels] ChannelList error: %s", err)
 		return err
@@ -65,7 +65,7 @@ func fixOrphanedFiles() error {
 	log.Infoln("Fixing orphaned channels ...")
 
 	// 1. Check if channel exists, otherwise delete.
-	channels, err := models.ChannelList()
+	channels, err := database.ChannelList()
 	if err != nil {
 		log.Errorf("[FixOrphanedFiles] ChannelList error: %s", err)
 		return err
@@ -78,7 +78,7 @@ func fixOrphanedFiles() error {
 
 	// 2. Check if recording file within channel exists, otherwise destroy.
 	log.Infoln("Fixing orphaned recordings ...")
-	recordings, err := models.RecordingsList()
+	recordings, err := database.RecordingsList()
 
 	if err != nil {
 		log.Errorf("[FixOrphanedFiles] ChannelList error: %s", err)
@@ -101,10 +101,10 @@ func fixOrphanedFiles() error {
 
 func fixOrphanedJobs() {
 	log.Infoln("Fixing orphaned jobs ...")
-	jobs, err := models.GetJobsByStatus(models.StatusRecording)
+	jobs, err := database.GetJobsByStatus(StatusRecording)
 
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		log.Infof("No jobs with status '%s' found", models.StatusRecording)
+		log.Infof("No jobs with status '%s' found", StatusRecording)
 		return
 	}
 	// Other errors
@@ -126,7 +126,7 @@ func fixOrphanedJobs() {
 			}
 			log.Errorf("Deleted file '%s'", job.Filename)
 		} else {
-			models.CreateRecording(job.ChannelId, job.Filename, "recording")
+			database.CreateRecording(job.ChannelId, job.Filename, "recording")
 			job.Destroy()
 			log.Infof("Added recording for '%s' and deleted orphaned recording job", job.Filename)
 		}

@@ -7,7 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/srad/streamsink/app"
-	"github.com/srad/streamsink/models"
+	"github.com/srad/streamsink/database"
 	"github.com/srad/streamsink/services"
 )
 
@@ -22,12 +22,12 @@ type CutRequest struct {
 // @Tags        recordings
 // @Accept      json
 // @Produce     json
-// @Success     200 {object} []models.Recording
+// @Success     200 {object} []database.Recording
 // @Failure     500 {} string "Error message"
 // @Router      /recordings [get]
 func GetRecordings(c *gin.Context) {
 	appG := app.Gin{C: c}
-	recordings, err := models.RecordingsList()
+	recordings, err := database.RecordingsList()
 
 	if err != nil {
 		appG.Response(http.StatusInternalServerError, nil)
@@ -69,7 +69,7 @@ func GeneratePosters(c *gin.Context) {
 func UpdateVideoInfo(c *gin.Context) {
 	appG := app.Gin{C: c}
 	// TODO Make into a cancelable job
-	if err := models.UpdateVideoInfo(); err != nil {
+	if err := database.UpdateVideoInfo(); err != nil {
 		appG.Response(http.StatusInternalServerError, err)
 		return
 	}
@@ -98,7 +98,7 @@ func IsUpdatingVideoInfo(c *gin.Context) {
 // @Accept      json
 // @Produce     json
 // @Param       id path uint true "Recording item id"
-// @Success     200 {object} models.Recording
+// @Success     200 {object} database.Recording
 // @Failure     400 {} string "Error message"
 // @Failure     500 {} string "Error message"
 // @Router      /recordings/{id} [get]
@@ -111,7 +111,7 @@ func GetRecording(c *gin.Context) {
 		return
 	}
 
-	recording, err := models.RecordingId(id).FindById()
+	recording, err := database.RecordingId(id).FindById()
 	if err != nil {
 		appG.Response(http.StatusInternalServerError, err)
 		return
@@ -126,12 +126,12 @@ func GetRecording(c *gin.Context) {
 // @Tags        recordings
 // @Accept      json
 // @Produce     json
-// @Success     200 {object} []models.Recording
+// @Success     200 {object} []database.Recording
 // @Failure     500 {} string "Error message"
 // @Router      /recordings/bookmarks [get]
 func GetBookmarks(c *gin.Context) {
 	appG := app.Gin{C: c}
-	recordings, err := models.BookmarkList()
+	recordings, err := database.BookmarkList()
 
 	if err != nil {
 		appG.Response(http.StatusInternalServerError, nil)
@@ -148,7 +148,7 @@ func GetBookmarks(c *gin.Context) {
 // @Accept      json
 // @Produce     json
 // @Param       id path uint true "Recording item id"
-// @Success     200 {object} models.Job
+// @Success     200 {object} database.Job
 // @Failure     400 {} string "Error message"
 // @Failure     500 {} string "Error message"
 // @Router      /recordings/{id}/preview [post]
@@ -161,12 +161,12 @@ func GeneratePreview(c *gin.Context) {
 		return
 	}
 
-	recordingId := models.RecordingId(id)
+	recordingId := database.RecordingId(id)
 	if err != nil {
 		appG.Response(http.StatusInternalServerError, err)
 	}
 
-	job, err := recordingId.EnqueuePreviewJob()
+	job, err := services.EnqueuePreviewJob(recordingId)
 	if err != nil {
 		appG.Response(http.StatusInternalServerError, err)
 		return
@@ -195,7 +195,7 @@ func FavRecording(c *gin.Context) {
 		return
 	}
 
-	if err := models.FavRecording(uint(id), true); err != nil {
+	if err := database.FavRecording(uint(id), true); err != nil {
 		appG.Response(http.StatusInternalServerError, err)
 		return
 	}
@@ -223,7 +223,7 @@ func UnfavRecording(c *gin.Context) {
 		return
 	}
 
-	if err := models.FavRecording(uint(id), false); err != nil {
+	if err := database.FavRecording(uint(id), false); err != nil {
 		appG.Response(http.StatusInternalServerError, err)
 		return
 	}
@@ -239,7 +239,7 @@ func UnfavRecording(c *gin.Context) {
 // @Param       CutRequest body CutRequest true "Start and end timestamp of cutting sequences."
 // @Accept      json
 // @Produce     json
-// @Success     200 {object} models.Job
+// @Success     200 {object} database.Job
 // @Failure     400 {} string "Error message"
 // @Failure     500 {} string "Error message"
 // @Router      /recordings/{id}/cut [post]
@@ -264,7 +264,7 @@ func CutRecording(c *gin.Context) {
 		return
 	}
 
-	job, err := models.EnqueueCuttingJob(models.RecordingId(id), string(cut))
+	job, err := services.EnqueueCuttingJob(database.RecordingId(id), string(cut))
 	if err != nil {
 		appG.Response(http.StatusInternalServerError, err)
 		return
@@ -281,7 +281,7 @@ func CutRecording(c *gin.Context) {
 // @Param       mediaType path string true "Media type to convert to: 720, 1080, mp3"
 // @Accept      json
 // @Produce     json
-// @Success     200 {object} models.Job
+// @Success     200 {object} database.Job
 // @Failure     400 {} string "Error message"
 // @Failure     500 {} string "Error message"
 // @Router      /recordings/{id}/{mediaType}/convert [post]
@@ -295,7 +295,7 @@ func Convert(c *gin.Context) {
 	}
 	mediaType := c.Param("mediaType")
 
-	job, err := models.EnqueueConversionJob(models.RecordingId(id), mediaType)
+	job, err := services.EnqueueConversionJob(database.RecordingId(id), mediaType)
 	if err != nil {
 		appG.Response(http.StatusInternalServerError, err)
 		return
@@ -311,7 +311,7 @@ func Convert(c *gin.Context) {
 // @Accept      json
 // @Produce     json
 // @Param       limit path string int "How many recordings"
-// @Success     200 {object} []models.Recording
+// @Success     200 {object} []database.Recording
 // @Failure     400 {} string "Error message"
 // @Failure     500 {} string "Error message"
 // @Router      /recordings/filter/{column}/{order}/{limit} [get]
@@ -327,7 +327,7 @@ func FilterRecordings(c *gin.Context) {
 	column := c.Param("column")
 	order := c.Param("order")
 
-	recordings, err := models.SortBy(column, order, limit)
+	recordings, err := database.SortBy(column, order, limit)
 	if err != nil {
 		appG.Response(http.StatusInternalServerError, err)
 		return
@@ -342,7 +342,7 @@ func FilterRecordings(c *gin.Context) {
 // @Accept      json
 // @Produce     json
 // @Param       limit path string int "How many recordings"
-// @Success     200 {object} []models.Recording
+// @Success     200 {object} []database.Recording
 // @Failure     400 {} string "Error message"
 // @Failure     500 {} string "Error message"
 // @Router      /recordings/random/{limit} [get]
@@ -355,7 +355,7 @@ func GetRandomRecordings(c *gin.Context) {
 		return
 	}
 
-	recordings, err := models.FindRandom(limit)
+	recordings, err := database.FindRandom(limit)
 
 	if err != nil {
 		appG.Response(http.StatusInternalServerError, err)
@@ -378,8 +378,8 @@ func GetRandomRecordings(c *gin.Context) {
 // @Failure     500 {} string "Error message"
 // @Router      /recordings/{channelName}/{filename}/download [get]
 func DownloadRecording(c *gin.Context) {
-	channelName := models.ChannelName(c.Param("channelName"))
-	c.FileAttachment(channelName.AbsoluteChannelFilePath(models.RecordingFileName(c.Param("filename"))), c.Param("filename"))
+	channelName := database.ChannelName(c.Param("channelName"))
+	c.FileAttachment(channelName.AbsoluteChannelFilePath(database.RecordingFileName(c.Param("filename"))), c.Param("filename"))
 }
 
 // DeleteRecording godoc
@@ -402,7 +402,7 @@ func DeleteRecording(c *gin.Context) {
 		return
 	}
 
-	rec, err := models.RecordingId(id).FindRecordingById()
+	rec, err := database.RecordingId(id).FindRecordingById()
 	if err != nil {
 		appG.Response(http.StatusInternalServerError, err)
 		return

@@ -1,18 +1,16 @@
-package models
+package services
 
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
+	log "github.com/sirupsen/logrus"
+	"github.com/srad/streamsink/database"
+	"github.com/srad/streamsink/helpers"
+	"github.com/srad/streamsink/network"
 	"os"
 	"strings"
 	"time"
-
-	log "github.com/sirupsen/logrus"
-	"github.com/srad/streamsink/helpers"
-	"github.com/srad/streamsink/network"
-	"gorm.io/gorm"
 )
 
 const (
@@ -25,94 +23,46 @@ const (
 )
 
 var (
-	JobInfoChannel     = make(chan network.EventMessage, 1000)
-	sleepBetweenRounds = 1 * time.Second
-	ctx, cancel        = context.WithCancel(context.Background())
+	JobInfoChannel      = make(chan network.EventMessage, 1000)
+	sleepBetweenRounds  = 1 * time.Second
+	ctxJobs, cancelJobs = context.WithCancel(context.Background())
 )
 
-func StartWorker() {
-	go processJobs(ctx)
-}
-
-func StopWorker() {
-	cancel()
-}
-
-type JobVideoInfo struct {
-	Packets uint64 `json:"packets"`
-	Frame   uint64 `json:"frame"`
-}
-
 type JobMessage struct {
-	JobId       uint              `json:"jobId,omitempty" extensions:"!x-nullable"`
-	RecordingId RecordingId       `json:"recordingId,omitempty" extensions:"!x-nullable"`
-	ChannelId   ChannelId         `json:"channelId,omitempty" extensions:"!x-nullable"`
-	ChannelName string            `json:"channelName,omitempty" extensions:"!x-nullable"`
-	Filename    RecordingFileName `json:"filename,omitempty"`
-	Type        string            `json:"type,omitempty"`
-	Data        interface{}       `json:"data,omitempty"`
+	JobId       uint                       `json:"jobId,omitempty" extensions:"!x-nullable"`
+	RecordingId database.RecordingId       `json:"recordingId,omitempty" extensions:"!x-nullable"`
+	ChannelId   database.ChannelId         `json:"channelId,omitempty" extensions:"!x-nullable"`
+	ChannelName string                     `json:"channelName,omitempty" extensions:"!x-nullable"`
+	Filename    database.RecordingFileName `json:"filename,omitempty"`
+	Type        string                     `json:"type,omitempty"`
+	Data        interface{}                `json:"data,omitempty"`
 }
 
-type Job struct {
-	Channel   Channel   `json:"-" gorm:"foreignKey:channel_id;references:channel_id;"`
-	Recording Recording `json:"-" gorm:"foreignKey:recording_id;references:recording_id"`
-
-	JobId uint `json:"jobId" gorm:"autoIncrement" extensions:"!x-nullable"`
-
-	ChannelId   ChannelId   `json:"channelId" gorm:"column:channel_id;not null;default:null" extensions:"!x-nullable"`
-	RecordingId RecordingId `json:"recordingId" gorm:"column:recording_id;not null;default:null" extensions:"!x-nullable"`
-
-	// Unique entry, this is the actual primary key
-	ChannelName ChannelName       `json:"channelName" gorm:"not null;default:null" extensions:"!x-nullable"`
-	Filename    RecordingFileName `json:"filename" gorm:"not null;default:null" extensions:"!x-nullable"`
-	Status      string            `json:"status" gorm:"not null;default:null" extensions:"!x-nullable"`
-
-	Filepath  string    `json:"pathRelative" gorm:"not null;default:null;" extensions:"!x-nullable"`
-	Active    bool      `json:"active" gorm:"not null;default:false" extensions:"!x-nullable"`
-	CreatedAt time.Time `json:"createdAt" gorm:"not null;default:current_timestamp;index:idx_create_at" extensions:"!x-nullable"`
-
-	// Additional information
-	Pid      *int    `json:"pid" gorm:"default:null"`
-	Command  *string `json:"command" gorm:"default:null"`
-	Progress *string `json:"progress" gorm:"default:null"`
-	Info     *string `json:"info" gorm:"default:null"`
-	Args     *string `json:"args" gorm:"default:null"`
-}
-
-func EnqueueRecordingJob(id RecordingId, outputPath string) (*Job, error) {
-	recording, err := id.FindRecordingById()
-	if err != nil {
-		return nil, err
+func DestroyJog(id uint) error {
+	if job, err := database.FindJobById(id); err != nil {
+		return err
+	} else {
+		job.Destroy()
+		log.Infof("[Job] Job id delete %d", job.JobId)
+		network.BroadCastClients("job:destroy", JobMessage{JobId: job.JobId, ChannelId: job.ChannelId, ChannelName: job.ChannelName.String(), Filename: job.Filename})
 	}
-	return addJob(recording, StatusRecording, &outputPath)
+
+	return nil
 }
 
-func EnqueueConversionJob(id RecordingId, mediaType string) (*Job, error) {
-	recording, err := id.FindRecordingById()
-	if err != nil {
-		return nil, err
+func ActivateJob(id uint) error {
+	if job, err := database.FindJobById(id); err != nil {
+		return err
+	} else {
+		job.Activate()
+		log.Infof("[Job] Job id activate %d", job.JobId)
 	}
-	return addJob(recording, StatusConvert, &mediaType)
+
+	return nil
 }
 
-func (id RecordingId) EnqueuePreviewJob() (*Job, error) {
-	recording, err := id.FindRecordingById()
-	if err != nil {
-		return nil, err
-	}
-	return addJob(recording, StatusPreview, nil)
-}
-
-func EnqueueCuttingJob(id RecordingId, intervals string) (*Job, error) {
-	recording, err := id.FindRecordingById()
-	if err != nil {
-		return nil, err
-	}
-	return addJob(recording, StatusCut, &intervals)
-}
-
-func addJob(recording *Recording, status string, args *string) (*Job, error) {
-	job := Job{
+func CreateJob(recording *database.Recording, status string, args *string) (*database.Job, error) {
+	job := &database.Job{
 		ChannelId:   recording.ChannelId,
 		ChannelName: recording.ChannelName,
 		RecordingId: recording.RecordingId,
@@ -124,125 +74,19 @@ func addJob(recording *Recording, status string, args *string) (*Job, error) {
 		CreatedAt:   time.Now(),
 	}
 
-	if err := Db.Create(&job).Error; err != nil {
+	if err := job.CreateJob(); err != nil {
 		log.Errorf("[Job] Error enqueing job: '%s/%s' -> %s: %s", recording.ChannelName, recording.Filename, status, err)
-		return &job, err
-	}
-	log.Infof("[Job] Enqueued job: '%s/%s' -> %s", recording.ChannelName, recording.Filename, status)
-
-	network.BroadCastClients("job:create", JobMessage{JobId: job.JobId, Type: status, ChannelId: job.ChannelId, ChannelName: job.ChannelName.String(), Filename: job.Filename})
-
-	return &job, nil
-}
-
-func JobList() ([]*Job, error) {
-	var jobs []*Job
-	if err := Db.
-		Order("jobs.created_at ASC").
-		Find(&jobs).Error; err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, err
-	}
-
-	return jobs, nil
-}
-
-func (channel *Channel) Jobs() ([]*Job, error) {
-	var jobs []*Job
-	if err := Db.Where("channel_id = ?", channel.ChannelId).Find(&jobs).Error; err != nil {
-		return nil, err
-	}
-
-	return jobs, nil
-}
-
-func (job *Job) Destroy() error {
-	if job.Pid != nil {
-		if err := helpers.Interrupt(*job.Pid); err != nil {
-			log.Errorf("[Destroy] Error interrupting process: %s", err)
-			return err
-		}
-	}
-
-	if err := Db.Table("jobs").Where("job_id = ?", job.JobId).Delete(Job{}).Error; err != nil {
-		return err
-	}
-	log.Infof("[Job] Job id delete %d", job.JobId)
-
-	network.BroadCastClients("job:destroy", JobMessage{JobId: job.JobId, ChannelId: job.ChannelId, ChannelName: job.ChannelName.String(), Filename: job.Filename})
-
-	return nil
-}
-
-func FindJobById(id int) (*Job, error) {
-	var job *Job
-	if err := Db.Where("job_id = ?", id).Find(&job).Error; err != nil {
-		return nil, err
+	} else {
+		log.Infof("[Job] Enqueued job: '%s/%s' -> %s", recording.ChannelName, recording.Filename, status)
+		network.BroadCastClients("job:create", JobMessage{JobId: job.JobId, Type: status, ChannelId: job.ChannelId, ChannelName: job.ChannelName.String(), Filename: job.Filename})
 	}
 
 	return job, nil
 }
 
-func GetJobsByStatus(status string) ([]*Job, error) {
-	var jobs []*Job
-	if err := Db.Where("status = ?", status).Find(&jobs).Error; err != nil {
-		return nil, err
-	}
-
-	return jobs, nil
-}
-
-// GetNextJob Any job is attached to a recording which it will process.
-func GetNextJob(status string) (*Job, error) {
-	var job *Job
-	err := Db.Where("status = ?", status).
-		Order("jobs.created_at asc").First(&job).Error
-
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, nil
-	}
-
-	return job, err
-}
-
-func UpdateJobStatus(jobId uint, status string) error {
-	return Db.Model(&Job{}).Where("job_id = ?", jobId).Update("status", status).Error
-}
-
-func (job *Job) UpdateInfo(pid int, command string) error {
-	return Db.Model(&Job{}).Where("job_id = ?", job.JobId).
-		Update("pid", pid).
-		Update("command", command).Error
-}
-
-func (job *Job) UpdateProgress(progress string) error {
-	return Db.Model(&Job{}).Where("job_id = ?", job.JobId).
-		Update("progress", progress).Error
-}
-
-func UpdateJobInfo(jobId uint, info string) error {
-	return Db.Model(&Job{}).Where("job_id = ?", jobId).
-		Update("info", info).Error
-}
-
-func (job *Job) Activate() error {
-	if err := Db.Model(&Job{}).Where("job_id = ?", job.JobId).Update("active", true).Error; err != nil {
-		return err
-	}
-
-	network.BroadCastClients("job:active", JobMessage{
-		JobId:       job.JobId,
-		ChannelId:   job.ChannelId,
-		ChannelName: job.ChannelName.String(),
-		Filename:    job.Filename,
-		Type:        job.Status,
-	})
-
-	return nil
-}
-
 // PreviewJobs Handles one single job.
 func previewJobs() error {
-	job, errNextJob := GetNextJob(StatusPreview)
+	job, errNextJob := database.GetNextJob(StatusPreview)
 	if job == nil {
 		return errNextJob
 	}
@@ -284,7 +128,7 @@ func previewJobs() error {
 				ChannelId:   job.ChannelId,
 				ChannelName: job.ChannelName.String(),
 				Filename:    job.Filename,
-				Data:        JobVideoInfo{Frame: info.Frame, Packets: uint64(info.Total)}})
+				Data:        database.JobVideoInfo{Frame: info.Frame, Packets: uint64(info.Total)}})
 		},
 		InputPath:  job.ChannelName.AbsoluteChannelPath(),
 		OutputPath: job.ChannelName.AbsoluteChannelDataPath(),
@@ -322,7 +166,7 @@ func previewJobs() error {
 }
 
 func conversionJobs() error {
-	job, err := GetNextJob(StatusConvert)
+	job, err := database.GetNextJob(StatusConvert)
 	if job == nil {
 		return err
 	}
@@ -342,7 +186,7 @@ func conversionJobs() error {
 				log.Errorf("Error updating job progress: %s", err)
 			}
 
-			network.BroadCastClients("job:progress", JobMessage{JobId: job.JobId, ChannelId: job.ChannelId, Data: JobVideoInfo{Packets: uint64(info.Total), Frame: info.Frame}, Type: job.Status, ChannelName: job.ChannelName.String(), Filename: job.Filename})
+			network.BroadCastClients("job:progress", JobMessage{JobId: job.JobId, ChannelId: job.ChannelId, Data: database.JobVideoInfo{Packets: uint64(info.Total), Frame: info.Frame}, Type: job.Status, ChannelName: job.ChannelName.String(), Filename: job.Filename})
 		},
 		InputPath:  job.ChannelName.AbsoluteChannelPath(),
 		Filename:   job.Filename.String(),
@@ -367,13 +211,13 @@ func conversionJobs() error {
 	}
 
 	// Also, when fails, destroy it, some reason it is foul.
-	if _, err := CreateRecording(job.ChannelId, RecordingFileName(result.Filename), "recording"); err != nil {
+	if _, err := database.CreateRecording(job.ChannelId, database.RecordingFileName(result.Filename), "recording"); err != nil {
 		if errRemove := os.Remove(result.Filepath); errRemove != nil {
 			log.Errorf("Error deleting file '%s': %s", result.Filepath, errRemove)
 			return errRemove
 		}
 	} else {
-		if _, errJob := job.RecordingId.EnqueuePreviewJob(); errJob != nil {
+		if _, errJob := EnqueuePreviewJob(job.RecordingId); errJob != nil {
 			log.Errorf("Error enqueing preview job: %s", errJob)
 			return errJob
 		}
@@ -415,7 +259,7 @@ func processJobs(ctx context.Context) {
 // Cut video, add preview job, destroy job.
 // This action is intrinsically procedural, keep it together locally.
 func cuttingJobs() error {
-	job, err := GetNextJob(StatusCut)
+	job, err := database.GetNextJob(StatusCut)
 	if job == nil {
 		return err
 	}
@@ -444,7 +288,7 @@ func cuttingJobs() error {
 	// Filenames
 	now := time.Now()
 	stamp := now.Format("2006_01_02_15_04_05")
-	filename := RecordingFileName(fmt.Sprintf("%s_cut_%s.mp4", job.ChannelName, stamp))
+	filename := database.RecordingFileName(fmt.Sprintf("%s_cut_%s.mp4", job.ChannelName, stamp))
 	inputPath := job.ChannelName.AbsoluteChannelFilePath(job.Filename)
 	outputFile := job.ChannelName.AbsoluteChannelFilePath(filename)
 	segFiles := make([]string, len(cutArgs.Starts))
@@ -453,7 +297,7 @@ func cuttingJobs() error {
 	// Cut
 	segmentFilename := fmt.Sprintf("%s_cut_%s", job.ChannelName, stamp)
 	for i, start := range cutArgs.Starts {
-		segFiles[i] = job.ChannelName.AbsoluteChannelFilePath(RecordingFileName(fmt.Sprintf("%s_%04d.mp4", segmentFilename, i)))
+		segFiles[i] = job.ChannelName.AbsoluteChannelFilePath(database.RecordingFileName(fmt.Sprintf("%s_%04d.mp4", segmentFilename, i)))
 		err = helpers.CutVideo(&helpers.CuttingJob{
 			OnStart: func(info *helpers.CommandInfo) {
 				_ = job.UpdateInfo(info.Pid, info.Command)
@@ -479,7 +323,7 @@ func cuttingJobs() error {
 	for i, file := range segFiles {
 		mergeFileContent[i] = fmt.Sprintf("file '%s'", file)
 	}
-	mergeTextFile := job.ChannelName.AbsoluteChannelFilePath(RecordingFileName(fmt.Sprintf("%s.txt", segmentFilename)))
+	mergeTextFile := job.ChannelName.AbsoluteChannelFilePath(database.RecordingFileName(fmt.Sprintf("%s.txt", segmentFilename)))
 	err = os.WriteFile(mergeTextFile, []byte(strings.Join(mergeFileContent, "\n")), 0644)
 	if err != nil {
 		log.Errorf("[Job] Error writing concat text file '%s': %s", mergeTextFile, err)
@@ -519,14 +363,14 @@ func cuttingJobs() error {
 		log.Errorf("[Job] Error reading video information for file '%s': %s", filename, err)
 	}
 
-	cutRecording, errCreate := CreateRecording(job.ChannelId, filename, "cut")
+	cutRecording, errCreate := database.CreateRecording(job.ChannelId, filename, "cut")
 	if errCreate != nil {
 		log.Errorf("[Job] Error creating: %s\n", errCreate)
 		return errCreate
 	}
 
 	// Successfully added cut record, enqueue preview job
-	if _, err = cutRecording.RecordingId.EnqueuePreviewJob(); err != nil {
+	if _, err = EnqueuePreviewJob(cutRecording.RecordingId); err != nil {
 		log.Errorf("[Job] Error adding preview for cutting job %d: %s", job.JobId, err)
 		return err
 	}
@@ -539,4 +383,44 @@ func cuttingJobs() error {
 
 	log.Infof("[Job] Cutting job complete for '%s'", job.Filepath)
 	return nil
+}
+
+func EnqueueRecordingJob(id database.RecordingId, outputPath string) (*database.Job, error) {
+	recording, err := id.FindRecordingById()
+	if err != nil {
+		return nil, err
+	}
+	return CreateJob(recording, StatusRecording, &outputPath)
+}
+
+func EnqueueConversionJob(id database.RecordingId, mediaType string) (*database.Job, error) {
+	recording, err := id.FindRecordingById()
+	if err != nil {
+		return nil, err
+	}
+	return CreateJob(recording, StatusConvert, &mediaType)
+}
+
+func EnqueuePreviewJob(id database.RecordingId) (*database.Job, error) {
+	recording, err := id.FindRecordingById()
+	if err != nil {
+		return nil, err
+	}
+	return CreateJob(recording, StatusPreview, nil)
+}
+
+func EnqueueCuttingJob(id database.RecordingId, intervals string) (*database.Job, error) {
+	recording, err := id.FindRecordingById()
+	if err != nil {
+		return nil, err
+	}
+	return CreateJob(recording, StatusCut, &intervals)
+}
+
+func StartJobProcessing() {
+	go processJobs(ctxJobs)
+}
+
+func StopJobProcessing() {
+	cancelJobs()
 }

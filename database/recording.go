@@ -1,4 +1,4 @@
-package models
+package database
 
 import (
 	"errors"
@@ -238,10 +238,6 @@ func DeleteFile(channelName ChannelName, filename RecordingFileName) error {
 	}
 
 	return nil
-}
-
-func (channelId ChannelId) Filename() RecordingFileName {
-	return recInfo[channelId].Filename
 }
 
 func (recordingId RecordingId) FindRecordingById() (*Recording, error) {
