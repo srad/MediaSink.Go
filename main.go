@@ -10,8 +10,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 	log "github.com/sirupsen/logrus"
+	"github.com/srad/streamsink/controllers"
 	"github.com/srad/streamsink/database"
-	"github.com/srad/streamsink/routers"
 	"github.com/srad/streamsink/services"
 )
 
@@ -48,7 +48,7 @@ func main() {
 
 	server := &http.Server{
 		Addr:           endPoint,
-		Handler:        routers.Setup(Version, Commit),
+		Handler:        controllers.Setup(Version, Commit),
 		ReadTimeout:    12 * time.Hour,
 		WriteTimeout:   12 * time.Hour,
 		MaxHeaderBytes: 0,

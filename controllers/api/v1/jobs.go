@@ -27,19 +27,19 @@ func AddJob(c *gin.Context) {
 
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		appG.Response(http.StatusBadRequest, err)
+		appG.Error(http.StatusBadRequest, err)
 		return
 	}
 
 	recording, err := database.RecordingId(id).FindRecordingById()
 	if err != nil {
-		appG.Response(http.StatusBadRequest, err)
+		appG.Error(http.StatusBadRequest, err)
 		return
 	}
 
 	job, err := services.EnqueuePreviewJob(recording.RecordingId)
 	if err != nil {
-		appG.Response(http.StatusInternalServerError, err)
+		appG.Error(http.StatusInternalServerError, err)
 		return
 	}
 
@@ -62,12 +62,12 @@ func StopJob(c *gin.Context) {
 
 	pid, err := strconv.Atoi(c.Param("pid"))
 	if err != nil {
-		appG.Response(http.StatusBadRequest, err)
+		appG.Error(http.StatusBadRequest, err)
 		return
 	}
 
 	if err := helpers.Interrupt(pid); err != nil {
-		appG.Response(http.StatusInternalServerError, err)
+		appG.Error(http.StatusInternalServerError, err)
 		return
 	}
 
@@ -90,18 +90,18 @@ func DestroyJob(c *gin.Context) {
 
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		appG.Response(http.StatusBadRequest, err)
+		appG.Error(http.StatusBadRequest, err)
 		return
 	}
 
 	job, err := database.FindJobById(uint(id))
 	if err != nil {
-		appG.Response(http.StatusBadRequest, err)
+		appG.Error(http.StatusBadRequest, err)
 		return
 	}
 
 	if errDestroy := job.Destroy(); errDestroy != nil {
-		appG.Response(http.StatusInternalServerError, errDestroy.Error())
+		appG.Error(http.StatusInternalServerError, errDestroy)
 		return
 	}
 
@@ -122,7 +122,7 @@ func GetJobs(c *gin.Context) {
 	jobs, err := database.JobList()
 
 	if err != nil {
-		appG.Response(http.StatusInternalServerError, err)
+		appG.Error(http.StatusInternalServerError, err)
 		return
 	}
 

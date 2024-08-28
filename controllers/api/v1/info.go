@@ -28,13 +28,13 @@ func GetInfo(c *gin.Context) {
 	secs := c.Param("seconds")
 	val, err := strconv.ParseUint(secs, 10, 64)
 	if err != nil {
-		appG.Response(http.StatusInternalServerError, err)
+		appG.Error(http.StatusInternalServerError, err)
 	}
 
 	data, err := helpers.Info(cfg.DataDisk, cfg.NetworkDev, val)
 
 	if err != nil {
-		appG.Response(http.StatusInternalServerError, err)
+		appG.Error(http.StatusInternalServerError, err)
 		return
 	}
 
@@ -58,7 +58,7 @@ func GetDiskInfo(c *gin.Context) {
 	info, err := helpers.DiskUsage(cfg.DataDisk)
 
 	if err != nil {
-		appG.Response(http.StatusInternalServerError, err)
+		appG.Error(http.StatusInternalServerError, err)
 		return
 	}
 

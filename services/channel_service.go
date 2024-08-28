@@ -2,7 +2,7 @@ package services
 
 import (
 	"context"
-	errors "errors"
+	"errors"
 	"fmt"
 	log "github.com/sirupsen/logrus"
 	"github.com/srad/streamsink/conf"

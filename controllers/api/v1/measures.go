@@ -19,13 +19,12 @@ import (
 // @Router      /metric/cpu [get]
 func GetCpu(c *gin.Context) {
 	appG := app.Gin{C: c}
-	response, err := database.GetCpuMeasure()
-	if err != nil {
-		appG.Response(http.StatusInternalServerError, err)
+	if response, err := database.GetCpuMeasure(); err != nil {
+		appG.Error(http.StatusInternalServerError, err)
 		return
+	} else {
+		appG.Response(http.StatusOK, &response)
 	}
-
-	appG.Response(http.StatusOK, &response)
 }
 
 // GetNet godoc
@@ -41,7 +40,7 @@ func GetNet(c *gin.Context) {
 	appG := app.Gin{C: c}
 	response, err := database.GetNetworkMeasure()
 	if err != nil {
-		appG.Response(http.StatusInternalServerError, err)
+		appG.Error(http.StatusInternalServerError, err)
 		return
 	}
 

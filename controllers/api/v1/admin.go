@@ -1,7 +1,7 @@
 package v1
 
 import (
-	"github.com/srad/streamsink/routers/api/v1/response"
+	"github.com/srad/streamsink/controllers/api/v1/response"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -66,9 +66,6 @@ func GetVersion(version, commit string) func(c *gin.Context) {
 	return func(c *gin.Context) {
 		appG := app.Gin{C: c}
 
-		appG.Response(http.StatusOK, response.ServerInfo{
-			Commit:  commit,
-			Version: version,
-		})
+		appG.Response(http.StatusOK, response.ServerInfo{Commit: commit, Version: version})
 	}
 }

@@ -1,4 +1,4 @@
-package routers
+package controllers
 
 import (
 	"net/http"
@@ -10,7 +10,7 @@ import (
 
 	"github.com/gin-contrib/cors"
 	socketio "github.com/googollee/go-socket.io"
-	v1 "github.com/srad/streamsink/routers/api/v1"
+	v1 "github.com/srad/streamsink/controllers/api/v1"
 
 	"github.com/gin-gonic/gin"
 	"github.com/swaggo/files"
