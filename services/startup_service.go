@@ -14,8 +14,8 @@ import (
 func StartUpJobs() error {
 	log.Infoln("[StartUpJobs] Running startup job ...")
 
-	deleteChannels() // Blocking.
-	deleteOrphanedRecordings()
+	deleteChannels()           // Blocking
+	deleteOrphanedRecordings() // Blocking
 	StartImport()
 	go fixOrphanedRecordings()
 

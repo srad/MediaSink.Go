@@ -342,13 +342,13 @@ func (recordingId RecordingId) DestroyPreviews() error {
 	paths := recording.ChannelName.GetRecordingsPaths(recording.Filename)
 
 	if err := os.Remove(paths.VideosPath); err != nil && !os.IsNotExist(err) {
-		log.Errorf("[DestroyPreviews] Error deleting '%s' from channel '%s': %v", paths.VideosPath, recording.ChannelName, err)
+		log.Errorf("error deleting '%s' from channel '%s': %v", paths.VideosPath, recording.ChannelName, err)
 	}
 	if err := os.Remove(paths.StripePath); err != nil && !os.IsNotExist(err) {
-		log.Errorf("[DestroyPreviews] Error deleting '%s' from channel '%s': %v", paths.StripePath, recording.ChannelName, err)
+		log.Errorf("error deleting '%s' from channel '%s': %v", paths.StripePath, recording.ChannelName, err)
 	}
 	if err := os.Remove(paths.CoverPath); err != nil && !os.IsNotExist(err) {
-		log.Errorf("[DestroyPreviews] Error deleting '%s' from channel '%s': %v", paths.CoverPath, recording.ChannelName, err)
+		log.Errorf("error deleting '%s' from channel '%s': %v", paths.CoverPath, recording.ChannelName, err)
 	}
 
 	err = Db.Model(&Recording{}).
