@@ -1,6 +1,7 @@
 package database
 
 import (
+	"encoding/json"
 	"errors"
 	"time"
 
@@ -10,8 +11,9 @@ import (
 )
 
 type JobVideoInfo struct {
-	Packets uint64 `json:"packets"`
-	Frame   uint64 `json:"frame"`
+	Total   uint64 `json:"total"`
+	Current uint64 `json:"current"`
+	Task    string `json:"task"`
 }
 
 type Job struct {
@@ -98,16 +100,29 @@ func GetJobsByStatus(status string) ([]*Job, error) {
 }
 
 // GetNextJob Any job is attached to a recording which it will process.
-func GetNextJob(status string) (*Job, error) {
+func GetNextJob[T any](status string) (*Job, *T, error) {
 	var job *Job
 	err := Db.Where("status = ?", status).
 		Order("jobs.created_at asc").First(&job).Error
 
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, nil
+		return nil, nil, nil
 	}
 
-	return job, err
+	// Deserialize the arguments, if existent.
+	if job.Args != nil {
+		var data *T
+		if err := json.Unmarshal([]byte(*job.Args), &data); err != nil {
+			log.Errorf("[Job] Error parsing cutting job arguments: %s", err)
+			if errDestroy := job.Destroy(); errDestroy != nil {
+				log.Errorf("[Job] Error destroying job: %s", errDestroy)
+			}
+			return job, nil, err
+		}
+		return job, data, err
+	}
+
+	return job, nil, err
 }
 
 func UpdateJobStatus(jobId uint, status string) error {

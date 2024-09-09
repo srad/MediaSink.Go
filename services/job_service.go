@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	log "github.com/sirupsen/logrus"
 	"github.com/srad/streamsink/database"
@@ -23,7 +24,6 @@ const (
 )
 
 var (
-	JobInfoChannel      = make(chan network.EventMessage, 1000)
 	sleepBetweenRounds  = 1 * time.Second
 	ctxJobs, cancelJobs = context.WithCancel(context.Background())
 )
@@ -38,30 +38,16 @@ type JobMessage struct {
 	Data        interface{}                `json:"data,omitempty"`
 }
 
-func DestroyJog(id uint) error {
-	if job, err := database.FindJobById(id); err != nil {
-		return err
-	} else {
-		job.Destroy()
-		log.Infof("[Job] Job id delete %d", job.JobId)
-		network.BroadCastClients("job:destroy", JobMessage{JobId: job.JobId, ChannelId: job.ChannelId, ChannelName: job.ChannelName.String(), Filename: job.Filename})
+func CreateJob[T any](recording *database.Recording, status string, args *T) (*database.Job, error) {
+	data := ""
+	if args != nil {
+		bytes, err := json.Marshal(args)
+		if err != nil {
+			return nil, err
+		}
+		data = string(bytes)
 	}
 
-	return nil
-}
-
-func ActivateJob(id uint) error {
-	if job, err := database.FindJobById(id); err != nil {
-		return err
-	} else {
-		job.Activate()
-		log.Infof("[Job] Job id activate %d", job.JobId)
-	}
-
-	return nil
-}
-
-func CreateJob(recording *database.Recording, status string, args *string) (*database.Job, error) {
 	job := &database.Job{
 		ChannelId:   recording.ChannelId,
 		ChannelName: recording.ChannelName,
@@ -69,7 +55,7 @@ func CreateJob(recording *database.Recording, status string, args *string) (*dat
 		Filename:    recording.Filename,
 		Filepath:    recording.ChannelName.AbsoluteChannelFilePath(recording.Filename),
 		Status:      status,
-		Args:        args,
+		Args:        &data,
 		Active:      false,
 		CreatedAt:   time.Now(),
 	}
@@ -86,7 +72,7 @@ func CreateJob(recording *database.Recording, status string, args *string) (*dat
 
 // PreviewJobs Handles one single job.
 func previewJobs() error {
-	job, errNextJob := database.GetNextJob(StatusPreview)
+	job, _, errNextJob := database.GetNextJob[*any](StatusPreview)
 	if job == nil {
 		return errNextJob
 	}
@@ -109,9 +95,10 @@ func previewJobs() error {
 	}
 
 	conversion := &helpers.VideoConversionArgs{
-		OnStart: func(info *helpers.CommandInfo) {
-			_ = job.UpdateInfo(info.Pid, info.Command)
-			log.Infof("Updating job %d pid=%d, command=%s", job.JobId, job.Pid, info.Command)
+		OnStart: func(info helpers.TaskInfo) {
+			if err := job.UpdateInfo(info.Pid, info.Command); err != nil {
+				log.Errorf("[Job] Error updating job info: %s", err)
+			}
 
 			network.BroadCastClients("job:start", JobMessage{
 				JobId:       job.JobId,
@@ -120,15 +107,34 @@ func previewJobs() error {
 				ChannelName: job.ChannelName.String(),
 				Filename:    job.Filename,
 				Type:        job.Status,
+				Data:        info,
 			})
 		},
-		OnProgress: func(info *helpers.ProcessInfo) {
+		OnProgress: func(info helpers.TaskProgress) {
 			network.BroadCastClients("job:progress", JobMessage{
 				JobId:       job.JobId,
 				ChannelId:   job.ChannelId,
 				ChannelName: job.ChannelName.String(),
 				Filename:    job.Filename,
-				Data:        database.JobVideoInfo{Frame: info.Frame, Packets: uint64(info.Total)}})
+				Data:        info})
+		},
+		OnEnd: func(info helpers.TaskComplete) {
+			network.BroadCastClients("job:done", JobMessage{
+				Data:        info,
+				JobId:       job.JobId,
+				ChannelId:   job.ChannelId,
+				ChannelName: job.ChannelName.String(),
+				Filename:    job.Filename,
+			})
+		},
+		OnError: func(err error) {
+			network.BroadCastClients("job:error", JobMessage{
+				Data:        err.Error(),
+				JobId:       job.JobId,
+				ChannelId:   job.ChannelId,
+				ChannelName: job.ChannelName.String(),
+				Filename:    job.Filename,
+			})
 		},
 		InputPath:  job.ChannelName.AbsoluteChannelPath(),
 		OutputPath: job.ChannelName.AbsoluteChannelDataPath(),
@@ -166,32 +172,39 @@ func previewJobs() error {
 }
 
 func conversionJobs() error {
-	job, err := database.GetNextJob(StatusConvert)
+	job, mediaType, err := database.GetNextJob[string](StatusConvert)
 	if job == nil {
 		return err
+	}
+
+	if mediaType == nil {
+		return errors.New("media type is nil")
 	}
 
 	if err := job.Activate(); err != nil {
 		log.Errorf("Error activating job: %s", err)
 	}
 
-	log.Infof("Job info: %v", job)
-
 	result, err := helpers.ConvertVideo(&helpers.VideoConversionArgs{
-		OnStart: func(info *helpers.CommandInfo) {
-			_ = job.UpdateInfo(info.Pid, info.Command)
+		OnStart: func(info helpers.TaskInfo) {
+			if err := job.UpdateInfo(info.Pid, info.Command); err != nil {
+				log.Errorf("Error updating job info: %s", err)
+			}
 		},
-		OnProgress: func(info *helpers.ProcessInfo) {
-			if err := job.UpdateProgress(fmt.Sprintf("%f", float32(info.Frame)/float32(info.Total)*100)); err != nil {
+		OnProgress: func(info helpers.TaskProgress) {
+			if err := job.UpdateProgress(fmt.Sprintf("%f", float32(info.Current)/float32(info.Total)*100)); err != nil {
 				log.Errorf("Error updating job progress: %s", err)
 			}
 
-			network.BroadCastClients("job:progress", JobMessage{JobId: job.JobId, ChannelId: job.ChannelId, Data: database.JobVideoInfo{Packets: uint64(info.Total), Frame: info.Frame}, Type: job.Status, ChannelName: job.ChannelName.String(), Filename: job.Filename})
+			network.BroadCastClients("job:progress", JobMessage{JobId: job.JobId, ChannelId: job.ChannelId, Data: database.JobVideoInfo{Total: info.Total, Current: info.Current}, Type: job.Status, ChannelName: job.ChannelName.String(), Filename: job.Filename})
+		},
+		OnError: func(err error) {
+			network.BroadCastClients("job:error", JobMessage{JobId: job.JobId, ChannelId: job.ChannelId, Data: err.Error(), Type: job.Status, ChannelName: job.ChannelName.String(), Filename: job.Filename})
 		},
 		InputPath:  job.ChannelName.AbsoluteChannelPath(),
 		Filename:   job.Filename.String(),
 		OutputPath: job.ChannelName.AbsoluteChannelPath(),
-	}, *job.Args)
+	}, *mediaType)
 
 	if err != nil {
 		log.Errorf("[conversionJobs] Error converting '%s' to '%s': %s", job.Filename, *job.Args, err)
@@ -256,18 +269,15 @@ func processJobs(ctx context.Context) {
 	}
 }
 
-// Cut video, add preview job, destroy job.
+// Three-phase cutting job:
+// 1. Cut video at the given time intervals
+// 2. Merge the cuts
+// 3. Enqueue preview job for new cut
 // This action is intrinsically procedural, keep it together locally.
 func cuttingJobs() error {
-	job, err := database.GetNextJob(StatusCut)
+	job, cutArgs, err := database.GetNextJob[helpers.CutArgs](StatusCut)
 	if job == nil {
 		return err
-	}
-
-	log.Errorf("[Job] Generating preview for '%s'", job.Filename)
-	err = job.Activate()
-	if err != nil {
-		log.Errorf("[Job] Error activating job: %d", job.JobId)
 	}
 
 	if job.Args == nil {
@@ -275,14 +285,11 @@ func cuttingJobs() error {
 		return err
 	}
 
-	// Parse arguments
-	cutArgs := &helpers.CutArgs{}
-	s := []byte(*job.Args)
-	err = json.Unmarshal(s, &cutArgs)
+	log.Infof("[Job] Generating video cut for '%s'", job.Filename)
+
+	err = job.Activate()
 	if err != nil {
-		log.Errorf("[Job] Error parsing cutting job arguments: %s", err)
-		_ = job.Destroy()
-		return err
+		log.Errorf("[Job] Error activating job: %d", job.JobId)
 	}
 
 	// Filenames
@@ -398,7 +405,7 @@ func EnqueueConversionJob(id database.RecordingId, mediaType string) (*database.
 	if err != nil {
 		return nil, err
 	}
-	return CreateJob(recording, StatusConvert, &mediaType)
+	return CreateJob[string](recording, StatusConvert, &mediaType)
 }
 
 func EnqueuePreviewJob(id database.RecordingId) (*database.Job, error) {
@@ -406,15 +413,15 @@ func EnqueuePreviewJob(id database.RecordingId) (*database.Job, error) {
 	if err != nil {
 		return nil, err
 	}
-	return CreateJob(recording, StatusPreview, nil)
+	return CreateJob[any](recording, StatusPreview, nil)
 }
 
-func EnqueueCuttingJob(id database.RecordingId, intervals string) (*database.Job, error) {
+func EnqueueCuttingJob(id database.RecordingId, intervals *helpers.CutArgs) (*database.Job, error) {
 	recording, err := id.FindRecordingById()
 	if err != nil {
 		return nil, err
 	}
-	return CreateJob(recording, StatusCut, &intervals)
+	return CreateJob(recording, StatusCut, intervals)
 }
 
 func StartJobProcessing() {

@@ -1,7 +1,7 @@
 package v1
 
 import (
-	"encoding/json"
+	"github.com/srad/streamsink/helpers"
 	"net/http"
 	"strconv"
 
@@ -10,11 +10,6 @@ import (
 	"github.com/srad/streamsink/database"
 	"github.com/srad/streamsink/services"
 )
-
-type CutRequest struct {
-	Starts []string `json:"starts"`
-	Ends   []string `json:"ends"`
-}
 
 // GetRecordings godoc
 // @Summary     Return a list of recordings
@@ -246,8 +241,8 @@ func UnfavRecording(c *gin.Context) {
 func CutRecording(c *gin.Context) {
 	appG := app.Gin{C: c}
 
-	cutRequest := CutRequest{}
-	if err := c.BindJSON(&cutRequest); err != nil {
+	cutRequest := &helpers.CutArgs{}
+	if err := c.BindJSON(cutRequest); err != nil {
 		appG.Response(http.StatusBadRequest, err)
 		return
 	}
@@ -258,13 +253,7 @@ func CutRecording(c *gin.Context) {
 		return
 	}
 
-	cut, err := json.Marshal(cutRequest)
-	if err != nil {
-		appG.Response(http.StatusBadRequest, err)
-		return
-	}
-
-	job, err := services.EnqueueCuttingJob(database.RecordingId(id), string(cut))
+	job, err := services.EnqueueCuttingJob(database.RecordingId(id), cutRequest)
 	if err != nil {
 		appG.Response(http.StatusInternalServerError, err)
 		return

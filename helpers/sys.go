@@ -6,10 +6,12 @@ import (
 	"errors"
 	"fmt"
 	log "github.com/sirupsen/logrus"
+	"io"
 	"os"
 	"os/exec"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 )
@@ -26,7 +28,7 @@ type CommandInfo struct {
 type ExecArgs struct {
 	cancel      context.CancelFunc
 	OnStart     func(CommandInfo)
-	OnPipeOut   func(string)
+	OnPipeOut   func(PipeMessage)
 	OnPipeErr   func(PipeMessage)
 	Command     string
 	CommandArgs []string
@@ -91,6 +93,7 @@ func ExecSync(execArgs *ExecArgs) error {
 	log.Infof("Executing: %s", execArgs.ToString())
 
 	// stdout, _ := cmd.StdoutPipe()
+	stout, _ := c.StdoutPipe()
 	sterr, _ := c.StderrPipe()
 
 	if err := c.Start(); err != nil {
@@ -106,13 +109,33 @@ func ExecSync(execArgs *ExecArgs) error {
 		execArgs.OnStart(CommandInfo{Pid: pid, Command: execArgs.ToString()})
 	}
 
-	if execArgs.OnPipeErr != nil {
-		scanner := bufio.NewScanner(sterr)
-		scanner.Split(bufio.ScanLines)
+	// Wait group to synchronize goroutines
+	var wg sync.WaitGroup
+
+	// Function to read from a given pipe
+	readPipe := func(pipe io.ReadCloser, pipeName string) {
+		defer wg.Done() // Notify the wait group when done
+		scanner := bufio.NewScanner(pipe)
 		for scanner.Scan() {
-			execArgs.OnPipeErr(PipeMessage{Output: scanner.Text(), Pid: pid})
+			if pipeName == "stdout" && execArgs.OnPipeOut != nil {
+				execArgs.OnPipeOut(PipeMessage{Output: scanner.Text(), Pid: pid})
+			} else if pipeName == "stderr" && execArgs.OnPipeErr != nil {
+				execArgs.OnPipeErr(PipeMessage{Output: scanner.Text(), Pid: pid})
+			}
 		}
 	}
+
+	// Add two goroutines to the wait group (for stdout and stderr)
+	wg.Add(2)
+
+	// Start a goroutine to read stdout
+	go readPipe(stout, "stdout")
+
+	// Start a goroutine to read stderr
+	go readPipe(sterr, "stderr")
+
+	// Wait for the goroutines to finish
+	wg.Wait()
 
 	if err := cmd[pid].Wait(); err != nil {
 		var exiterr *exec.ExitError
