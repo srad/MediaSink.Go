@@ -294,7 +294,7 @@ func (id ChannelId) NewRecording(videoType string) (*Recording, string, error) {
 
 	filename, timestamp := channel.ChannelName.MakeRecordingFilename()
 	relativePath := filepath.Join(channel.ChannelName.String(), filename.String())
-	outputFile := channel.ChannelName.AbsoluteChannelFilePath(filename)
+	filePath := channel.ChannelName.AbsoluteChannelFilePath(filename)
 
 	return &Recording{
 			ChannelId:     channel.ChannelId,
@@ -314,7 +314,7 @@ func (id ChannelId) NewRecording(videoType string) (*Recording, string, error) {
 			PreviewVideo:  nil,
 			PreviewCover:  nil,
 		},
-		outputFile,
+		filePath,
 		nil
 }
 

@@ -421,8 +421,7 @@ func (video Video) CreatePreview(args *VideoConversionArgs, extractCount uint64,
 	}
 
 	return &PreviewResult{
-		Filename: args.Filename,
-		//ScreensPath:    dir,
+		Filename:       args.Filename,
 		VideoFilePath:  previewVideoDir,
 		StripeFilePath: path.Join(args.OutputPath, filename+".jpg"),
 	}, nil

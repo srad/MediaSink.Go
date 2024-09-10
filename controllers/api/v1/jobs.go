@@ -119,12 +119,10 @@ func DestroyJob(c *gin.Context) {
 // @Router      /jobs [get]
 func GetJobs(c *gin.Context) {
 	appG := app.Gin{C: c}
-	jobs, err := database.JobList()
-
-	if err != nil {
+	if jobs, err := database.JobList(); err != nil {
 		appG.Error(http.StatusInternalServerError, err)
 		return
+	} else {
+		appG.Response(http.StatusOK, jobs)
 	}
-
-	appG.Response(http.StatusOK, &jobs)
 }

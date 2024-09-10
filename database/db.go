@@ -4,6 +4,7 @@ import (
 	"fmt"
 	log "github.com/sirupsen/logrus"
 	"github.com/srad/streamsink/conf"
+	"gorm.io/driver/mysql"
 	"gorm.io/driver/postgres"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -27,31 +28,30 @@ func Init() {
 		},
 	)
 
-	// If no db host specified, then create a local sqlite3 models. Mainly for dev env.
-	if os.Getenv("DB_HOST") != "" {
-		dsn := fmt.Sprintf("host=%s user=%s password=%s dbname=streamsink port=5432 sslmode=disable TimeZone=Europe/Berlin", os.Getenv("DB_HOST"), os.Getenv("DB_USER"), os.Getenv("DB_PASS"))
-		db, err := gorm.Open(postgres.New(postgres.Config{
-			DSN: dsn,
-			// PreferSimpleProtocol: true, // disables implicit prepared statement usage
-		}), &gorm.Config{
-			Logger: newLogger,
-		})
-		if err != nil {
-			panic("failed to connect models")
-		}
-		Db = db
-	} else {
+	// Choose driver.
+	var dialector gorm.Dialector
+	switch os.Getenv("DB_ADAPTER") {
+	case "mysql":
+		dsn := fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%s sslmode=disable TimeZone=Europe/Berlin", os.Getenv("DB_HOST"), os.Getenv("DB_USER"), os.Getenv("DB_PASSWORD"), os.Getenv("DB_NAME"), os.Getenv("DB_PORT"))
+		dialector = mysql.New(mysql.Config{DSN: dsn})
+	case "postgres":
+		dsn := fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%s sslmode=disable TimeZone=Europe/Berlin", os.Getenv("DB_HOST"), os.Getenv("DB_USER"), os.Getenv("DB_PASSWORD"), os.Getenv("DB_NAME"), os.Getenv("DB_PORT"))
+		dialector = postgres.New(postgres.Config{DSN: dsn})
+	default:
 		// SQLite3
-		log.Infof("Opening models: %s", cfg.DbFileName)
-		db, err := gorm.Open(sqlite.Open(cfg.DbFileName), &gorm.Config{
-			DisableForeignKeyConstraintWhenMigrating: true,
-			Logger:                                   newLogger,
-		})
-		if err != nil {
-			panic("failed to connect models")
-		}
-		Db = db
+		dialector = sqlite.Open(cfg.DbFileName)
 	}
+
+	/// Open and assign database.
+	config := &gorm.Config{
+		Logger:                                   newLogger,
+		DisableForeignKeyConstraintWhenMigrating: true,
+	}
+	db, err := gorm.Open(dialector, config)
+	if err != nil {
+		panic("failed to connect models")
+	}
+	Db = db
 
 	migrate()
 }

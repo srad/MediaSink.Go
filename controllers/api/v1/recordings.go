@@ -11,6 +11,12 @@ import (
 	"github.com/srad/streamsink/services"
 )
 
+type CutRequest struct {
+	Starts                []string `json:"starts"`
+	Ends                  []string `json:"ends"`
+	DeleteAfterCompletion bool     `json:"deleteAfterCut"`
+}
+
 // GetRecordings godoc
 // @Summary     Return a list of recordings
 // @Description Return a list of recordings.
@@ -241,7 +247,7 @@ func UnfavRecording(c *gin.Context) {
 func CutRecording(c *gin.Context) {
 	appG := app.Gin{C: c}
 
-	cutRequest := &helpers.CutArgs{}
+	cutRequest := &CutRequest{}
 	if err := c.BindJSON(cutRequest); err != nil {
 		appG.Response(http.StatusBadRequest, err)
 		return
@@ -253,7 +259,11 @@ func CutRecording(c *gin.Context) {
 		return
 	}
 
-	job, err := services.EnqueueCuttingJob(database.RecordingId(id), cutRequest)
+	job, err := services.EnqueueCuttingJob(database.RecordingId(id), &helpers.CutArgs{
+		Starts:                cutRequest.Starts,
+		Ends:                  cutRequest.Ends,
+		DeleteAfterCompletion: cutRequest.DeleteAfterCompletion,
+	})
 	if err != nil {
 		appG.Response(http.StatusInternalServerError, err)
 		return

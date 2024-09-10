@@ -61,18 +61,18 @@ func CaptureChannel(id database.ChannelId, url string, skip uint) error {
 		return err
 	}
 
-	recording, outputPath, err := channel.ChannelId.NewRecording("recording")
+	recording, outputFilePath, err := channel.ChannelId.NewRecording("recording")
 	if err != nil {
 		return err
 	}
 
 	log.Infoln("----------------------------------------Capturing----------------------------------------")
 	log.Infoln("Url: " + url)
-	log.Infoln("to: " + outputPath)
+	log.Infoln("to: " + outputFilePath)
 
 	recInfo[id] = recording
-	streams[id] = exec.Command("ffmpeg", "-hide_banner", "-loglevel", "error", "-i", url, "-ss", fmt.Sprintf("%d", skip), "-movflags", "faststart", "-c", "copy", outputPath)
-	cmdStr := strings.Join([]string{"ffmpeg", "-hide_banner", "-loglevel", "error", "-i", url, "-ss", fmt.Sprintf("%d", skip), "-movflags", "faststart", "-c", "copy", outputPath}, " ")
+	streams[id] = exec.Command("ffmpeg", "-hide_banner", "-loglevel", "error", "-i", url, "-ss", fmt.Sprintf("%d", skip), "-movflags", "faststart", "-c", "copy", outputFilePath)
+	cmdStr := strings.Join([]string{"ffmpeg", "-hide_banner", "-loglevel", "error", "-i", url, "-ss", fmt.Sprintf("%d", skip), "-movflags", "faststart", "-c", "copy", outputFilePath}, " ")
 	log.Infof("Executing: %s", cmdStr)
 
 	sterr, _ := streams[id].StderrPipe()
@@ -86,28 +86,12 @@ func CaptureChannel(id database.ChannelId, url string, skip uint) error {
 		log.Errorf("[Capture] %s: %s", string(b), err)
 	}
 
-	// Before recording, store information about the file in the recordings table, for status checks and recovery.
-	createRecording, err := database.CreateStreamRecording(channel.ChannelId, recording.Filename)
-	if err != nil {
-		log.Errorf("CreateStreamRecording: %s", err)
-		return err
-	}
-
-	recJob, err := EnqueueRecordingJob(createRecording.RecordingId, outputPath)
-	if err != nil {
-		log.Errorf("[Capture] Error enqueuing reccording for: %s/%s: %s", channel.ChannelName, recording.Filename, err)
-	}
-
-	if err := recJob.UpdateInfo(streams[id].Process.Pid, cmdStr); err != nil {
-		log.Errorf("[recJob.UpdateInfo]: %s / %s", channel.ChannelName, err)
-	}
-
 	// Wait for process to exit
 	if err := streams[id].Wait(); err != nil && !strings.Contains(err.Error(), "255") {
 		log.Errorf("[Capture] Wait for process exit '%s' error: %s", channel.ChannelName, err)
-		DestroyData(id)
-		if err := recJob.Destroy(); err != nil {
-			log.Errorf("[Capture] Error destroying recording: '%s' error: %s", channel.ChannelName, err)
+		DeleteStreamData(id)
+		if err := os.Remove(outputFilePath); err != nil {
+			log.Errorf("[Capture] Error deleting recording file '%s': %s", outputFilePath, err)
 		}
 		var exiterr *exec.ExitError
 		if errors.As(err, &exiterr) {
@@ -127,51 +111,45 @@ func CaptureChannel(id database.ChannelId, url string, skip uint) error {
 	}
 
 	// Finish recording
-	duration := uint(time.Now().Sub(recording.CreatedAt).Minutes())
+	duration := time.Now().Sub(recording.CreatedAt)
 
 	// Query the latest minimum recording duration or set a default of 10min.
 
 	log.Infof("Minimum recording duration for channel %s is %dmin", channel.ChannelName, channel.MinDuration)
 
 	// Duration might have changed since the process launch.
-	channel, err = id.GetChannelById()
+	channel, errChannel := id.GetChannelById()
+	var minDuration = 10 * time.Minute // default
+	if errChannel != nil {
+		log.Errorf("[Capture] Error querying channel-id %d: %s", id, errChannel)
+	} else {
+		minDuration = time.Duration(channel.MinDuration) * time.Minute
+	}
 
-	// keep
-	if duration >= channel.MinDuration {
+	// Keep the recording
+	if duration.Seconds() >= minDuration.Seconds() {
 		info := Info(id)
-		if _, err := database.CreateRecording(info.ChannelId, info.Filename, "recording"); err != nil {
-			log.Errorf("[Info] Error adding recording: %v", info)
-		}
-
-		// No access to info after this!
-		DestroyData(id)
-		if err := recJob.Destroy(); err != nil {
-			log.Errorf("[Capture] Error destroying recording: %s", err)
-		}
-
-		// Video can now be marked as a regular recording.
-		createRecording.RecordingId.UpdateVideoType("recording")
-		network.BroadCastClients("recording:add", createRecording)
-
-		if job, err := EnqueuePreviewJob(createRecording.RecordingId); err != nil {
-			log.Errorf("[FinishRecording] Error enqueuing job for %s", err)
-			return err
+		if newRecording, err := database.CreateRecording(info.ChannelId, info.Filename, "recording"); err != nil {
+			log.Errorf("[Info] Error adding recording '%s': %s", outputFilePath, err)
 		} else {
-			log.Infof("[FinishRecording] Job enqueued %v\n", job)
+			network.BroadCastClients("recording:add", newRecording)
+
+			if job, err := EnqueuePreviewJob(newRecording.RecordingId); err != nil {
+				log.Errorf("[FinishRecording] Error enqueuing job for %s", err)
+				return err
+			} else {
+				log.Infof("[FinishRecording] Job enqueued %v\n", job)
+			}
 		}
 	} else { // Throw away
 		log.Infof("[FinishRecording] Deleting stream '%s/%s' because it is too short (%dmin)", channel.ChannelName, recording.Filename, duration)
 
-		DestroyData(id)
-		if err := recJob.Destroy(); err != nil {
+		if err := os.Remove(outputFilePath); err != nil {
 			log.Errorf("[Capture] Error destroying recording: %s", err)
 		}
-
-		if err := createRecording.Destroy(); err != nil {
-			log.Errorf("[FinishRecording] Error deleting '%s/%s': %s", channel.ChannelName, recording.Filename, err)
-			return err
-		}
 	}
+
+	DeleteStreamData(id)
 
 	return nil
 }
@@ -185,10 +163,6 @@ func GetRecordingMinutes(id database.ChannelId) float64 {
 
 func Info(id database.ChannelId) *database.Recording {
 	return recInfo[id]
-}
-
-func Filename(channelId database.ChannelId) database.RecordingFileName {
-	return recInfo[channelId].Filename
 }
 
 func Start(id database.ChannelId) error {
@@ -283,7 +257,7 @@ func IsRecordingStream(id database.ChannelId) bool {
 	return false
 }
 
-func DestroyData(id database.ChannelId) {
+func DeleteStreamData(id database.ChannelId) {
 	delete(streams, id)
 	delete(recInfo, id)
 	delete(streamInfo, id)
@@ -293,15 +267,19 @@ func ProcessList() []*ProcessInfo {
 	var info []*ProcessInfo
 
 	for id, cmd := range streams {
-		output, _ := cmd.CombinedOutput()
-		args := strings.Join(cmd.Args, " ")
+		var s = ""
+		if output, err := cmd.CombinedOutput(); err == nil {
+			s = strings.TrimSpace(string(output))
+		}
+
+		args := strings.TrimSpace(strings.Join(cmd.Args, " "))
 
 		info = append(info, &ProcessInfo{
 			Id:     id,
 			Pid:    cmd.Process.Pid,
 			Path:   cmd.Path,
-			Args:   strings.TrimSpace(args),
-			Output: strings.TrimSpace(string(output)),
+			Args:   args,
+			Output: s,
 		})
 	}
 
