@@ -94,7 +94,7 @@ func Setup(version, commit string) http.Handler {
 		apiv1.POST("/jobs/:id", v1.AddJob)
 		apiv1.POST("/jobs/stop/:pid", v1.StopJob)
 		apiv1.DELETE("/jobs/:id", v1.DestroyJob)
-		apiv1.GET("/jobs", v1.GetJobs)
+		apiv1.GET("/jobs/:skip/:take", v1.GetJobs)
 
 		// recorder
 		apiv1.POST("/recorder/resume", v1.StartRecorder)

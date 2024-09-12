@@ -12,10 +12,6 @@ import (
 	"gorm.io/gorm"
 )
 
-var (
-	UpdatingVideoInfo = false
-)
-
 type RecordingId uint
 
 type Recording struct {
@@ -45,6 +41,10 @@ type Recording struct {
 }
 
 func (id RecordingId) FindById() (*Recording, error) {
+	if id == 0 {
+		return nil, fmt.Errorf("invalid recording id %d", id)
+	}
+
 	var recording *Recording
 	if err := Db.Model(Recording{}).
 		Select("recordings.*").
@@ -55,6 +55,18 @@ func (id RecordingId) FindById() (*Recording, error) {
 	}
 
 	return recording, nil
+}
+
+func (id RecordingId) Exists() error {
+	var count int64 = 0
+	if err := Db.Model(Recording{}).Where("recordings.recording_id = ?", id).Count(&count).Error; err != nil {
+		return err
+	}
+
+	if count > 0 {
+		return nil
+	}
+	return errors.New("record not exists")
 }
 
 func FavRecording(id uint, fav bool) error {
@@ -195,38 +207,50 @@ func CreateRecording(channelId ChannelId, filename RecordingFileName, videoType 
 	return recording, nil
 }
 
-// Destroy Deletes all recording related files, jobs, and database item.
-func (recording *Recording) Destroy() error {
-	// Try to find and destroy all related items: jobs, file, previews, db entry.
-
-	if err := recording.ChannelId.DestroyJobs(); err != nil {
-		log.Errorf("Error destroying jobs: %s", err)
+func DestroyJobs(id RecordingId) error {
+	var jobs *[]Job
+	err := Db.Model(&Job{}).
+		Where("recording_id = ?", id).
+		Find(&jobs).Error
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return err
 	}
 
-	if err := DeleteFile(recording.ChannelName, recording.Filename); err != nil {
-		log.Errorf("Error deleting file: %s", err)
-	}
-
-	if err := recording.RecordingId.DestroyPreviews(); err != nil {
-		log.Errorf("Error destroying preview: %s", err)
-	}
-
-	// Remove from database
-	if err := Db.Delete(&Recording{}, "recording_id = ?", recording.RecordingId).Error; err != nil {
-		return fmt.Errorf("error deleting recordings of file '%s' from channel '%s': %s", recording.Filename, recording.ChannelName, err)
+	for _, job := range *jobs {
+		if err := DeleteJob(job.JobId); err != nil {
+			log.Warnln(err)
+		}
 	}
 
 	return nil
 }
 
-func (channelId ChannelId) DestroyJobs() error {
-	if jobs, err := channelId.FindJobs(); err == nil {
-		for _, job := range *jobs {
-			if destroyErr := job.Destroy(); destroyErr != nil {
-				log.Errorf("Error destroying job-id: %d", job.JobId)
-			}
-		}
+// DestroyRecording Deletes all recording related files, jobs, and database item.
+func DestroyRecording(id RecordingId) error {
+	rec, err := id.FindById()
+	if err != nil {
+		return err
 	}
+
+	// Try to find and destroy all related items: jobs, file, previews, db entry.
+
+	if err := DestroyJobs(id); err != nil {
+		log.Errorf("Error destroying jobs: %s", err)
+	}
+
+	if err := DeleteFile(rec.ChannelName, rec.Filename); err != nil {
+		log.Errorf("Error deleting file: %s", err)
+	}
+
+	if err := DestroyPreviews(rec.RecordingId); err != nil {
+		log.Errorf("Error destroying preview: %s", err)
+	}
+
+	// Remove from database
+	if err := Db.Delete(&Recording{}, "recording_id = ?", rec.RecordingId).Error; err != nil {
+		return fmt.Errorf("error deleting recordings of file '%s' from channel '%s': %s", rec.Filename, rec.ChannelName, err)
+	}
+
 	return nil
 }
 
@@ -333,8 +357,8 @@ func (recordingId RecordingId) AddPreviews() error {
 	return nil
 }
 
-func (recordingId RecordingId) DestroyPreviews() error {
-	recording, err := recordingId.FindRecordingById()
+func DestroyPreviews(id RecordingId) error {
+	recording, err := id.FindRecordingById()
 	if err != nil {
 		return err
 	}
@@ -352,7 +376,7 @@ func (recordingId RecordingId) DestroyPreviews() error {
 	}
 
 	err = Db.Model(&Recording{}).
-		Where("recording_id = ?", recordingId).
+		Where("recording_id = ?", id).
 		First(&recording).Error
 
 	// Nothing found to destroy.
@@ -383,35 +407,4 @@ func (id RecordingId) UpdateVideoType(videoType string) error {
 
 func (recording *Recording) Save() error {
 	return Db.Model(&recording).Save(&recording).Error
-}
-
-func UpdateVideoInfo() error {
-	log.Infoln("[Recorder] Updating all recordings info")
-	recordings, err := RecordingsList()
-	if err != nil {
-		log.Errorln(err)
-		return err
-	}
-	UpdatingVideoInfo = true
-	count := len(recordings)
-
-	i := 1
-	for _, rec := range recordings {
-		info, err := GetVideoInfo(rec.ChannelName, rec.Filename)
-		if err != nil {
-			log.Errorf("[UpdateVideoInfo] Error updating video info: %s", err)
-			continue
-		}
-
-		if err := rec.UpdateInfo(info); err != nil {
-			log.Errorf("[Recorder] Error updating video info: %s", err)
-			continue
-		}
-		log.Infof("[Recorder] Updated %s (%d/%d)", rec.Filename, i, count)
-		i++
-	}
-
-	UpdatingVideoInfo = false
-
-	return nil
 }

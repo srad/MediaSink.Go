@@ -119,7 +119,7 @@ func ImportChannels(context.Context) error {
 
 			if _, errVideoInfo := video.GetVideoInfo(); errVideoInfo != nil {
 				log.Errorf("[Import/%s] File '%s' seems corrupted, deleting: %s", channelName, file.Name(), errVideoInfo)
-				if errDestroy := recording.Destroy(); errDestroy != nil {
+				if errDestroy := database.DestroyRecording(recording.RecordingId); errDestroy != nil {
 					log.Errorf("[Import/%s] Error deleting: %s: %s", channelName, file.Name(), errDestroy)
 				} else {
 					log.Infof("[Import/%s] Deleted: %s", channelName, file.Name())

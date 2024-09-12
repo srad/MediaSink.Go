@@ -137,21 +137,24 @@ func ExecSync(execArgs *ExecArgs) error {
 	// Wait for the goroutines to finish
 	wg.Wait()
 
-	if err := cmd[pid].Wait(); err != nil {
-		var exiterr *exec.ExitError
-		if errors.As(err, &exiterr) {
-			// The program has exited with an exit code != 0
+	// First check if process still exists, could have been killed in the meantime.
+	if _, ok := cmd[pid]; ok {
+		if err := cmd[pid].Wait(); err != nil {
+			var exiterr *exec.ExitError
+			if errors.As(err, &exiterr) {
+				// The program has exited with an exit code != 0
 
-			// This works on both Unix and Windows. Although package
-			// syscall is generally platform dependent, WaitStatus is
-			// defined for both Unix and Windows and in both cases has
-			// an ExitStatus() method with the same signature.
-			if _, ok := exiterr.Sys().(syscall.WaitStatus); ok {
-				return err
-				// return status.ExitStatus()
+				// This works on both Unix and Windows. Although package
+				// syscall is generally platform dependent, WaitStatus is
+				// defined for both Unix and Windows and in both cases has
+				// an ExitStatus() method with the same signature.
+				if _, ok := exiterr.Sys().(syscall.WaitStatus); ok {
+					return err
+					// return status.ExitStatus()
+				}
 			}
+			return err
 		}
-		return err
 	}
 
 	return nil
@@ -163,7 +166,7 @@ func Interrupt(pid int) error {
 		delete(cmd, pid)
 		return err
 	}
-	return fmt.Errorf("pid %d not found", pid)
+	return nil
 }
 
 func CpuUsage(waitSeconds uint64) (*CPUInfo, error) {

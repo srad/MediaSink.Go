@@ -260,7 +260,7 @@ func (id ChannelId) DestroyAllRecordings() error {
 		log.Errorln("Error querying all jobs for this channel")
 	} else {
 		for _, job := range jobs {
-			if err := job.Destroy(); err != nil {
+			if err := job.Cancel("Internal cancelling, deleting channel"); err != nil {
 				log.Errorf("Error destroying job: %s", err)
 			}
 		}
@@ -268,7 +268,7 @@ func (id ChannelId) DestroyAllRecordings() error {
 
 	// TODO: Also Cancel running jobs from this channel
 	for _, recording := range recordings {
-		if err := recording.Destroy(); err != nil {
+		if err := DestroyJobs(recording.RecordingId); err != nil {
 			log.Errorf("Error deleting recording %s: %s", recording.Filename, err)
 		}
 	}

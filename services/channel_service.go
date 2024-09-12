@@ -20,6 +20,7 @@ type ChannelInfo struct {
 	MinRecording  float64 `json:"minRecording" extensions:"!x-nullable"`
 }
 
+// CreateChannel Persistent channel generation.
 func CreateChannel(name, displayName string, skipStart, minDuration uint, url string, fav bool, tags *database.Tags, isPaused bool) (*ChannelInfo, error) {
 	channel := database.Channel{
 		ChannelName: database.ChannelName(name),
@@ -57,6 +58,7 @@ func CreateChannel(name, displayName string, skipStart, minDuration uint, url st
 	return info, nil
 }
 
+// GetChannels Adds additional streaming and recording information to the channel data in the database.
 func GetChannels() ([]ChannelInfo, error) {
 	channels, err := database.ChannelListNotDeleted()
 	if err != nil {
@@ -82,6 +84,7 @@ func GetChannels() ([]ChannelInfo, error) {
 	return response, nil
 }
 
+// GetChannel Single Channel data with streaming and recording information.
 func GetChannel(id uint) (*ChannelInfo, error) {
 	channelId := database.ChannelId(id)
 	if channel, err := channelId.GetChannelById(); err != nil {

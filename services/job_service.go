@@ -2,7 +2,6 @@ package services
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	log "github.com/sirupsen/logrus"
@@ -12,15 +11,6 @@ import (
 	"os"
 	"strings"
 	"time"
-)
-
-const (
-	// StatusRecording Recording in progress
-	StatusRecording = "recording"
-	StatusConvert   = "convert"
-	// StatusPreview Generating preview currently
-	StatusPreview = "preview"
-	StatusCut     = "cut"
 )
 
 var (
@@ -33,41 +23,10 @@ type JobMessage struct {
 	Data interface{}   `json:"data"`
 }
 
-func CreateJob[T any](recording *database.Recording, status string, args *T) (*database.Job, error) {
-	data := ""
-	if args != nil {
-		bytes, err := json.Marshal(args)
-		if err != nil {
-			return nil, err
-		}
-		data = string(bytes)
-	}
-
-	job := &database.Job{
-		ChannelId:   recording.ChannelId,
-		ChannelName: recording.ChannelName,
-		RecordingId: recording.RecordingId,
-		Filename:    recording.Filename,
-		Filepath:    recording.ChannelName.AbsoluteChannelFilePath(recording.Filename),
-		Status:      status,
-		Args:        &data,
-		Active:      false,
-		CreatedAt:   time.Now(),
-	}
-
-	if err := job.CreateJob(); err != nil {
-		log.Errorf("[Job] Error enqueing job: '%s/%s' -> %s: %s", recording.ChannelName, recording.Filename, status, err)
-	} else {
-		log.Infof("[Job] Enqueued job: '%s/%s' -> %s", recording.ChannelName, recording.Filename, status)
-		network.BroadCastClients("job:create", JobMessage{Job: job})
-	}
-
-	return job, nil
-}
-
 // PreviewJobs Handles one single job.
-func previewJobs() error {
-	job, _, errNextJob := database.GetNextJob[*any](StatusPreview)
+// Intentionally procedural, all steps can be read from top to bottom.
+func processPreview() error {
+	job, _, errNextJob := database.GetNextJob[*any](database.TaskPreview)
 	if job == nil {
 		return errNextJob
 	}
@@ -79,7 +38,7 @@ func previewJobs() error {
 	log.Infof("[previewJobs] Recording: %v", recording)
 
 	// Delete any old previews first
-	if err := recording.RecordingId.DestroyPreviews(); err != nil {
+	if err := database.DestroyPreviews(recording.RecordingId); err != nil {
 		log.Errorf("[Job] Error deleting existing previews: %s", err)
 	}
 
@@ -89,7 +48,7 @@ func previewJobs() error {
 		log.Infof("[Job] Error activating job: %d", job.JobId)
 	}
 
-	conversion := &helpers.VideoConversionArgs{
+	previewArgs := &helpers.VideoConversionArgs{
 		OnStart: func(info helpers.TaskInfo) {
 			if err := job.UpdateInfo(info.Pid, info.Command); err != nil {
 				log.Errorf("[Job] Error updating job info: %s", err)
@@ -123,37 +82,43 @@ func previewJobs() error {
 	}
 
 	// 1. First check if input file is corrupt.
-	if _, err := helpers.GeneratePreviews(conversion); err != nil {
+	if _, err := helpers.GeneratePreviews(previewArgs); err != nil {
 		// 2. Delete the file if it is corrupted
-		checkFileErr := helpers.CheckVideo(job.ChannelName.GetRecordingsPaths(job.Filename).Filepath)
-		if checkFileErr != nil {
+		if checkFileErr := helpers.CheckVideo(job.ChannelName.GetRecordingsPaths(job.Filename).Filepath); checkFileErr != nil {
 			if rec, errJob := job.RecordingId.FindRecordingById(); errJob != nil && rec != nil {
-				_ = rec.Destroy()
+				_ = database.DestroyRecording(rec.RecordingId)
 			}
-			log.Errorf("[Job] File corrupted, deleting '%s', %s", job.Filename, checkFileErr)
-		}
-		// 3. Since the job failed for some reason, remove it
-		_ = job.Destroy()
 
-		return fmt.Errorf("error generating preview for '%s' : %s", job.Filename, err)
+			message := fmt.Errorf("error generating previews for file %s is corrupt: %s", job.Filename, checkFileErr)
+			_ = job.Error(message)
+			return message
+		}
+
+		// 3. File not corrupt, only error generating the preview
+		message := fmt.Errorf("error generating previews for file %s: %s", job.Filename, err)
+
+		// 3. Job failed because file corrupt
+		_ = job.Error(message)
+
+		return message
 	}
 
-	// 4. Went ok.
+	// 4. Went ok. Now generate previews.
 	if err := recording.RecordingId.AddPreviews(); err != nil {
 		return fmt.Errorf("error adding previews: %s", err)
 	}
 
 	network.BroadCastClients("job:preview:done", JobMessage{Job: job})
 
-	if errDestroy := job.Destroy(); errDestroy != nil {
+	if errDestroy := job.Completed(); errDestroy != nil {
 		return fmt.Errorf("error deleting job: %s", errDestroy)
 	}
 
 	return nil
 }
 
-func conversionJobs() error {
-	job, mediaType, err := database.GetNextJob[string](StatusConvert)
+func processConversion() error {
+	job, mediaType, err := database.GetNextJob[string](database.TaskConvert)
 	if job == nil {
 		return err
 	}
@@ -166,7 +131,7 @@ func conversionJobs() error {
 		log.Errorf("Error activating job: %s", err)
 	}
 
-	result, err := helpers.ConvertVideo(&helpers.VideoConversionArgs{
+	result, errConvert := helpers.ConvertVideo(&helpers.VideoConversionArgs{
 		OnStart: func(info helpers.TaskInfo) {
 			if err := job.UpdateInfo(info.Pid, info.Command); err != nil {
 				log.Errorf("Error updating job info: %s", err)
@@ -177,7 +142,7 @@ func conversionJobs() error {
 				log.Errorf("Error updating job progress: %s", err)
 			}
 
-			network.BroadCastClients("job:progress", JobMessage{Job: job, Data: database.JobVideoInfo{Total: info.Total, Current: info.Current}})
+			network.BroadCastClients("job:progress", JobMessage{Job: job, Data: info})
 		},
 		OnError: func(err error) {
 			network.BroadCastClients("job:error", JobMessage{Job: job, Data: err.Error()})
@@ -187,37 +152,33 @@ func conversionJobs() error {
 		OutputPath: job.ChannelName.AbsoluteChannelPath(),
 	}, *mediaType)
 
-	if err != nil {
-		log.Errorf("[conversionJobs] Error converting '%s' to '%s': %s", job.Filename, *job.Args, err)
-		if err := os.Remove(result.Filepath); err != nil {
-			log.Errorf("Error deleting file '%s': %s", result.Filepath, err)
+	if errConvert != nil {
+		message := fmt.Errorf("error converting %s to %s: %s", job.Filename, mediaType, errConvert)
+
+		log.Errorln(message)
+		if errDelete := os.Remove(result.Filepath); err != nil {
+			log.Errorf("error deleting file %s: %s", result.Filepath, errDelete)
 		}
-		if err := job.Destroy(); err != nil {
-			log.Errorf("Error destroying job: %s", err)
-		}
-		return err
+		_ = job.Error(message)
+		return message
 	} else {
 		log.Infof("[conversionJobs] Completed conversion of '%s' with args '%s'", job.Filename, *job.Args)
 	}
 
-	if err := job.Destroy(); err != nil {
-		log.Errorf("[conversionJobs] Error deleting job: %s", err)
-	}
+	_ = job.Completed()
 
 	// Also, when fails, destroy it, some reason it is foul.
 	if _, err := database.CreateRecording(job.ChannelId, database.RecordingFileName(result.Filename), "recording"); err != nil {
 		if errRemove := os.Remove(result.Filepath); errRemove != nil {
-			log.Errorf("Error deleting file '%s': %s", result.Filepath, errRemove)
-			return errRemove
+			return fmt.Errorf("error deleting file %s: %s", result.Filepath, errRemove)
 		}
 	} else {
 		if _, errJob := EnqueuePreviewJob(job.RecordingId); errJob != nil {
-			log.Errorf("Error enqueing preview job: %s", errJob)
-			return errJob
+			return fmt.Errorf("error enqueuing preview job for %s: %s", result.Filename, errJob)
 		}
 	}
 
-	log.Infof("[processJobs] Conversion completed for '%s'", job.Filepath)
+	log.Infof("Conversion completed for %s", job.Filepath)
 
 	return nil
 }
@@ -231,19 +192,16 @@ func processJobs(ctx context.Context) {
 		case <-time.After(sleepBetweenRounds):
 			// Intentionally blocking call, one after another. Tasks use all cores.
 
-			// Conversion
-			if err := conversionJobs(); err != nil {
-				log.Errorf("[processJobs] Error current job: %s", err)
+			if err := processConversion(); err != nil {
+				log.Errorln(err)
 			}
 
-			// Cutting
-			if err := cuttingJobs(); err != nil {
-				log.Errorf("[processJobs] Error current job: %s", err)
+			if err := processCutting(); err != nil {
+				log.Errorln(err)
 			}
 
-			// Previews
-			if err := previewJobs(); err != nil {
-				log.Errorf("[processJobs] Error current job: %s", err)
+			if err := processPreview(); err != nil {
+				log.Errorln(err)
 			}
 
 		}
@@ -255,8 +213,8 @@ func processJobs(ctx context.Context) {
 // 2. Merge the cuts
 // 3. Enqueue preview job for new cut
 // This action is intrinsically procedural, keep it together locally.
-func cuttingJobs() error {
-	job, cutArgs, err := database.GetNextJob[helpers.CutArgs](StatusCut)
+func processCutting() error {
+	job, cutArgs, err := database.GetNextJob[helpers.CutArgs](database.TaskCut)
 	if job == nil {
 		return err
 	}
@@ -289,6 +247,17 @@ func cuttingJobs() error {
 		err = helpers.CutVideo(&helpers.CuttingJob{
 			OnStart: func(info *helpers.CommandInfo) {
 				_ = job.UpdateInfo(info.Pid, info.Command)
+
+				network.BroadCastClients("job:start", JobMessage{
+					Job: job,
+					Data: helpers.TaskInfo{
+						Steps:   2,
+						Step:    1,
+						Pid:     info.Pid,
+						Command: info.Command,
+						Message: "Starting cutting phase",
+					},
+				})
 			},
 			OnProgress: func(s string) {
 				network.BroadCastClients("job:progress", JobMessage{Job: job, Data: s})
@@ -303,7 +272,7 @@ func cuttingJobs() error {
 					log.Errorf("[Job] Error deleting segment '%s': %s", file, err)
 				}
 			}
-			_ = job.Destroy()
+			_ = job.Error(err)
 			return err
 		}
 	}
@@ -311,107 +280,134 @@ func cuttingJobs() error {
 	for i, file := range segFiles {
 		mergeFileContent[i] = fmt.Sprintf("file '%s'", file)
 	}
-	mergeTextFile := job.ChannelName.AbsoluteChannelFilePath(database.RecordingFileName(fmt.Sprintf("%s.txt", segmentFilename)))
-	err = os.WriteFile(mergeTextFile, []byte(strings.Join(mergeFileContent, "\n")), 0644)
-	if err != nil {
-		log.Errorf("[Job] Error writing concat text file '%s': %s", mergeTextFile, err)
+	mergeFileAbsolutePath := job.ChannelName.AbsoluteChannelFilePath(database.RecordingFileName(fmt.Sprintf("%s.txt", segmentFilename)))
+	errWriteMergeFile := os.WriteFile(mergeFileAbsolutePath, []byte(strings.Join(mergeFileContent, "\n")), 0644)
+	if errWriteMergeFile != nil {
+		log.Errorf("[Job] Error writing concat text file %s: %s", mergeFileAbsolutePath, errWriteMergeFile)
 		for _, file := range segFiles {
 			if err := os.RemoveAll(file); err != nil {
 				log.Errorf("[Job] Error deleting %s: %s", file, err)
 			}
 		}
-		_ = os.RemoveAll(mergeTextFile)
-		_ = job.Destroy()
-		return err
+		if err := os.RemoveAll(mergeFileAbsolutePath); err != nil {
+			log.Errorf("[Job] Error deleting merge file %s: %s", mergeFileAbsolutePath, err)
+		}
+		_ = job.Error(errWriteMergeFile)
+		return errWriteMergeFile
 	}
 
-	if err = helpers.MergeVideos(func(s string) {
-		network.BroadCastClients("job:progress", JobMessage{Job: job, Data: s})
-	}, mergeTextFile, outputFile); err != nil {
+	errMerge := helpers.MergeVideos(&helpers.MergeArgs{
+		OnStart: func(info helpers.CommandInfo) {
+			network.BroadCastClients("job:start", JobMessage{
+				Job: job,
+				Data: helpers.TaskInfo{
+					Steps:   2,
+					Step:    2,
+					Pid:     info.Pid,
+					Command: info.Command,
+					Message: "Starting merge phase",
+				},
+			})
+		},
+		OnProgress: func(info helpers.PipeMessage) {
+			// TODO: For cutting and merging ffmpeg doesnt seem to provide obvious progress information, check again.
+			//network.BroadCastClients("job:progress", JobMessage{Job: job, Data: info})
+		},
+		OnErr: func(err error) {
+			network.BroadCastClients("job:error", JobMessage{Job: job, Data: err.Error()})
+		},
+		MergeFileAbsolutePath:  mergeFileAbsolutePath,
+		AbsoluteOutputFilepath: outputFile,
+	})
+
+	if errMerge != nil {
 		// Job failed, destroy all files.
-		log.Errorf("[Job] Error merging file '%s': %s", mergeTextFile, err)
+		log.Errorf("Error merging file '%s': %s", mergeFileAbsolutePath, err)
 		for _, file := range segFiles {
 			if err := os.RemoveAll(file); err != nil {
-				log.Errorf("[Job] Error deleting %s: %s", file, err)
+				log.Errorf("Error deleting %s: %s", file, err)
 			}
 		}
-		_ = os.RemoveAll(mergeTextFile)
-		_ = job.Destroy()
+		if err := os.RemoveAll(mergeFileAbsolutePath); err != nil {
+			log.Errorf("Error deleting merge file %s: %s", mergeFileAbsolutePath, err)
+		}
+		_ = job.Error(errMerge)
 		return err
 	}
 
-	_ = os.RemoveAll(mergeTextFile)
+	_ = os.RemoveAll(mergeFileAbsolutePath)
 	for _, file := range segFiles {
 		log.Infof("[MergeJob] Deleting segment %s", file)
 		if err := os.Remove(file); err != nil {
-			log.Errorf("[Job] Error deleting segment '%s': %s", file, err)
+			log.Errorf("Error deleting segment '%s': %s", file, err)
 		}
 	}
 
 	outputVideo := &helpers.Video{FilePath: outputFile}
 	if _, err := outputVideo.GetVideoInfo(); err != nil {
-		log.Errorf("[Job] Error reading video information for file '%s': %s", filename, err)
+		log.Errorf("Error reading video information for file '%s': %s", filename, err)
 	}
 
 	cutRecording, errCreate := database.CreateRecording(job.ChannelId, filename, "cut")
 	if errCreate != nil {
-		log.Errorf("[Job] Error creating: %s\n", errCreate)
+		log.Errorf("Error creating: %s\n", errCreate)
 		return errCreate
 	}
 
 	// Successfully added cut record, enqueue preview job
 	if _, err = EnqueuePreviewJob(cutRecording.RecordingId); err != nil {
-		log.Errorf("[Job] Error adding preview for cutting job %d: %s", job.JobId, err)
+		log.Errorf("Error adding preview for cutting job %d: %s", job.JobId, err)
 		return err
 	}
 
 	// The original file shall be deleted after the process if successful.
 	if cutArgs.DeleteAfterCompletion {
-		if err := job.Recording.Destroy(); err != nil {
-			return err
+		if err := database.DestroyRecording(job.RecordingId); err != nil {
+			log.Errorf("Eror deleting recording after cutting job for %s: %s", outputFile, err)
 		}
 	}
 
 	// Finished, destroy job
-	if err = job.Destroy(); err != nil {
-		log.Errorf("[Job] Error deleteing job: %s", err)
+	if err = job.Completed(); err != nil {
+		log.Errorf("Error deleteing job: %s", err)
 		return err
 	}
 
-	log.Infof("[Job] Cutting job complete for '%s'", job.Filepath)
+	log.Infof("Cutting job complete for '%s'", job.Filepath)
 	return nil
 }
 
-func EnqueueRecordingJob(id database.RecordingId, outputPath string) (*database.Job, error) {
-	recording, err := id.FindRecordingById()
-	if err != nil {
-		return nil, err
-	}
-	return CreateJob(recording, StatusRecording, &outputPath)
-}
-
 func EnqueueConversionJob(id database.RecordingId, mediaType string) (*database.Job, error) {
-	recording, err := id.FindRecordingById()
-	if err != nil {
-		return nil, err
-	}
-	return CreateJob[string](recording, StatusConvert, &mediaType)
+	return enqueueJob[string](id, database.TaskConvert, &mediaType)
 }
 
 func EnqueuePreviewJob(id database.RecordingId) (*database.Job, error) {
-	recording, err := id.FindRecordingById()
-	if err != nil {
-		return nil, err
-	}
-	return CreateJob[any](recording, StatusPreview, nil)
+	return enqueueJob[*any](id, database.TaskPreview, nil)
 }
 
-func EnqueueCuttingJob(id database.RecordingId, intervals *helpers.CutArgs) (*database.Job, error) {
-	recording, err := id.FindRecordingById()
-	if err != nil {
+func EnqueueCuttingJob(id database.RecordingId, args *helpers.CutArgs) (*database.Job, error) {
+	return enqueueJob(id, database.TaskCut, args)
+}
+
+func enqueueJob[T any](id database.RecordingId, task database.JobTask, args *T) (*database.Job, error) {
+	if recording, err := id.FindRecordingById(); err != nil {
 		return nil, err
+	} else {
+		if job, err2 := database.CreateJob(recording, task, args); err2 != nil {
+			return nil, err2
+		} else {
+			network.BroadCastClients("job:create", job)
+			return job, nil
+		}
 	}
-	return CreateJob(recording, StatusCut, intervals)
+}
+
+func DeleteJob(id uint) error {
+	if err := database.DeleteJob(id); err != nil {
+		return err
+	}
+	network.BroadCastClients("job:deleted", id)
+	return nil
 }
 
 func StartJobProcessing() {

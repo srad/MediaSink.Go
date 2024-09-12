@@ -44,11 +44,13 @@ type TaskProgress struct {
 	Total   uint64 `json:"total"`
 	Steps   uint   `json:"steps"`
 	Step    uint   `json:"step"`
+	Message string `json:"message"`
 }
 
 type TaskComplete struct {
-	Steps uint `json:"steps"`
-	Step  uint `json:"step"`
+	Steps   uint   `json:"steps"`
+	Step    uint   `json:"step"`
+	Message string `json:"message"`
 }
 
 type TaskInfo struct {
@@ -56,6 +58,7 @@ type TaskInfo struct {
 	Step    uint   `json:"step"`
 	Pid     int    `json:"pid"`
 	Command string `json:"command"`
+	Message string `json:"message"`
 }
 
 type VideoConversionArgs struct {
@@ -128,6 +131,14 @@ type PreviewVideoArgs struct {
 	OnErr                      func(error)
 	OutputDir, OutFile         string
 	FrameDistance, FrameHeight uint
+}
+
+type MergeArgs struct {
+	OnStart                func(info CommandInfo)
+	OnProgress             func(info PipeMessage)
+	OnErr                  func(error)
+	MergeFileAbsolutePath  string
+	AbsoluteOutputFilepath string
 }
 
 func (video *Video) CreatePreviewStripe(arg *PreviewStripeArgs) error {
@@ -352,6 +363,7 @@ func (video Video) CreatePreview(args *VideoConversionArgs, extractCount uint64,
 				Step:    1,
 				Pid:     info.Pid,
 				Command: info.Command,
+				Message: "Generating stripe",
 			})
 		},
 		OnProgress: func(info TaskProgress) {
@@ -361,13 +373,15 @@ func (video Video) CreatePreview(args *VideoConversionArgs, extractCount uint64,
 				Total:   extractCount,
 				Steps:   2,
 				Step:    1,
+				Message: "Generating stripe",
 			})
 		},
 		OnEnd: func(task string) {
 			if args.OnEnd == nil {
 				args.OnEnd(TaskComplete{
-					Step:  1,
-					Steps: 2,
+					Step:    1,
+					Steps:   2,
+					Message: "Stripe generated",
 				})
 			}
 		},
@@ -388,6 +402,7 @@ func (video Video) CreatePreview(args *VideoConversionArgs, extractCount uint64,
 				Step:    2,
 				Pid:     info.Pid,
 				Command: info.Command,
+				Message: "Generating preview video",
 			})
 		},
 		OnProgress: func(info TaskProgress) {
@@ -396,13 +411,15 @@ func (video Video) CreatePreview(args *VideoConversionArgs, extractCount uint64,
 				Total:   extractCount,
 				Steps:   2,
 				Step:    2,
+				Message: "Generating preview video",
 			})
 		},
 		OnEnd: func() {
 			if args.OnEnd == nil {
 				args.OnEnd(TaskComplete{
-					Step:  2,
-					Steps: 2,
+					Step:    2,
+					Steps:   2,
+					Message: "Video generated",
 				})
 			}
 		},
@@ -525,24 +542,22 @@ func (video *Video) GetVideoInfo() (*FFProbeInfo, error) {
 	return info, nil
 }
 
-func MergeVideos(outputListener func(string), absoluteMergeTextfile, absoluteOutputFilepath string) error {
+func MergeVideos(args *MergeArgs) error {
 	log.Infoln("---------------------------------------------- Merge Job ----------------------------------------------")
-	log.Infoln(absoluteMergeTextfile)
-	log.Infoln(absoluteOutputFilepath)
+	log.Infoln(args.MergeFileAbsolutePath)
+	log.Infoln(args.AbsoluteOutputFilepath)
 	log.Infoln("---------------------------------------------------------------------------------------------------------")
 
 	return ExecSync(&ExecArgs{
 		Command:     "ffmpeg",
-		CommandArgs: []string{"-hide_banner", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", absoluteMergeTextfile, "-movflags", "faststart", "-codec", "copy", absoluteOutputFilepath},
-		OnStart: func(info CommandInfo) {
-
-		},
+		CommandArgs: []string{"-hide_banner", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", args.MergeFileAbsolutePath, "-movflags", "faststart", "-codec", "copy", args.AbsoluteOutputFilepath},
+		OnStart:     args.OnStart,
 		OnPipeErr: func(info PipeMessage) {
-			log.Error(info.Output)
+			if args.OnErr != nil {
+				args.OnErr(errors.New(info.Output))
+			}
 		},
-		OnPipeOut: func(message PipeMessage) {
-			outputListener(message.Output)
-		},
+		OnPipeOut: args.OnProgress,
 	})
 }
 

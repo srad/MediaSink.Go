@@ -70,7 +70,7 @@ func GeneratePosters(c *gin.Context) {
 func UpdateVideoInfo(c *gin.Context) {
 	appG := app.Gin{C: c}
 	// TODO Make into a cancelable job
-	if err := database.UpdateVideoInfo(); err != nil {
+	if err := services.UpdateVideoInfo(); err != nil {
 		appG.Response(http.StatusInternalServerError, err)
 		return
 	}
@@ -89,7 +89,7 @@ func UpdateVideoInfo(c *gin.Context) {
 func IsUpdatingVideoInfo(c *gin.Context) {
 	appG := app.Gin{C: c}
 	// TODO: do it
-	appG.Response(http.StatusOK, true)
+	appG.Response(http.StatusOK, services.IsUpdatingRecordings())
 }
 
 // GetRecording godoc
@@ -408,7 +408,7 @@ func DeleteRecording(c *gin.Context) {
 	}
 
 	if rec != nil {
-		if err2 := rec.Destroy(); err2 != nil {
+		if err2 := database.DestroyRecording(rec.RecordingId); err2 != nil {
 			appG.Response(http.StatusInternalServerError, err2)
 			return
 		}
