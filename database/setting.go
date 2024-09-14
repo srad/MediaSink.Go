@@ -15,7 +15,6 @@ type Setting struct {
 }
 
 const (
-	MinDuration = "min_duration"
 	ReqInterval = "req_interval"
 )
 

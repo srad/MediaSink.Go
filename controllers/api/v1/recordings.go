@@ -2,6 +2,7 @@ package v1
 
 import (
 	"github.com/srad/streamsink/helpers"
+	"github.com/srad/streamsink/models/requests"
 	"net/http"
 	"strconv"
 
@@ -10,12 +11,6 @@ import (
 	"github.com/srad/streamsink/database"
 	"github.com/srad/streamsink/services"
 )
-
-type CutRequest struct {
-	Starts                []string `json:"starts"`
-	Ends                  []string `json:"ends"`
-	DeleteAfterCompletion bool     `json:"deleteAfterCut"`
-}
 
 // GetRecordings godoc
 // @Summary     Return a list of recordings
@@ -162,12 +157,7 @@ func GeneratePreview(c *gin.Context) {
 		return
 	}
 
-	recordingId := database.RecordingId(id)
-	if err != nil {
-		appG.Response(http.StatusInternalServerError, err)
-	}
-
-	job, err := services.EnqueuePreviewJob(recordingId)
+	job, err := services.EnqueuePreviewJob(database.RecordingId(id))
 	if err != nil {
 		appG.Response(http.StatusInternalServerError, err)
 		return
@@ -237,7 +227,7 @@ func UnfavRecording(c *gin.Context) {
 // @Description Cut a video and merge all defined segments
 // @Tags        recordings
 // @Param       id path uint true "Recording item id"
-// @Param       CutRequest body CutRequest true "Start and end timestamp of cutting sequences."
+// @Param       CutRequest body requests.CutRequest true "Start and end timestamp of cutting sequences."
 // @Accept      json
 // @Produce     json
 // @Success     200 {object} database.Job
@@ -247,7 +237,7 @@ func UnfavRecording(c *gin.Context) {
 func CutRecording(c *gin.Context) {
 	appG := app.Gin{C: c}
 
-	cutRequest := &CutRequest{}
+	cutRequest := &requests.CutRequest{}
 	if err := c.BindJSON(cutRequest); err != nil {
 		appG.Response(http.StatusBadRequest, err)
 		return

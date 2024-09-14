@@ -37,7 +37,7 @@ func main() {
 	// models.StartMetrics(conf.AppCfg.NetworkDev)
 	setupFolders()
 
-	services.StartUpJobs()
+	_ = services.StartUpJobs()
 	services.StartRecorder()
 	services.StartJobProcessing()
 
@@ -68,7 +68,7 @@ func main() {
 func cleanup() {
 	log.Infoln("cleanup ...")
 	services.StopJobProcessing()
-	services.StopRecorder()
+	_ = services.StopRecorder()
 	log.Infoln("cleanup complete")
 }
 
@@ -79,6 +79,8 @@ func setupFolders() {
 		return
 	}
 	for _, channel := range channels {
-		channel.ChannelName.MkDir()
+		if err := channel.ChannelName.MkDir(); err != nil {
+			log.Errorln(err)
+		}
 	}
 }

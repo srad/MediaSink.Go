@@ -6,28 +6,13 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/srad/streamsink/app"
 	"github.com/srad/streamsink/database"
+	"github.com/srad/streamsink/models/requests"
 	"github.com/srad/streamsink/services"
 	"io"
 	"net/http"
 	"os"
 	"strconv"
 )
-
-type ChannelRequest struct {
-	ChannelName string         `json:"channelName" extensions:"!x-nullable"`
-	DisplayName string         `json:"displayName" extensions:"!x-nullable"`
-	SkipStart   uint           `json:"skipStart" extensions:"!x-nullable"`
-	MinDuration uint           `json:"minDuration" extensions:"!x-nullable"`
-	Url         string         `json:"url" extensions:"!x-nullable"`
-	IsPaused    bool           `json:"isPaused" extensions:"!x-nullable"`
-	Tags        *database.Tags `json:"tags"`
-	Fav         bool           `json:"fav"`
-	Deleted     bool           `json:"deleted"`
-}
-
-type ChannelTagsUpdateRequest struct {
-	Tags *database.Tags `json:"tags"`
-}
 
 // https://github.com/swaggo/swag/blob/master/README.md#declarative-comments-format
 // Parameters that separated by spaces: | param name | param type | data type | is mandatory? | comment attribute(optional) |
@@ -113,7 +98,7 @@ func GetChannel(c *gin.Context) {
 // @Summary     Add a new channel
 // @Description Add a new channel
 // @Tags        channels
-// @Param       ChannelRequest body ChannelRequest true "Channel data"
+// @Param       ChannelRequest body requests.ChannelRequest true "Channel data"
 // @Accept      json
 // @Produce     json
 // @Success     200 {object} services.ChannelInfo
@@ -124,7 +109,7 @@ func CreateChannel(c *gin.Context) {
 	appG := app.Gin{C: c}
 
 	// Parse JSON
-	data := &ChannelRequest{}
+	data := &requests.ChannelRequest{}
 	if err := c.BindJSON(&data); err != nil {
 		errReq := fmt.Errorf("error parsing request: %s", err)
 		log.Errorln(errReq)
@@ -145,7 +130,7 @@ func CreateChannel(c *gin.Context) {
 // @Description Update channel data
 // @Tags        channels
 // @Param       id path uint true "Channel id"
-// @Param       ChannelRequestRequest body ChannelRequest true "Channel data"
+// @Param       ChannelRequest body requests.ChannelRequest true "Channel data"
 // @Accept      json
 // @Produce     json
 // @Success     200 {object} database.Channel
@@ -163,7 +148,7 @@ func UpdateChannel(c *gin.Context) {
 	}
 
 	// Body
-	data := &ChannelRequest{}
+	data := &requests.ChannelRequest{}
 	if err := c.BindJSON(&data); err != nil {
 		log.Errorf("[UpdateChannel] Error parsing request: %s", err)
 		appG.Error(http.StatusInternalServerError, err)
@@ -241,7 +226,7 @@ func DeleteChannel(c *gin.Context) {
 // @Description Tag a channel
 // @Tags        channels
 // @Accept      json
-// @Param       ChannelTagsUpdateRequest body ChannelTagsUpdateRequest true "Channel data"
+// @Param       ChannelTagsUpdateRequest body requests.ChannelTagsUpdateRequest true "Channel data"
 // @Param       id path uint true "Channel id"
 // @Success     200 {} nil
 // @Failure     500 {}  http.StatusInternalServerError
@@ -250,25 +235,21 @@ func DeleteChannel(c *gin.Context) {
 func TagChannel(c *gin.Context) {
 	appG := app.Gin{C: c}
 
-	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
 		appG.Error(http.StatusBadRequest, err)
 		return
 	}
 
-	request := &ChannelTagsUpdateRequest{}
+	request := &requests.ChannelTagsUpdateRequest{}
 	if err := c.BindJSON(&request); err != nil {
 		log.Errorf("[TagChannel] Error parsing request: %s", err)
 		appG.Error(http.StatusInternalServerError, err)
 		return
 	}
 
-	update := &database.ChannelTagsUpdate{
-		ChannelId: database.ChannelId(id),
-		Tags:      request.Tags,
-	}
-
-	if err := update.TagChannel(); err != nil {
+	channelId := database.ChannelId(id)
+	if err := channelId.TagChannel(request.Tags); err != nil {
 		log.Errorln(err)
 		appG.Error(http.StatusInternalServerError, err)
 		return
@@ -416,7 +397,10 @@ func UploadChannel(c *gin.Context) {
 		return
 	}
 
-	services.EnqueuePreviewJob(recording.RecordingId)
+	if _, err := services.EnqueuePreviewJob(recording.RecordingId); err != nil {
+		appG.Error(http.StatusInternalServerError, err)
+		return
+	}
 
 	appG.Response(http.StatusOK, recording)
 }

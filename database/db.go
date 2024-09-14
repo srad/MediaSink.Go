@@ -58,6 +58,9 @@ func Init() {
 
 func migrate() {
 	// Migrate the schema
+	if err := Db.AutoMigrate(&User{}); err != nil {
+		panic(fmt.Sprintf("[Migrate] Error user: %s", err))
+	}
 	if err := Db.AutoMigrate(&Channel{}); err != nil {
 		panic(fmt.Sprintf("[Migrate] Error Channel: %s", err))
 	}

@@ -76,7 +76,9 @@ func JobList(skip, take int) ([]*Job, int64, error) {
 
 func (channel *Channel) Jobs() ([]*Job, error) {
 	var jobs []*Job
-	if err := Db.Where("channel_id = ?", channel.ChannelId).Find(&jobs).Error; err != nil {
+	if err := Db.Model(&Job{}).
+		Where("channel_id = ?", channel.ChannelId).
+		Find(&jobs).Error; err != nil {
 		return nil, err
 	}
 
@@ -131,7 +133,9 @@ func DeleteJob(id uint) error {
 		}
 	}
 
-	if err := Db.Table("jobs").Where("job_id = ?", id).Delete(Job{}).Error; err != nil {
+	if err := Db.Model(&Job{}).
+		Where("job_id = ?", id).
+		Delete(Job{}).Error; err != nil {
 		return err
 	}
 

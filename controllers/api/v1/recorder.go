@@ -2,6 +2,7 @@ package v1
 
 import (
 	log "github.com/sirupsen/logrus"
+	"github.com/srad/streamsink/models/responses"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -9,21 +10,17 @@ import (
 	"github.com/srad/streamsink/services"
 )
 
-type RecordingStatus struct {
-	IsRecording bool `json:"isRecording" extensions:"!x-nullable"`
-}
-
 // IsRecording godoc
 // @Summary     Return if server is current recording
 // @Description Return if server is current recording.
 // @Tags        recorder
 // @Produce     plain
-// @Success     200 {object} RecordingStatus
+// @Success     200 {object} responses.RecordingStatusResponse
 // @Success     500
 // @Router      /recorder [get]
 func IsRecording(c *gin.Context) {
 	appG := app.Gin{C: c}
-	appG.Response(http.StatusOK, &RecordingStatus{IsRecording: services.IsRecording()})
+	appG.Response(http.StatusOK, &responses.RecordingStatusResponse{IsRecording: services.IsRecording()})
 }
 
 // StopRecorder godoc

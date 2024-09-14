@@ -3,6 +3,7 @@ package v1
 import (
 	"fmt"
 	"github.com/srad/streamsink/helpers"
+	"github.com/srad/streamsink/models/responses"
 	"github.com/srad/streamsink/services"
 	"net/http"
 	"strconv"
@@ -11,13 +12,6 @@ import (
 	"github.com/srad/streamsink/app"
 	"github.com/srad/streamsink/database"
 )
-
-type JobResponse struct {
-	Jobs       []*database.Job `json:"jobs"`
-	TotalCount int64           `json:"totalCount"`
-	Skip       int             `json:"skip"`
-	Take       int             `json:"take"`
-}
 
 // AddJob godoc
 // @Summary     Enqueue a preview job
@@ -118,7 +112,7 @@ func DestroyJob(c *gin.Context) {
 // @Produce     json
 // @Param       skip path int true "Number of rows to skip"
 // @Param       take path int true "Number of rows to take"
-// @Success     200 {object} JobResponse
+// @Success     200 {object} responses.JobResponse
 // @Failure     500 {} string http.StatusInternalServerError
 // @Router      /jobs/{skip}/{take} [get]
 func GetJobs(c *gin.Context) {
@@ -141,7 +135,7 @@ func GetJobs(c *gin.Context) {
 		appG.Error(http.StatusInternalServerError, err)
 		return
 	} else {
-		appG.Response(http.StatusOK, JobResponse{
+		appG.Response(http.StatusOK, responses.JobResponse{
 			Jobs:       jobs,
 			TotalCount: totalCount,
 			Skip:       int(skip),

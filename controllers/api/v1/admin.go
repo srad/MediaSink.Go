@@ -1,7 +1,7 @@
 package v1
 
 import (
-	"github.com/srad/streamsink/controllers/api/v1/response"
+	"github.com/srad/streamsink/models/responses"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -35,7 +35,7 @@ func TriggerImport(c *gin.Context) {
 // @Tags        admin
 // @Accept      json
 // @Produce     json
-// @Success     200 {object} response.ImportInfo
+// @Success     200 {object} responses.ImportInfoResponse
 // @Failure     500 {} http.StatusInternalServerError
 // @Router      /admin/import [get]
 func GetImportInfo(c *gin.Context) {
@@ -43,7 +43,7 @@ func GetImportInfo(c *gin.Context) {
 
 	progress, size := services.GetImportProgress()
 
-	info := response.ImportInfo{
+	info := responses.ImportInfoResponse{
 		IsImporting: services.IsImporting(),
 		Progress:    progress,
 		Size:        size,
@@ -59,13 +59,13 @@ func GetImportInfo(c *gin.Context) {
 // @Tags        admin
 // @Accept      json
 // @Produce     json
-// @Success     200 {object} response.ServerInfo
+// @Success     200 {object} responses.ServerInfoResponse
 // @Failure     500 {} http.StatusInternalServerError
 // @Router      /admin/version [get]
 func GetVersion(version, commit string) func(c *gin.Context) {
 	return func(c *gin.Context) {
 		appG := app.Gin{C: c}
 
-		appG.Response(http.StatusOK, response.ServerInfo{Commit: commit, Version: version})
+		appG.Response(http.StatusOK, responses.ServerInfoResponse{Commit: commit, Version: version})
 	}
 }
