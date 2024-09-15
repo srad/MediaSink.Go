@@ -44,8 +44,9 @@ func Setup(version, commit string) http.Handler {
 	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
 	router.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{"*"},
-		AllowMethods:     []string{"POST", "GET", "DELETE", "PUT", "PATCH"},
+		AllowOriginFunc: func(origin string) bool {
+			return true
+		},
 		AllowHeaders:     []string{"Origin", "Content-Type, Authorization"},
 		ExposeHeaders:    []string{"Content-Length"},
 		AllowCredentials: true,
