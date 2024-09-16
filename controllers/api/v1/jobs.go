@@ -1,8 +1,8 @@
 package v1
 
 import (
-	"fmt"
 	"github.com/srad/streamsink/helpers"
+	"github.com/srad/streamsink/models/requests"
 	"github.com/srad/streamsink/models/responses"
 	"github.com/srad/streamsink/services"
 	"net/http"
@@ -104,42 +104,35 @@ func DestroyJob(c *gin.Context) {
 	appG.Response(http.StatusOK, nil)
 }
 
-// GetJobs godoc
-// @Summary     Return a list of jobs
-// @Description Return a list of jobs
+// JobsList godoc
+// @Summary     Jobs pagination
+// @Description Allow paging through jobs by providing skip, take, statuses, and sort order.
 // @Tags        jobs
 // @Accept      json
 // @Produce     json
-// @Param       skip path int true "Number of rows to skip"
-// @Param       take path int true "Number of rows to take"
-// @Success     200 {object} responses.JobResponse
+// @Param       JobsRequest body requests.JobsRequest true "Job pagination properties"
+// @Success     200 {object} responses.JobsResponse
 // @Failure     500 {} string http.StatusInternalServerError
-// @Router      /jobs/{skip}/{take} [get]
-func GetJobs(c *gin.Context) {
+// @Router      /jobs/list [post]
+func JobsList(c *gin.Context) {
 	appG := app.Gin{C: c}
 
-	skip, skipErr := strconv.ParseInt(c.Param("skip"), 10, 32)
-	take, takeErr := strconv.ParseInt(c.Param("take"), 10, 32)
+	var request requests.JobsRequest
 
-	if skipErr != nil {
-		appG.Error(http.StatusBadRequest, fmt.Errorf("invalid id type: %s", skipErr))
+	if err := c.BindJSON(&request); err != nil {
+		appG.Error(http.StatusBadRequest, err)
 		return
 	}
 
-	if takeErr != nil {
-		appG.Error(http.StatusBadRequest, fmt.Errorf("invalid id type: %s", takeErr))
-		return
-	}
-
-	if jobs, totalCount, err := database.JobList(int(skip), int(take)); err != nil {
+	if jobs, totalCount, err := database.JobList(request.Skip, request.Take, request.States, request.SortOrder); err != nil {
 		appG.Error(http.StatusInternalServerError, err)
 		return
 	} else {
-		appG.Response(http.StatusOK, responses.JobResponse{
+		appG.Response(http.StatusOK, responses.JobsResponse{
 			Jobs:       jobs,
 			TotalCount: totalCount,
-			Skip:       int(skip),
-			Take:       int(take),
+			Skip:       request.Skip,
+			Take:       request.Take,
 		})
 	}
 }

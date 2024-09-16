@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"gorm.io/gorm/clause"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -16,10 +17,16 @@ const (
 	TaskPreview        JobTask   = "preview"
 	TaskCut            JobTask   = "cut"
 	StatusJobCompleted JobStatus = "completed"
-	StatusOpen         JobStatus = "open"
-	StatusError        JobStatus = "error"
+	StatusJobOpen      JobStatus = "open"
+	StatusJobError     JobStatus = "error"
 	StatusJobCanceled  JobStatus = "canceled"
+	JobOrderASC        JobOrder  = "ASC"
+	JobOrderDESC       JobOrder  = "DESC"
 )
+
+type JobTask string
+type JobStatus string
+type JobOrder string
 
 type Job struct {
 	Channel   Channel   `json:"-" gorm:"foreignKey:channel_id;references:channel_id;"`
@@ -50,21 +57,23 @@ type Job struct {
 	Args     *string `json:"args" gorm:"default:null"`
 }
 
-type JobTask string
-type JobStatus string
-
 func (job *Job) CreateJob() error {
 	return Db.Create(job).Error
 }
 
-func JobList(skip, take int) ([]*Job, int64, error) {
+func JobList(skip, take int, status []JobStatus, order JobOrder) ([]*Job, int64, error) {
 	var count int64 = 0
-	if err := Db.Model(&Job{}).Count(&count).Error; err != nil {
+	if err := Db.Model(&Job{}).
+		Where("status IN (?)", status).
+		Count(&count).Error; err != nil {
 		return nil, 0, err
 	}
 
 	var jobs []*Job
-	if err := Db.Order("jobs.created_at ASC").
+	if err := Db.
+		Model(&Job{}).
+		Where("status IN (?)", status).
+		Order(clause.OrderByColumn{Column: clause.Column{Name: "created_at"}, Desc: order == JobOrderDESC}).
 		Offset(skip).
 		Limit(take).
 		Find(&jobs).Error; err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
@@ -95,7 +104,7 @@ func (job *Job) Completed() error {
 
 func (job *Job) Error(reason error) error {
 	err := reason.Error()
-	return job.updateStatus(StatusError, &err)
+	return job.updateStatus(StatusJobError, &err)
 }
 
 func (job *Job) updateStatus(status JobStatus, reason *string) error {
@@ -146,7 +155,7 @@ func DeleteJob(id uint) error {
 // The caller must know which type the JSON serialized argument originally had.
 func GetNextJob[T any](task JobTask) (*Job, *T, error) {
 	var job *Job
-	err := Db.Where("task = ? AND status = ?", task, StatusOpen).
+	err := Db.Where("task = ? AND status = ?", task, StatusJobOpen).
 		Order("jobs.created_at asc").
 		First(&job).Error
 
@@ -213,7 +222,7 @@ func CreateJob[T any](recording *Recording, task JobTask, args *T) (*Job, error)
 		RecordingId: recording.RecordingId,
 		Filename:    recording.Filename,
 		Filepath:    recording.ChannelName.AbsoluteChannelFilePath(recording.Filename),
-		Status:      StatusOpen,
+		Status:      StatusJobOpen,
 		Task:        task,
 		Args:        &data,
 		Active:      false,
