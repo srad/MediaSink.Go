@@ -120,12 +120,9 @@ RUN swag init
 RUN go mod tidy
 RUN go mod vendor
 
-ARG SECRET=0123456789
-
 ENV CGO_ENABLED=1
 ENV GOOS=${TARGETOS}
 ENV GOARCH=${TARGETARCH}
-ENV SECRET=${SECRET}
 
 # ARM64 specific compilation
 # Multiple arm cross compilation issues, see:
@@ -139,4 +136,4 @@ RUN go build -o ./streamsink -ldflags="-X 'main.Version=$VERSION' -X 'main.Commi
 
 EXPOSE 3000
 
-CMD [ "./streamsink" ]
+CMD [ "./docker-entrypoint.sh" ]
