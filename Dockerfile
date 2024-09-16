@@ -136,4 +136,4 @@ RUN go build -o ./streamsink -ldflags="-X 'main.Version=$VERSION' -X 'main.Commi
 
 EXPOSE 3000
 
-CMD [ "./docker-entrypoint.sh" ]
+CMD [ "sh", "./docker-entrypoint.sh" ]
