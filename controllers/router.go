@@ -47,7 +47,7 @@ func Setup(version, commit string) http.Handler {
 		AllowOriginFunc: func(origin string) bool {
 			return true
 		},
-		AllowHeaders:     []string{"Origin", "Content-Type, Authorization"},
+		AllowHeaders:     []string{"*"},
 		ExposeHeaders:    []string{"Content-Length"},
 		AllowCredentials: true,
 		MaxAge:           12 * time.Hour,
