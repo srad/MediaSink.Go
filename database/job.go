@@ -64,7 +64,7 @@ func JobList(skip, take int) ([]*Job, int64, error) {
 	}
 
 	var jobs []*Job
-	if err := Db.Order("jobs.created_at DESC").
+	if err := Db.Order("jobs.created_at ASC").
 		Offset(skip).
 		Limit(take).
 		Find(&jobs).Error; err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
