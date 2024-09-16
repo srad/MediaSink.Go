@@ -1,6 +1,6 @@
 package requests
 
 type AuthenticationRequest struct {
-	Username string `json:"username" binding:"required"`
-	Password string `json:"password" binding:"required"`
+	Username string `json:"username" extensions:"!x-nullable"`
+	Password string `json:"password" extensions:"!x-nullable"`
 }
