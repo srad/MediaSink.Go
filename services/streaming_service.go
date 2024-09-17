@@ -47,7 +47,7 @@ func (si *StreamInfo) Screenshot() error {
 // CaptureChannel Starts and also waits for the stream to end or being killed
 // This code is intentionally procedural and contains all the steps to finish a recording.
 func CaptureChannel(id database.ChannelId, url string, skip uint) error {
-	channel, err := id.GetChannelById()
+	channel, err := database.GetChannelById(id)
 	if err != nil {
 		return err
 	}
@@ -61,7 +61,7 @@ func CaptureChannel(id database.ChannelId, url string, skip uint) error {
 		return err
 	}
 
-	recording, outputFilePath, err := channel.ChannelId.NewRecording("recording")
+	recording, outputFilePath, err := database.NewRecording(channel.ChannelId, "recording")
 	if err != nil {
 		return err
 	}
@@ -118,7 +118,7 @@ func CaptureChannel(id database.ChannelId, url string, skip uint) error {
 	log.Infof("Minimum recording duration for channel %s is %dmin", channel.ChannelName, channel.MinDuration)
 
 	// Duration might have changed since the process launch.
-	channel, errChannel := id.GetChannelById()
+	channel, errChannel := database.GetChannelById(id)
 	var minDuration = 10 * time.Minute // default
 	if errChannel != nil {
 		log.Errorf("[Capture] Error querying channel-id %d: %s", id, errChannel)
@@ -166,7 +166,7 @@ func Info(id database.ChannelId) *database.Recording {
 }
 
 func Start(id database.ChannelId) error {
-	channel, err := id.GetChannelById()
+	channel, err := database.GetChannelById(id)
 	if err != nil {
 		return err
 	}

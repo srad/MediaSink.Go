@@ -37,7 +37,7 @@ func main() {
 	// models.StartMetrics(conf.AppCfg.NetworkDev)
 	setupFolders()
 
-	_ = services.StartUpJobs()
+	services.StartUpJobs()
 	services.StartRecorder()
 	services.StartJobProcessing()
 

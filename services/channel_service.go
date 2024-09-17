@@ -87,7 +87,7 @@ func GetChannels() ([]ChannelInfo, error) {
 // GetChannel Single Channel data with streaming and recording information.
 func GetChannel(id uint) (*ChannelInfo, error) {
 	channelId := database.ChannelId(id)
-	if channel, err := channelId.GetChannelById(); err != nil {
+	if channel, err := database.GetChannelById(channelId); err != nil {
 		return nil, fmt.Errorf("[GetChannel] Error getting channel: %s", err)
 	} else {
 		return &ChannelInfo{
@@ -99,4 +99,16 @@ func GetChannel(id uint) (*ChannelInfo, error) {
 		}, nil
 	}
 
+}
+
+func DeleteChannel(channelId database.ChannelId) error {
+	if err := TerminateProcess(channelId); err != nil {
+		return fmt.Errorf("process could not be terminated: %s", err.Error())
+	}
+
+	if err := database.TryDeleteChannel(channelId); err != nil {
+		return fmt.Errorf("channel could not be deleted: %s", err.Error())
+	}
+
+	return nil
 }

@@ -52,7 +52,7 @@ func checkStreams() {
 		}
 
 		// Get the current models value, in case it case been updated meanwhile.
-		if result, err := channel.ChannelId.GetChannelById(); err != nil {
+		if result, err := database.GetChannelById(channel.ChannelId); err != nil {
 			log.Errorf("[checkStreams] Error channel %s: %s", channel.ChannelName, err)
 			continue
 		} else {

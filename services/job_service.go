@@ -104,7 +104,7 @@ func processPreview() error {
 	}
 
 	// 4. Went ok. Now generate previews.
-	if err := recording.RecordingId.AddPreviews(); err != nil {
+	if err := AddPreviews(recording.RecordingId, database.TaskPreview); err != nil {
 		return fmt.Errorf("error adding previews: %s", err)
 	}
 
@@ -399,6 +399,17 @@ func enqueueJob[T any](id database.RecordingId, task database.JobTask, args *T) 
 			network.BroadCastClients("job:create", job)
 			return job, nil
 		}
+	}
+}
+
+func AddPreviews(id database.RecordingId, task database.JobTask) error {
+	if jobExists, err := database.JobExists(id, task); err != nil {
+		return err
+	} else {
+		if jobExists {
+			return fmt.Errorf("job for task %s already exists for recording id %d", task, id)
+		}
+		return database.AddPreviews(id)
 	}
 }
 

@@ -1,164 +1,163 @@
 package database
 
 import (
-    "errors"
-    log "github.com/sirupsen/logrus"
-    "gorm.io/gorm"
-    "os"
-    "path/filepath"
+	"errors"
+	"fmt"
+	log "github.com/sirupsen/logrus"
+	"gorm.io/gorm"
+	"os"
+	"path/filepath"
 )
 
 type ChannelId uint
 
 func (channelId ChannelId) TagChannel(tags *Tags) error {
-    return Db.Table("channels").
-        Where("channel_id = ?", channelId).
-        Update("tags", tags).Error
+	return Db.Table("channels").
+		Where("channel_id = ?", channelId).
+		Update("tags", tags).Error
 }
 
-func (channelId ChannelId) GetChannelById() (*Channel, error) {
-    var channel Channel
+func GetChannelById(id ChannelId) (*Channel, error) {
+	var channel Channel
 
-    err := Db.Model(&Channel{}).
-        Where("channels.channel_id = ?", channelId).
-        Select("*").
-        Preload("Recordings").
-        Find(&channel).Error
+	err := Db.Model(&Channel{}).
+		Where("channel_id = ?", id).
+		Select("*").
+		Find(&channel).Error
 
-    if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
-        return nil, err
-    }
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, err
+	}
 
-    return &channel, nil
+	return &channel, nil
 }
 
 func (channelId ChannelId) FavChannel() error {
-    return Db.Table("channels").
-        Where("channel_id = ?", channelId).
-        Update("fav", true).Error
+	return Db.Table("channels").
+		Where("channel_id = ?", channelId).
+		Update("fav", true).Error
 }
 
 func (channelId ChannelId) UnFavChannel() error {
-    return Db.Table("channels").
-        Where("channel_id = ?", channelId).
-        Update("fav", false).Error
+	return Db.Table("channels").
+		Where("channel_id = ?", channelId).
+		Update("fav", false).Error
 }
 
-// SoftDestroyChannel Delete all recordings and mark channel to delete.
+// TryDeleteChannel Delete all recordings and mark channel to delete.
 // Often the folder is locked for multiple reasons and can only be deleted on restart.
-func (channelId ChannelId) SoftDestroyChannel() error {
-    channel, err := channelId.GetChannelById()
-    if err != nil {
-        return err
-    }
+func TryDeleteChannel(channelId ChannelId) error {
+	if channelId == 0 {
+		return errors.New("channel id must not be 0")
+	}
 
-    if err := channelId.DestroyAllRecordings(); err != nil {
-        log.Errorf("Error deleting recordings of channel '%s': %s", channel.ChannelName, err)
-        return err
-    }
-    if err := os.RemoveAll(channel.ChannelName.AbsoluteChannelPath()); err != nil && !os.IsNotExist(err) {
-        log.Errorf("Error deleting channel folder: %s", err)
-        return err
-    }
+	var channel Channel
+	if err := Db.Model(&Channel{}).Where("channels.channel_id = ?", channelId).Select("channel_id", "channel_name").First(&channel).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return errors.New("channel not found")
+		}
+		return err
+	}
 
-    if err := Db.Model(&Channel{}).
-        Where("channel_id = ?", channel.ChannelId).
-        Update("deleted", true).Error; err != nil {
-        log.Errorf("[SoftDestroy] Error updating channels table: %s", err)
-        return err
-    }
+	if err := DestroyChannelRecordings(channelId); err != nil {
+		log.Errorf("Error deleting recordings of channel '%s': %s", channel.ChannelName, err)
+		return err
+	}
 
-    return nil
+	// Try remove folder from disk.
+	if err := os.RemoveAll(channel.ChannelName.AbsoluteChannelPath()); err != nil && !os.IsNotExist(err) {
+		// Folder could not be deleted for some reason.
+		// Mark the channel as delete. Folder will be removed on the next program launch.
+
+		log.Errorf("Error deleting channel folder: %s", err)
+
+		if err2 := MarkChannelAsDeleted(channelId); err2 != nil {
+			log.Errorln(err2)
+		}
+		return err
+	}
+
+	// Removed channel folder successfully. Not delete from database.
+	if err := DeleteChannel(channelId); err != nil {
+		return err
+	}
+
+	return nil
 }
 
-func (channelId ChannelId) DestroyChannel() error {
-    channel, err := channelId.GetChannelById()
-    if err != nil {
-        return err
-    }
+func DeleteChannel(channelId ChannelId) error {
+	if channelId == 0 {
+		return errors.New("channel id must not be 0")
+	}
 
-    // Channel folder
-    if err := os.RemoveAll(channel.ChannelName.AbsoluteChannelPath()); err != nil && !os.IsNotExist(err) {
-        log.Infof("Error deleting channel folder: %s", err)
-        return err
-    }
-    if err := Db.Where("channel_id = ?", channel.ChannelId).Delete(Channel{}).Error; err != nil {
-        return err
-    }
-    return nil
+	return Db.Where("channel_id = ?", channelId).Delete(&Channel{}).Error
 }
 
-func (channelId ChannelId) DestroyAllRecordings() error {
-    channel, err := channelId.GetChannelById()
-    if err != nil {
-        return err
-    }
+func MarkChannelAsDeleted(channelId ChannelId) error {
+	if err := Db.Model(&Channel{}).
+		Where("channel_id = ?", channelId).
+		Update("deleted", true).Error; err != nil {
+		return fmt.Errorf("error marking channel as deleted: %s", err)
+	}
 
-    // Terminate and delete all jobs
-    if jobs, err := channel.Jobs(); err != nil {
-        log.Errorln(err)
-    } else {
-        for _, job := range jobs {
-            if err := DeleteJob(job.JobId); err != nil {
-                log.Errorf("Error destroying job: %s", err)
-            }
-        }
-    }
+	return nil
+}
 
-    var recordings []*Recording
-    if err := Db.Where("channel_id = ?", channel.ChannelId).Find(&recordings).Error; err != nil {
-        log.Errorf("No recordings found to destroy for channel %s", channel.ChannelName)
-        return err
-    }
+func DestroyChannel(channelId ChannelId) error {
+	channel, err := GetChannelById(channelId)
+	if err != nil {
+		return err
+	}
 
-    for _, recording := range recordings {
-        if err := DestroyJobs(recording.RecordingId); err != nil {
-            log.Errorf("Error deleting recording %s: %s", recording.Filename, err)
-        }
-    }
-
-    return nil
+	// Channel folder
+	if err := os.RemoveAll(channel.ChannelName.AbsoluteChannelPath()); err != nil && !os.IsNotExist(err) {
+		log.Infof("Error deleting channel folder: %s", err)
+		return err
+	}
+	if err := Db.Where("channel_id = ?", channel.ChannelId).Delete(Channel{}).Error; err != nil {
+		return err
+	}
+	return nil
 }
 
 func (channelId ChannelId) PauseChannel(pauseVal bool) error {
-    if err := Db.Table("channels").
-        Where("channel_id = ?", channelId).
-        Update("is_paused", pauseVal).Error; err != nil {
-        return err
-    }
+	if err := Db.Table("channels").
+		Where("channel_id = ?", channelId).
+		Update("is_paused", pauseVal).Error; err != nil {
+		return err
+	}
 
-    return nil
+	return nil
 }
 
-func (channelId ChannelId) NewRecording(videoType string) (*Recording, string, error) {
-    channel, err := channelId.GetChannelById()
-    if err != nil {
-        return nil, "", err
-    }
+func NewRecording(channelId ChannelId, videoType string) (*Recording, string, error) {
+	channel, err := GetChannelById(channelId)
+	if err != nil {
+		return nil, "", err
+	}
 
-    filename, timestamp := channel.ChannelName.MakeRecordingFilename()
-    relativePath := filepath.Join(channel.ChannelName.String(), filename.String())
-    filePath := channel.ChannelName.AbsoluteChannelFilePath(filename)
+	filename, timestamp := channel.ChannelName.MakeRecordingFilename()
+	relativePath := filepath.Join(channel.ChannelName.String(), filename.String())
+	filePath := channel.ChannelName.AbsoluteChannelFilePath(filename)
 
-    return &Recording{
-            ChannelId:     channel.ChannelId,
-            ChannelName:   channel.ChannelName,
-            Filename:      filename,
-            Bookmark:      false,
-            CreatedAt:     timestamp,
-            VideoType:     videoType,
-            Packets:       0,
-            Duration:      0,
-            Size:          0,
-            BitRate:       0,
-            Width:         0,
-            Height:        0,
-            PathRelative:  relativePath,
-            PreviewStripe: nil,
-            PreviewVideo:  nil,
-            PreviewCover:  nil,
-        },
-        filePath,
-        nil
+	return &Recording{
+			ChannelId:     channel.ChannelId,
+			ChannelName:   channel.ChannelName,
+			Filename:      filename,
+			Bookmark:      false,
+			CreatedAt:     timestamp,
+			VideoType:     videoType,
+			Packets:       0,
+			Duration:      0,
+			Size:          0,
+			BitRate:       0,
+			Width:         0,
+			Height:        0,
+			PathRelative:  relativePath,
+			PreviewStripe: nil,
+			PreviewVideo:  nil,
+			PreviewCover:  nil,
+		},
+		filePath,
+		nil
 }
-

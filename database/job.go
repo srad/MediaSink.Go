@@ -123,6 +123,19 @@ func (job *Job) updateStatus(status JobStatus, reason *string) error {
 		Updates(map[string]interface{}{"status": status, "info": reason, "active": false}).Error
 }
 
+func JobExists(recordingId RecordingId, task JobTask) (bool, error) {
+	if recordingId == 0 {
+		return false, errors.New("recording id is 0")
+	}
+
+	var count int64 = 0
+	if err := Db.Model(&Job{}).Where("recording_id = ? AND task = ?", recordingId, task).Count(&count).Error; err != nil {
+		return false, err
+	}
+
+	return count > 0, nil
+}
+
 // DeleteJob If an existing PID is assigned to the job,
 // first the process is try-killed and then the job deleted.
 func DeleteJob(id uint) error {

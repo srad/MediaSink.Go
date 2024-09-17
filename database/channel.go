@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/astaxie/beego/utils"
+	log "github.com/sirupsen/logrus"
 	"gorm.io/gorm"
 	"os/exec"
 	"path"
@@ -47,6 +48,45 @@ func CreateChannel(channelName ChannelName, displayName, url string) (*Channel, 
 	}
 
 	return channel, nil
+}
+
+func DestroyChannelRecordings(channelId ChannelId) error {
+	if channelId == 0 {
+		return errors.New("invalid channel id")
+	}
+
+	channel, err := GetChannelById(channelId)
+	if err != nil {
+		return err
+	}
+
+	// 1. Terminate and delete all jobs.
+	if jobs, err := channel.Jobs(); err != nil {
+		log.Errorln(err)
+	} else {
+		for _, job := range jobs {
+			if err := DeleteJob(job.JobId); err != nil {
+				log.Errorf("Error destroying job: %s", err)
+			}
+		}
+	}
+
+	// 2. Delete records.
+	var recordings []*Recording
+	if err := Db.Model(&Recording{}).
+		Where("channel_id = ?", channelId).
+		Find(&recordings).Error; err != nil {
+		log.Errorf("No recordings found to destroy for channel %s", channel.ChannelName)
+		return err
+	}
+
+	for _, recording := range recordings {
+		if err := DestroyJobs(recording.RecordingId); err != nil {
+			log.Errorf("Error deleting recording %s: %s", recording.Filename, err)
+		}
+	}
+
+	return nil
 }
 
 func CreateChannelDetail(channel Channel) (*Channel, error) {
@@ -102,17 +142,17 @@ func (channel *Channel) QueryStreamUrl() (string, error) {
 }
 
 func ChannelList() ([]*Channel, error) {
-	var result []*Channel
+	var channels []*Channel
 
 	err := Db.Model(&Channel{}).
 		Select("channels.*", "(SELECT COUNT(*) FROM recordings WHERE recordings.channel_id = channels.channel_id) recordings_count", "(SELECT SUM(size) FROM recordings WHERE recordings.channel_name = channels.channel_name) recordings_size").
-		Find(&result).Error
+		Find(&channels).Error
 
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, err
 	}
 
-	return result, nil
+	return channels, nil
 }
 
 func ChannelListNotDeleted() ([]*Channel, error) {
@@ -131,7 +171,7 @@ func ChannelListNotDeleted() ([]*Channel, error) {
 }
 
 func EnabledChannelList() ([]*Channel, error) {
-	var result []*Channel
+	var channels []*Channel
 
 	// Query favourites first
 	err := Db.Model(&Channel{}).
@@ -139,13 +179,13 @@ func EnabledChannelList() ([]*Channel, error) {
 		Where("is_paused = ?", false).
 		Select("channels.*", "(SELECT COUNT(*) FROM recordings WHERE recordings.channel_id = channels.channel_id) recordings_count").
 		Order("fav desc").
-		Find(&result).Error
+		Find(&channels).Error
 
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, err
 	}
 
-	return result, nil
+	return channels, nil
 }
 
 func newChannel(channelName ChannelName, displayName, url string) Channel {

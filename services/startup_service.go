@@ -7,15 +7,13 @@ import (
 	"github.com/srad/streamsink/helpers"
 )
 
-func StartUpJobs() error {
+func StartUpJobs() {
 	log.Infoln("[StartUpJobs] Running startup job ...")
 
 	deleteChannels()           // Blocking
 	deleteOrphanedRecordings() // Blocking
 	StartImport()
 	go fixOrphanedRecordings()
-
-	return nil
 }
 
 func deleteOrphanedRecordings() error {
@@ -44,7 +42,7 @@ func deleteChannels() error {
 	for _, channel := range channels {
 		if channel.Deleted {
 			log.Infof("[DeleteChannels] Deleting channel : %s", channel.ChannelName)
-			channel.ChannelId.DestroyChannel()
+			database.DestroyChannel(channel.ChannelId)
 		}
 	}
 
@@ -69,7 +67,7 @@ func fixOrphanedFiles() error {
 	}
 	for _, channel := range channels {
 		if !channel.FolderExists() {
-			channel.ChannelId.DestroyChannel()
+			database.DestroyChannel(channel.ChannelId)
 		}
 	}
 

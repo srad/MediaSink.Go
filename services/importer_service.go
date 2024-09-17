@@ -141,10 +141,14 @@ func ImportChannels(context.Context) error {
 			// ---------------------------------------------------------------------------------
 			if database.PreviewsExist(newRecording.ChannelName, newRecording.Filename) {
 				log.Infof("[Import/%s] Preview files exist", channelName)
-				newRecording.RecordingId.AddPreviews()
+				if err := AddPreviews(newRecording.RecordingId, database.TaskPreview); err != nil {
+					log.Errorln(err)
+				}
 			} else {
 				log.Infof("[Import/%s] Adding job for: %s", channelName, file.Name())
-				EnqueuePreviewJob(newRecording.RecordingId)
+				if _, err := EnqueuePreviewJob(newRecording.RecordingId); err != nil {
+					log.Errorln(err)
+				}
 			}
 		}
 	}

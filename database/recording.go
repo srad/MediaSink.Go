@@ -147,14 +147,14 @@ func PreviewsExist(channelName ChannelName, filename RecordingFileName) bool {
 }
 
 // CreateStreamRecording Stream recording does not read the video data because it's written life to the disk.
-func CreateStreamRecording(id ChannelId, filename RecordingFileName) (*Recording, error) {
-	channel, errChannel := id.GetChannelById()
+func CreateStreamRecording(channelId ChannelId, filename RecordingFileName) (*Recording, error) {
+	channel, errChannel := GetChannelById(channelId)
 	if errChannel != nil {
 		return nil, errChannel
 	}
 
 	recording := Recording{
-		ChannelId:    id,
+		ChannelId:    channelId,
 		ChannelName:  channel.ChannelName,
 		Filename:     filename,
 		Bookmark:     false,
@@ -177,7 +177,7 @@ func CreateStreamRecording(id ChannelId, filename RecordingFileName) (*Recording
 }
 
 func CreateRecording(channelId ChannelId, filename RecordingFileName, videoType string) (*Recording, error) {
-	channel, errChannel := channelId.GetChannelById()
+	channel, errChannel := GetChannelById(channelId)
 	if errChannel != nil {
 		return nil, errChannel
 	}
@@ -338,7 +338,7 @@ func (recording *Recording) DataFolder() string {
 	return recording.ChannelName.AbsoluteChannelDataPath()
 }
 
-func (recordingId RecordingId) AddPreviews() error {
+func AddPreviews(recordingId RecordingId) error {
 	recording, err := recordingId.FindRecordingById()
 	if err != nil {
 		return err

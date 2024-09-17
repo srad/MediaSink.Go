@@ -206,15 +206,8 @@ func DeleteChannel(c *gin.Context) {
 		return
 	}
 
-	channelId := database.ChannelId(id)
-
-	if err := services.TerminateProcess(channelId); err != nil {
-		appG.Response(http.StatusInternalServerError, fmt.Sprintf("Process cound not be terminated: %s", err))
-		return
-	}
-
-	if err := channelId.SoftDestroyChannel(); err != nil {
-		appG.Response(http.StatusInternalServerError, fmt.Sprintf("Channel could not be deleted: %s", err))
+	if err := services.DeleteChannel(database.ChannelId(id)); err != nil {
+		appG.Error(http.StatusInternalServerError, err)
 		return
 	}
 
@@ -377,7 +370,7 @@ func UploadChannel(c *gin.Context) {
 	}
 
 	channelId := database.ChannelId(id)
-	recording, outputPath, err := channelId.NewRecording("recording")
+	recording, outputPath, err := database.NewRecording(channelId, "recording")
 	database.CreateRecording(recording.ChannelId, recording.Filename, "recording")
 
 	out, err := os.Create(outputPath)
