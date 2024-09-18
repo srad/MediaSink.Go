@@ -18,18 +18,34 @@ func (channelId ChannelId) TagChannel(tags *Tags) error {
 }
 
 func GetChannelById(id ChannelId) (*Channel, error) {
-	var channel Channel
+	var channel *Channel
 
 	err := Db.Model(&Channel{}).
 		Where("channel_id = ?", id).
 		Select("*").
 		Find(&channel).Error
 
-	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+	if err != nil {
 		return nil, err
 	}
 
-	return &channel, nil
+	return channel, nil
+}
+
+func GetChannelByIdWithRecordings(id ChannelId) (*Channel, error) {
+	var channel *Channel
+
+	err := Db.Model(&Channel{}).
+		Preload("Recordings").
+		Where("channels.channel_id = ?", id).
+		Select("*", "(SELECT COUNT(*) FROM recordings WHERE recordings.channel_id = channels.channel_id) recordings_count", "(SELECT SUM(size) FROM recordings WHERE recordings.channel_name = channels.channel_name) recordings_size").
+		Find(&channel).Error
+
+	if err != nil {
+		return nil, err
+	}
+
+	return channel, nil
 }
 
 func (channelId ChannelId) FavChannel() error {

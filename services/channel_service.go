@@ -4,10 +4,8 @@ import (
 	"errors"
 	"fmt"
 	log "github.com/sirupsen/logrus"
-	"github.com/srad/streamsink/conf"
 	"github.com/srad/streamsink/database"
 	"gorm.io/gorm"
-	"path/filepath"
 	"time"
 )
 
@@ -44,14 +42,11 @@ func CreateChannel(name, displayName string, skipStart, minDuration uint, url st
 		return nil, err
 	}
 
-	// Success
-	cfg := conf.Read()
-
 	info := &ChannelInfo{
 		Channel:      *newChannel,
 		IsRecording:  false,
 		IsOnline:     false,
-		Preview:      filepath.Join(newChannel.ChannelName.AbsoluteChannelPath(), cfg.DataPath, database.SnapshotFilename),
+		Preview:      newChannel.ChannelName.PreviewPath(),
 		MinRecording: 0,
 	}
 
@@ -67,13 +62,11 @@ func GetChannels() ([]ChannelInfo, error) {
 
 	response := make([]ChannelInfo, len(channels))
 
-	cfg := conf.Read()
-
 	for index, channel := range channels {
 		// Add to each channel current system information
 		response[index] = ChannelInfo{
 			Channel:       *channel,
-			Preview:       filepath.Join(channel.ChannelName.String(), cfg.DataPath, database.SnapshotFilename),
+			Preview:       channel.ChannelName.PreviewPath(),
 			IsOnline:      IsOnline(channel.ChannelId),
 			IsTerminating: IsTerminating(channel.ChannelId),
 			IsRecording:   IsRecordingStream(channel.ChannelId),
@@ -87,7 +80,7 @@ func GetChannels() ([]ChannelInfo, error) {
 // GetChannel Single Channel data with streaming and recording information.
 func GetChannel(id uint) (*ChannelInfo, error) {
 	channelId := database.ChannelId(id)
-	if channel, err := database.GetChannelById(channelId); err != nil {
+	if channel, err := database.GetChannelByIdWithRecordings(channelId); err != nil {
 		return nil, fmt.Errorf("[GetChannel] Error getting channel: %s", err)
 	} else {
 		return &ChannelInfo{
@@ -96,6 +89,7 @@ func GetChannel(id uint) (*ChannelInfo, error) {
 			IsTerminating: IsTerminating(channel.ChannelId),
 			IsRecording:   IsRecordingStream(channel.ChannelId),
 			MinRecording:  GetRecordingMinutes(channel.ChannelId),
+			Preview:       channel.ChannelName.PreviewPath(),
 		}, nil
 	}
 
