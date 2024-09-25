@@ -136,3 +136,39 @@ func JobsList(c *gin.Context) {
 		})
 	}
 }
+
+// PauseJobs godoc
+// @Summary     Stops the job processing
+// @Description Stops the job processing
+// @Tags        jobs
+// @Success     200 {} nil
+// @Router      /jobs/pause [post]
+func PauseJobs(c *gin.Context) {
+	appG := app.Gin{C: c}
+	services.StopJobProcessing()
+	appG.Response(http.StatusOK, nil)
+}
+
+// ResumeJobs godoc
+// @Summary     Start the job processing
+// @Description Start the job processing
+// @Tags        jobs
+// @Success     200 {} nil
+// @Router      /jobs/resume [post]
+func ResumeJobs(c *gin.Context) {
+	appG := app.Gin{C: c}
+	services.StartJobProcessing()
+	appG.Response(http.StatusOK, nil)
+}
+
+// IsProcessing godoc
+// @Summary     Job worker status
+// @Description Job worker status
+// @Produce     json
+// @Success     200 {object} responses.JobWorkerStatus
+// @Tags        jobs
+// @Router      /jobs/worker [get]
+func IsProcessing(c *gin.Context) {
+	appG := app.Gin{C: c}
+	appG.Response(http.StatusOK, &responses.JobWorkerStatus{IsProcessing: services.IsJobProcessing()})
+}

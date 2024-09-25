@@ -10,7 +10,7 @@ github.com/KyleBanks/depth
 github.com/astaxie/beego/logs
 github.com/astaxie/beego/utils
 github.com/astaxie/beego/validation
-# github.com/bytedance/sonic v1.12.2
+# github.com/bytedance/sonic v1.12.3
 ## explicit; go 1.17
 github.com/bytedance/sonic
 github.com/bytedance/sonic/ast

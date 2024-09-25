@@ -61,10 +61,10 @@ func checkStreams() {
 			}
 
 			if err := Start(result.ChannelId); err != nil {
-				network.BroadCastClients("channel:offline", result.ChannelId)
+				network.BroadCastClients(network.ChannelOfflineEvent, result.ChannelId)
 			} else {
-				network.BroadCastClients("channel:online", result.ChannelId)
-				network.BroadCastClients("channel:start", result.ChannelId)
+				network.BroadCastClients(network.ChannelOnlineEvent, result.ChannelId)
+				network.BroadCastClients(network.ChannelStartEvent, result.ChannelId)
 			}
 
 			// StopRecorder between each check

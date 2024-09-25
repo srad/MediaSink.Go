@@ -338,7 +338,11 @@ func (recording *Recording) DataFolder() string {
 	return recording.ChannelName.AbsoluteChannelDataPath()
 }
 
-func AddPreviews(recordingId RecordingId) error {
+func AddPreviewPaths(recordingId RecordingId) error {
+	if recordingId == 0 {
+		return errors.New("invalid job id")
+	}
+
 	recording, err := recordingId.FindRecordingById()
 	if err != nil {
 		return err

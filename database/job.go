@@ -166,9 +166,41 @@ func DeleteJob(id uint) error {
 
 // GetNextJob Any job is attached to a recording which it will process.
 // The caller must know which type the JSON serialized argument originally had.
-func GetNextJob[T any](task JobTask) (*Job, *T, error) {
+func GetNextJob() (*Job, error) {
 	var job *Job
-	err := Db.Where("task = ? AND status = ?", task, StatusJobOpen).
+	err := Db.Where("status = ? AND active = ?", StatusJobOpen, false).
+		Order("jobs.created_at asc").
+		First(&job).Error
+
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+
+	return job, err
+}
+
+func UnmarshalJobArg[T any](job *Job) (*T, error) {
+	// Deserialize the arguments, if existent.
+	if job.Args != nil && *job.Args != "" {
+		var data *T
+		if err := json.Unmarshal([]byte(*job.Args), &data); err != nil {
+			log.Errorf("[Job] Error parsing cutting job arguments: %s", err)
+			if errDestroy := job.Error(err); errDestroy != nil {
+				log.Errorf("[Job] Error destroying job: %s", errDestroy)
+			}
+			return nil, err
+		}
+		return data, nil
+	}
+
+	return nil, errors.New("job arg nil or empty")
+}
+
+// GetNextJobTask Any job is attached to a recording which it will process.
+// The caller must know which type the JSON serialized argument originally had.
+func GetNextJobTask[T any](task JobTask) (*Job, *T, error) {
+	var job *Job
+	err := Db.Where("task = ? AND status = ? AND active = ?", task, StatusJobOpen, false).
 		Order("jobs.created_at asc").
 		First(&job).Error
 

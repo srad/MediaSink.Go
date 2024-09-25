@@ -93,6 +93,9 @@ func Setup(version, commit string) http.Handler {
 		apiV1.POST("/jobs/stop/:pid", middlewares.CheckAuthorizationHeader, v1.StopJob)
 		apiV1.DELETE("/jobs/:id", middlewares.CheckAuthorizationHeader, v1.DestroyJob)
 		apiV1.POST("/jobs/list", middlewares.CheckAuthorizationHeader, v1.JobsList)
+		apiV1.POST("/jobs/resume", middlewares.CheckAuthorizationHeader, v1.ResumeJobs)
+		apiV1.POST("/jobs/pause", middlewares.CheckAuthorizationHeader, v1.PauseJobs)
+		apiV1.GET("/jobs/worker", middlewares.CheckAuthorizationHeader, v1.IsProcessing)
 
 		// recorder
 		apiV1.POST("/recorder/resume", middlewares.CheckAuthorizationHeader, v1.StartRecorder)

@@ -10,6 +10,25 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+type SocketEventName string
+
+const (
+	ChannelOnlineEvent    SocketEventName = "channel:online"
+	ChannelOfflineEvent   SocketEventName = "channel:offline"
+	ChannelStartEvent     SocketEventName = "channel:start"
+	ChannelThumbnailEvent SocketEventName = "channel:thumbnail"
+
+	JobCreateEvent      SocketEventName = "job:create"
+	JobStartEvent       SocketEventName = "job:start"
+	JobProgressEvent    SocketEventName = "job:progress"
+	JobDoneEvent        SocketEventName = "job:done"
+	JobErrorEvent       SocketEventName = "job:error"
+	JobPreviewDoneEvent SocketEventName = "job:preview:done"
+	JobDeleteEvent      SocketEventName = "job:delete"
+
+	RecordingAddEvent SocketEventName = "recording:add"
+)
+
 var (
 	// Queue size.
 	broadCastChannel = make(chan SocketEvent, 1000)
@@ -20,12 +39,12 @@ var (
 )
 
 type SocketEvent struct {
-	Data interface{} `json:"data"`
-	Name string      `json:"name"`
+	Name SocketEventName `json:"name"`
+	Data interface{}     `json:"data"`
 }
 
 // BroadCastClients Dispatches message asynchronously.
-func BroadCastClients(name string, data interface{}) {
+func BroadCastClients(name SocketEventName, data interface{}) {
 	go SocketEvent{Name: name, Data: data}.channelDispatcher()
 }
 

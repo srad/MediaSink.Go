@@ -132,7 +132,7 @@ func CaptureChannel(id database.ChannelId, url string, skip uint) error {
 		if newRecording, err := database.CreateRecording(info.ChannelId, info.Filename, "recording"); err != nil {
 			log.Errorf("[Info] Error adding recording '%s': %s", outputFilePath, err)
 		} else {
-			network.BroadCastClients("recording:add", newRecording)
+			network.BroadCastClients(network.RecordingAddEvent, newRecording)
 
 			if job, err := EnqueuePreviewJob(newRecording.RecordingId); err != nil {
 				log.Errorf("[FinishRecording] Error enqueuing job for %s", err)
@@ -299,7 +299,7 @@ func startThumbnailWorker(ctx context.Context) {
 					if err := info.Screenshot(); err != nil {
 						log.Errorf("[Recorder] Error extracting first frame of channel-id %d: %s", channelId, err)
 					} else {
-						network.BroadCastClients("channel:thumbnail", channelId)
+						network.BroadCastClients(network.ChannelThumbnailEvent, channelId)
 					}
 				}
 			}

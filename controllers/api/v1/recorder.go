@@ -14,7 +14,7 @@ import (
 // @Summary     Return if server is current recording
 // @Description Return if server is current recording.
 // @Tags        recorder
-// @Produce     plain
+// @Produce     json
 // @Success     200 {object} responses.RecordingStatusResponse
 // @Success     500
 // @Router      /recorder [get]
