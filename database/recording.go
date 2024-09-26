@@ -234,24 +234,30 @@ func DestroyRecording(id RecordingId) error {
 
 	// Try to find and destroy all related items: jobs, file, previews, db entry.
 
-	if err := DestroyJobs(id); err != nil {
-		log.Errorf("Error destroying jobs: %s", err)
-	}
+	var err1, err2, err3, err4 error
 
-	if err := DeleteFile(rec.ChannelName, rec.Filename); err != nil {
-		log.Errorf("Error deleting file: %s", err)
-	}
-
-	if err := DestroyPreviews(rec.RecordingId); err != nil {
-		log.Errorf("Error destroying preview: %s", err)
-	}
+	err1 = DestroyJobs(id)
+	err2 = DeleteFile(rec.ChannelName, rec.Filename)
+	err3 = DestroyPreviews(rec.RecordingId)
 
 	// Remove from database
 	if err := Db.Delete(&Recording{}, "recording_id = ?", rec.RecordingId).Error; err != nil {
-		return fmt.Errorf("error deleting recordings of file '%s' from channel '%s': %s", rec.Filename, rec.ChannelName, err)
+		err4 = fmt.Errorf("error deleting recordings of file '%s' from channel '%s': %s", rec.Filename, rec.ChannelName, err)
 	}
 
-	return nil
+	return errors.Join(err1, err2, err3, err4)
+}
+
+func DeleteRecordingData(channelName ChannelName, filename RecordingFileName) error {
+	var err1, err2, err3 error
+
+	err1 = DeleteFile(channelName, filename)
+	err2 = DeletePreviewFiles(channelName, filename)
+	if err := Db.Delete(&Recording{}, "channel_name = ? AND filename = ?", channelName, filename).Error; err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		err3 = fmt.Errorf("error deleting recordings of file '%s' from channel '%s': %w", filename, channelName, err)
+	}
+
+	return errors.Join(err1, err2, err3)
 }
 
 func DeleteFile(channelName ChannelName, filename RecordingFileName) error {
@@ -350,7 +356,7 @@ func AddPreviewPaths(recordingId RecordingId) error {
 
 	paths := recording.ChannelName.GetRecordingsPaths(recording.Filename)
 
-	updates := map[string]interface{}{"preview_video": paths.VideosPath, "preview_stripe": paths.StripePath, "preview_cover": paths.CoverPath}
+	updates := map[string]interface{}{"preview_video": paths.RelativeVideosPath, "preview_stripe": paths.RelativeStripePath, "preview_cover": paths.RelativeCoverPath}
 
 	if err := Db.Model(Recording{}).Where("recording_id = ?", recordingId).Updates(updates).Error; err != nil {
 		return err
@@ -367,39 +373,47 @@ func DestroyPreviews(id RecordingId) error {
 		return err
 	}
 
-	paths := recording.ChannelName.GetRecordingsPaths(recording.Filename)
+	var err1, err2 error
 
-	if err := os.Remove(paths.VideosPath); err != nil && !os.IsNotExist(err) {
-		log.Errorf("error deleting '%s' from channel '%s': %v", paths.VideosPath, recording.ChannelName, err)
-	}
-	if err := os.Remove(paths.StripePath); err != nil && !os.IsNotExist(err) {
-		log.Errorf("error deleting '%s' from channel '%s': %v", paths.StripePath, recording.ChannelName, err)
-	}
-	if err := os.Remove(paths.CoverPath); err != nil && !os.IsNotExist(err) {
-		log.Errorf("error deleting '%s' from channel '%s': %v", paths.CoverPath, recording.ChannelName, err)
-	}
+	err1 = DeletePreviewFiles(recording.ChannelName, recording.Filename)
+	err2 = nilPreviews(recording.ChannelName, recording.RecordingId, recording.Filename)
 
-	err = Db.Model(&Recording{}).
-		Where("recording_id = ?", id).
-		First(&recording).Error
+	return errors.Join(err1, err2)
+}
 
-	// Nothing found to destroy.
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil
+func nilPreviews(channelName ChannelName, recordingId RecordingId, filename RecordingFileName) error {
+	if recordingId == 0 {
+		return errors.New("invalid recording id")
+	}
+	if filename == "" {
+		return errors.New("invalid filename")
 	}
 
-	if err != nil {
-		return err
-	}
-
-	if err := Db.
+	return Db.
 		Model(&Recording{}).
-		Where("recording_id = ?", recording.RecordingId).
-		Update("path_relative", recording.ChannelName.ChannelPath(recording.Filename)).
+		Where("recording_id = ?", recordingId).
+		Update("path_relative", channelName.ChannelPath(filename)).
 		Update("preview_video", nil).
 		Update("preview_stripe", nil).
-		Update("preview_cover", nil).Error; err != nil {
-		return err
+		Update("preview_cover", nil).Error
+}
+
+func DeletePreviewFiles(channelName ChannelName, filename RecordingFileName) error {
+	paths := channelName.GetRecordingsPaths(filename)
+
+	var err1, err2, err3 error
+	if err := os.Remove(paths.AbsoluteVideosPath); err != nil && !os.IsNotExist(err) {
+		err1 = fmt.Errorf("error deleting '%s' from channel '%s': %w", paths.RelativeVideosPath, channelName, err)
+	}
+	if err := os.Remove(paths.AbsoluteStripePath); err != nil && !os.IsNotExist(err) {
+		err2 = fmt.Errorf("error deleting '%s' from channel '%s': %w", paths.RelativeStripePath, channelName, err)
+	}
+	if err := os.Remove(paths.AbsolutePosterPath); err != nil && !os.IsNotExist(err) {
+		err3 = fmt.Errorf("error deleting '%s' from channel '%s': %w", paths.RelativeCoverPath, channelName, err)
+	}
+
+	if err1 != nil || err2 != nil || err3 != nil {
+		return errors.Join(err1, err2, err3)
 	}
 
 	return nil

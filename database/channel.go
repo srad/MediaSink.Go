@@ -55,9 +55,9 @@ func DestroyChannelRecordings(channelId ChannelId) error {
 		return errors.New("invalid channel id")
 	}
 
-	channel, err := GetChannelById(channelId)
-	if err != nil {
-		return err
+	channel, errChannel := GetChannelById(channelId)
+	if errChannel != nil {
+		return errChannel
 	}
 
 	// 1. Terminate and delete all jobs.
@@ -81,7 +81,7 @@ func DestroyChannelRecordings(channelId ChannelId) error {
 	}
 
 	for _, recording := range recordings {
-		if err := DestroyJobs(recording.RecordingId); err != nil {
+		if err := DestroyRecording(recording.RecordingId); err != nil {
 			log.Errorf("Error deleting recording %s: %s", recording.Filename, err)
 		}
 	}

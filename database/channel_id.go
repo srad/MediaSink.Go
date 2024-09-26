@@ -39,7 +39,7 @@ func GetChannelByIdWithRecordings(id ChannelId) (*Channel, error) {
 		Preload("Recordings").
 		Where("channels.channel_id = ?", id).
 		Select("*", "(SELECT COUNT(*) FROM recordings WHERE recordings.channel_id = channels.channel_id) recordings_count", "(SELECT SUM(size) FROM recordings WHERE recordings.channel_name = channels.channel_name) recordings_size").
-		Find(&channel).Error
+		First(&channel).Error
 
 	if err != nil {
 		return nil, err
@@ -68,7 +68,10 @@ func TryDeleteChannel(channelId ChannelId) error {
 	}
 
 	var channel Channel
-	if err := Db.Model(&Channel{}).Where("channels.channel_id = ?", channelId).Select("channel_id", "channel_name").First(&channel).Error; err != nil {
+	if err := Db.Model(&Channel{}).
+		Where("channel_id = ?", channelId).
+		Select("channel_id", "channel_name").
+		First(&channel).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return errors.New("channel not found")
 		}

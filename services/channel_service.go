@@ -81,7 +81,7 @@ func GetChannels() ([]ChannelInfo, error) {
 func GetChannel(id uint) (*ChannelInfo, error) {
 	channelId := database.ChannelId(id)
 	if channel, err := database.GetChannelByIdWithRecordings(channelId); err != nil {
-		return nil, fmt.Errorf("[GetChannel] Error getting channel: %s", err)
+		return nil, fmt.Errorf("channel not found: %w", err)
 	} else {
 		return &ChannelInfo{
 			Channel:       *channel,
@@ -96,13 +96,19 @@ func GetChannel(id uint) (*ChannelInfo, error) {
 }
 
 func DeleteChannel(channelId database.ChannelId) error {
+	var err1, err2 error
 	if err := TerminateProcess(channelId); err != nil {
-		return fmt.Errorf("process could not be terminated: %s", err.Error())
+		err1 = fmt.Errorf("process could not be terminated: %s", err.Error())
 	}
 
 	if err := database.TryDeleteChannel(channelId); err != nil {
-		return fmt.Errorf("channel could not be deleted: %s", err.Error())
+		err2 = fmt.Errorf("channel could not be deleted: %s", err.Error())
 	}
 
-	return nil
+	err := errors.Join(err1, err2)
+	if err == nil {
+		log.Infof("Deleted channel %d", channelId)
+	}
+
+	return err
 }

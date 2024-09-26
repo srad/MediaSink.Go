@@ -113,13 +113,12 @@ func ImportChannels(context.Context) error {
 
 			log.Infof("[Import/%s (%d/%d) (%d/%d)] Checking file: %s", channelName, importProgress, importSize, j, len(files), file.Name())
 
-			recording := database.Recording{ChannelId: newChannel.ChannelId, ChannelName: channelName, Filename: database.RecordingFileName(file.Name())}
-
-			video := &helpers.Video{FilePath: channelName.AbsoluteChannelFilePath(database.RecordingFileName(file.Name()))}
+			filename := database.RecordingFileName(file.Name())
+			video := &helpers.Video{FilePath: channelName.AbsoluteChannelFilePath(filename)}
 
 			if _, errVideoInfo := video.GetVideoInfo(); errVideoInfo != nil {
 				log.Errorf("[Import/%s] File '%s' seems corrupted, deleting: %s", channelName, file.Name(), errVideoInfo)
-				if errDestroy := database.DestroyRecording(recording.RecordingId); errDestroy != nil {
+				if errDestroy := database.DeleteRecordingData(channelName, filename); errDestroy != nil {
 					log.Errorf("[Import/%s] Error deleting: %s: %s", channelName, file.Name(), errDestroy)
 				} else {
 					log.Infof("[Import/%s] Deleted: %s", channelName, file.Name())
