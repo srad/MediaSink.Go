@@ -41,23 +41,23 @@ type PipeMessage struct {
 }
 
 type SysInfo struct {
-	CPUInfo  CPUInfo  `json:"cpuInfo"`
-	DiskInfo DiskInfo `json:"diskInfo"`
-	NetInfo  NetInfo  `json:"netInfo"`
+	CPUInfo  CPUInfo  `json:"cpuInfo" extensions:"!x-nullable"`
+	DiskInfo DiskInfo `json:"diskInfo" extensions:"!x-nullable"`
+	NetInfo  NetInfo  `json:"netInfo" extensions:"!x-nullable"`
 }
 
 type DiskInfo struct {
-	SizeFormattedGb  string `json:"sizeFormattedGb"`
-	UsedFormattedGb  string `json:"usedFormattedGb"`
-	AvailFormattedGb string `json:"availFormattedGb"`
-	Pcent            string `json:"pcent"`
+	SizeFormattedGb  string `json:"sizeFormattedGb" extensions:"!x-nullable"`
+	UsedFormattedGb  string `json:"usedFormattedGb" extensions:"!x-nullable"`
+	AvailFormattedGb string `json:"availFormattedGb" extensions:"!x-nullable"`
+	Pcent            string `json:"pcent" extensions:"!x-nullable"`
 }
 
 type NetInfo struct {
-	Dev           string    `json:"dev"`
-	TransmitBytes uint64    `json:"transmitBytes"`
-	ReceiveBytes  uint64    `json:"receiveBytes"`
-	CreatedAt     time.Time `json:"createdAt"`
+	Dev           string    `json:"dev" extensions:"!x-nullable"`
+	TransmitBytes uint64    `json:"transmitBytes" extensions:"!x-nullable"`
+	ReceiveBytes  uint64    `json:"receiveBytes" extensions:"!x-nullable"`
+	CreatedAt     time.Time `json:"createdAt" extensions:"!x-nullable"`
 }
 
 func (NetInfo) TableName() string {
@@ -65,17 +65,13 @@ func (NetInfo) TableName() string {
 }
 
 type CPULoad struct {
-	CPU       string    `json:"cpu"`
-	Load      float64   `json:"load"`
-	CreatedAt time.Time `json:"createdAt"`
-}
-
-func (CPULoad) TableName() string {
-	return "cpu_metrics"
+	CPU       string    `json:"cpu" extensions:"!x-nullable"`
+	Load      float64   `json:"load" extensions:"!x-nullable"`
+	CreatedAt time.Time `json:"createdAt" extensions:"!x-nullable"`
 }
 
 type CPUInfo struct {
-	LoadCPU []CPULoad `json:"loadCpu"`
+	LoadCPU []CPULoad `json:"loadCpu" extensions:"!x-nullable"`
 }
 
 type CPUMeasure struct {
@@ -173,6 +169,7 @@ func Interrupt(pid int) error {
 func CPUUsage(waitSeconds uint64) (*CPUInfo, error) {
 	cpu := CPUInfo{}
 
+	timestamp := time.Now()
 	measure0, err := cpuMeasures()
 	if err != nil {
 		return nil, err
@@ -188,7 +185,7 @@ func CPUUsage(waitSeconds uint64) (*CPUInfo, error) {
 	for i := 0; i < len(measure1); i++ {
 		dIdle := measure1[i].Idle - measure0[i].Idle
 		dTotal := measure1[i].Total - measure0[i].Total
-		cpu.LoadCPU = append(cpu.LoadCPU, CPULoad{CPU: measure1[i].CPU, Load: 1.0 - (dIdle / dTotal)})
+		cpu.LoadCPU = append(cpu.LoadCPU, CPULoad{CPU: measure1[i].CPU, Load: 1.0 - (dIdle / dTotal), CreatedAt: timestamp})
 	}
 
 	return &cpu, nil
