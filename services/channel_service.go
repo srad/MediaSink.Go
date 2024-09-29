@@ -3,10 +3,11 @@ package services
 import (
 	"errors"
 	"fmt"
+	"time"
+
 	log "github.com/sirupsen/logrus"
 	"github.com/srad/streamsink/database"
 	"gorm.io/gorm"
-	"time"
 )
 
 type ChannelInfo struct {
@@ -26,7 +27,7 @@ func CreateChannel(name, displayName string, skipStart, minDuration uint, url st
 		SkipStart:   skipStart,
 		MinDuration: minDuration,
 		CreatedAt:   time.Now(),
-		Url:         url,
+		URL:         url,
 		Fav:         fav,
 		Tags:        tags,
 		IsPaused:    isPaused}
@@ -67,10 +68,10 @@ func GetChannels() ([]ChannelInfo, error) {
 		response[index] = ChannelInfo{
 			Channel:       *channel,
 			Preview:       channel.ChannelName.PreviewPath(),
-			IsOnline:      IsOnline(channel.ChannelId),
-			IsTerminating: IsTerminating(channel.ChannelId),
-			IsRecording:   IsRecordingStream(channel.ChannelId),
-			MinRecording:  GetRecordingMinutes(channel.ChannelId),
+			IsOnline:      IsOnline(channel.ChannelID),
+			IsTerminating: IsTerminating(channel.ChannelID),
+			IsRecording:   IsRecordingStream(channel.ChannelID),
+			MinRecording:  GetRecordingMinutes(channel.ChannelID),
 		}
 	}
 
@@ -79,35 +80,35 @@ func GetChannels() ([]ChannelInfo, error) {
 
 // GetChannel Single Channel data with streaming and recording information.
 func GetChannel(id uint) (*ChannelInfo, error) {
-	channelId := database.ChannelId(id)
-	if channel, err := database.GetChannelByIdWithRecordings(channelId); err != nil {
+	channelID := database.ChannelID(id)
+	channel, err := database.GetChannelByIDWithRecordings(channelID)
+	if err != nil {
 		return nil, fmt.Errorf("channel not found: %w", err)
-	} else {
-		return &ChannelInfo{
-			Channel:       *channel,
-			IsOnline:      IsOnline(channel.ChannelId),
-			IsTerminating: IsTerminating(channel.ChannelId),
-			IsRecording:   IsRecordingStream(channel.ChannelId),
-			MinRecording:  GetRecordingMinutes(channel.ChannelId),
-			Preview:       channel.ChannelName.PreviewPath(),
-		}, nil
 	}
 
+	return &ChannelInfo{
+		Channel:       *channel,
+		IsOnline:      IsOnline(channel.ChannelID),
+		IsTerminating: IsTerminating(channel.ChannelID),
+		IsRecording:   IsRecordingStream(channel.ChannelID),
+		MinRecording:  GetRecordingMinutes(channel.ChannelID),
+		Preview:       channel.ChannelName.PreviewPath(),
+	}, nil
 }
 
-func DeleteChannel(channelId database.ChannelId) error {
+func DeleteChannel(channelID database.ChannelID) error {
 	var err1, err2 error
-	if err := TerminateProcess(channelId); err != nil {
+	if err := TerminateProcess(channelID); err != nil {
 		err1 = fmt.Errorf("process could not be terminated: %s", err.Error())
 	}
 
-	if err := database.TryDeleteChannel(channelId); err != nil {
+	if err := database.TryDeleteChannel(channelID); err != nil {
 		err2 = fmt.Errorf("channel could not be deleted: %s", err.Error())
 	}
 
 	err := errors.Join(err1, err2)
 	if err == nil {
-		log.Infof("Deleted channel %d", channelId)
+		log.Infof("Deleted channel %d", channelID)
 	}
 
 	return err

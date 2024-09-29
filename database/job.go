@@ -4,8 +4,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"gorm.io/gorm/clause"
 	"time"
+
+	"gorm.io/gorm/clause"
 
 	log "github.com/sirupsen/logrus"
 	"github.com/srad/streamsink/helpers"
@@ -32,10 +33,10 @@ type Job struct {
 	Channel   Channel   `json:"-" gorm:"foreignKey:channel_id;references:channel_id;"`
 	Recording Recording `json:"-" gorm:"foreignKey:recording_id;references:recording_id"`
 
-	JobId uint `json:"jobId" gorm:"autoIncrement;primaryKey" extensions:"!x-nullable"`
+	JobID uint `json:"jobId" gorm:"autoIncrement;primaryKey" extensions:"!x-nullable"`
 
-	ChannelId   ChannelId   `json:"channelId" gorm:"column:channel_id;not null;default:null" extensions:"!x-nullable"`
-	RecordingId RecordingId `json:"recordingId" gorm:"column:recording_id;not null;default:null" extensions:"!x-nullable"`
+	ChannelID   ChannelID   `json:"channelId" gorm:"column:channel_id;not null;default:null" extensions:"!x-nullable"`
+	RecordingID RecordingID `json:"recordingId" gorm:"column:recording_id;not null;default:null" extensions:"!x-nullable"`
 
 	// Unique entry, this is the actual primary key
 	ChannelName ChannelName       `json:"channelName" gorm:"not null;default:null" extensions:"!x-nullable"`
@@ -45,9 +46,11 @@ type Job struct {
 	Task   JobTask   `json:"task" gorm:"not null;default:preview" extensions:"!x-nullable"`
 	Status JobStatus `json:"status" gorm:"not null;default:completed" extensions:"!x-nullable"`
 
-	Filepath  string    `json:"pathRelative" gorm:"not null;default:null;" extensions:"!x-nullable"`
-	Active    bool      `json:"active" gorm:"not null;default:false" extensions:"!x-nullable"`
-	CreatedAt time.Time `json:"createdAt" gorm:"not null;default:current_timestamp;index:idx_create_at" extensions:"!x-nullable"`
+	Filepath    string     `json:"pathRelative" gorm:"not null;default:null;" extensions:"!x-nullable"`
+	Active      bool       `json:"active" gorm:"not null;default:false" extensions:"!x-nullable"`
+	CreatedAt   time.Time  `json:"createdAt" gorm:"not null;default:current_timestamp;index:idx_create_at" extensions:"!x-nullable"`
+	StartedAt   *time.Time `json:"startedAt" gorm:"default:null" extensions:"!x-nullable"`
+	CompletedAt *time.Time `json:"completedAt" gorm:"default:null" extensions:"!x-nullable"`
 
 	// Additional information
 	Pid      *int    `json:"pid" gorm:"default:null"`
@@ -58,19 +61,19 @@ type Job struct {
 }
 
 func (job *Job) CreateJob() error {
-	return Db.Create(job).Error
+	return DB.Create(job).Error
 }
 
 func JobList(skip, take int, status []JobStatus, order JobOrder) ([]*Job, int64, error) {
 	var count int64 = 0
-	if err := Db.Model(&Job{}).
+	if err := DB.Model(&Job{}).
 		Where("status IN (?)", status).
 		Count(&count).Error; err != nil {
 		return nil, 0, err
 	}
 
 	var jobs []*Job
-	if err := Db.
+	if err := DB.
 		Model(&Job{}).
 		Where("status IN (?)", status).
 		Order(clause.OrderByColumn{Column: clause.Column{Name: "created_at"}, Desc: order == JobOrderDESC}).
@@ -85,8 +88,8 @@ func JobList(skip, take int, status []JobStatus, order JobOrder) ([]*Job, int64,
 
 func (channel *Channel) Jobs() ([]*Job, error) {
 	var jobs []*Job
-	if err := Db.Model(&Job{}).
-		Where("channel_id = ?", channel.ChannelId).
+	if err := DB.Model(&Job{}).
+		Where("channel_id = ?", channel.ChannelID).
 		Find(&jobs).Error; err != nil {
 		return nil, err
 	}
@@ -99,7 +102,11 @@ func (job *Job) Cancel(reason string) error {
 }
 
 func (job *Job) Completed() error {
-	return job.updateStatus(StatusJobCompleted, nil)
+	err1 := job.updateStatus(StatusJobCompleted, nil)
+	err2 := DB.Model(&Job{}).Where("job_id = ?", job.JobID).
+		Update("completed_at", time.Now()).Error
+
+	return errors.Join(err1, err2)
 }
 
 func (job *Job) Error(reason error) error {
@@ -108,7 +115,7 @@ func (job *Job) Error(reason error) error {
 }
 
 func (job *Job) updateStatus(status JobStatus, reason *string) error {
-	if job.JobId == 0 {
+	if job.JobID == 0 {
 		return errors.New("invalid job id")
 	}
 
@@ -119,17 +126,17 @@ func (job *Job) updateStatus(status JobStatus, reason *string) error {
 		}
 	}
 
-	return Db.Model(&Job{}).Where("job_id = ?", job.JobId).
+	return DB.Model(&Job{}).Where("job_id = ?", job.JobID).
 		Updates(map[string]interface{}{"status": status, "info": reason, "active": false}).Error
 }
 
-func JobExists(recordingId RecordingId, task JobTask) (bool, error) {
-	if recordingId == 0 {
+func JobExists(recordingID RecordingID, task JobTask) (bool, error) {
+	if recordingID == 0 {
 		return false, errors.New("recording id is 0")
 	}
 
 	var count int64 = 0
-	if err := Db.Model(&Job{}).Where("recording_id = ? AND task = ?", recordingId, task).Count(&count).Error; err != nil {
+	if err := DB.Model(&Job{}).Where("recording_id = ? AND task = ?", recordingID, task).Count(&count).Error; err != nil {
 		return false, err
 	}
 
@@ -144,7 +151,7 @@ func DeleteJob(id uint) error {
 	}
 
 	var job *Job
-	if err := Db.Where("job_id = ?", id).First(&job).Error; err != nil {
+	if err := DB.Where("job_id = ?", id).First(&job).Error; err != nil {
 		return err
 	}
 
@@ -155,7 +162,7 @@ func DeleteJob(id uint) error {
 		}
 	}
 
-	if err := Db.Model(&Job{}).
+	if err := DB.Model(&Job{}).
 		Where("job_id = ?", id).
 		Delete(Job{}).Error; err != nil {
 		return err
@@ -168,7 +175,7 @@ func DeleteJob(id uint) error {
 // The caller must know which type the JSON serialized argument originally had.
 func GetNextJob() (*Job, error) {
 	var job *Job
-	err := Db.Where("status = ? AND active = ?", StatusJobOpen, false).
+	err := DB.Where("status = ? AND active = ?", StatusJobOpen, false).
 		Order("jobs.created_at asc").
 		First(&job).Error
 
@@ -200,7 +207,7 @@ func UnmarshalJobArg[T any](job *Job) (*T, error) {
 // The caller must know which type the JSON serialized argument originally had.
 func GetNextJobTask[T any](task JobTask) (*Job, *T, error) {
 	var job *Job
-	err := Db.Where("task = ? AND status = ? AND active = ?", task, StatusJobOpen, false).
+	err := DB.Where("task = ? AND status = ? AND active = ?", task, StatusJobOpen, false).
 		Order("jobs.created_at asc").
 		First(&job).Error
 
@@ -225,30 +232,30 @@ func GetNextJobTask[T any](task JobTask) (*Job, *T, error) {
 }
 
 func (job *Job) UpdateInfo(pid int, command string) error {
-	if job.JobId == 0 {
+	if job.JobID == 0 {
 		return errors.New("invalid job id")
 	}
 
-	return Db.Model(&Job{}).Where("job_id = ?", job.JobId).
+	return DB.Model(&Job{}).Where("job_id = ?", job.JobID).
 		Update("pid", pid).
 		Update("command", command).Error
 }
 
 func (job *Job) UpdateProgress(progress string) error {
-	if job.JobId == 0 {
+	if job.JobID == 0 {
 		return errors.New("invalid job id")
 	}
 
-	return Db.Model(&Job{}).Where("job_id = ?", job.JobId).
+	return DB.Model(&Job{}).Where("job_id = ?", job.JobID).
 		Update("progress", progress).Error
 }
 
 func (job *Job) Activate() error {
-	if job.JobId == 0 {
+	if job.JobID == 0 {
 		return errors.New("invalid job id")
 	}
 
-	return Db.Model(&Job{}).Where("job_id = ?", job.JobId).Update("active", true).Error
+	return DB.Model(&Job{}).Where("job_id = ?", job.JobID).Updates(map[string]interface{}{"started_at": time.Now(), "active": true}).Error
 }
 
 func CreateJob[T any](recording *Recording, task JobTask, args *T) (*Job, error) {
@@ -262,9 +269,9 @@ func CreateJob[T any](recording *Recording, task JobTask, args *T) (*Job, error)
 	}
 
 	job := &Job{
-		ChannelId:   recording.ChannelId,
+		ChannelID:   recording.ChannelID,
 		ChannelName: recording.ChannelName,
-		RecordingId: recording.RecordingId,
+		RecordingID: recording.RecordingID,
 		Filename:    recording.Filename,
 		Filepath:    recording.ChannelName.AbsoluteChannelFilePath(recording.Filename),
 		Status:      StatusJobOpen,

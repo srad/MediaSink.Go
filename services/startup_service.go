@@ -10,10 +10,14 @@ import (
 func StartUpJobs() {
 	log.Infoln("[StartUpJobs] Running startup job ...")
 
-	deleteChannels()           // Blocking
-	deleteOrphanedRecordings() // Blocking
+	if err := deleteChannels(); err != nil { // Blocking
+		log.Errorf("[DeleteChannels] ChannelList error: %s", err)
+	}
+	if err := deleteOrphanedRecordings(); err != nil { // Blocking
+		log.Errorln(err)
+	}
 	StartImport()
-	go fixOrphanedRecordings()
+	go fixOrphanedFiles()
 }
 
 func deleteOrphanedRecordings() error {
@@ -25,7 +29,7 @@ func deleteOrphanedRecordings() error {
 	for _, recording := range recordings {
 		filePath := recording.ChannelName.AbsoluteChannelFilePath(recording.Filename)
 		if !utils.FileExists(filePath) {
-			database.DestroyRecording(recording.RecordingId)
+			database.DestroyRecording(recording.RecordingID)
 		}
 	}
 
@@ -35,23 +39,17 @@ func deleteOrphanedRecordings() error {
 func deleteChannels() error {
 	channels, err := database.ChannelList()
 	if err != nil {
-		log.Errorf("[DeleteChannels] ChannelList error: %s", err)
 		return err
 	}
 
 	for _, channel := range channels {
 		if channel.Deleted {
 			log.Infof("[DeleteChannels] Deleting channel : %s", channel.ChannelName)
-			database.DestroyChannel(channel.ChannelId)
+			database.DestroyChannel(channel.ChannelID)
 		}
 	}
 
 	return nil
-}
-
-// FixOrphanedRecordings Go through all open jobs with status "recording" and complete them.
-func fixOrphanedRecordings() {
-	fixOrphanedFiles()
 }
 
 // fixOrphanedFiles Scans the recording folder and checks if an un-imported file is found on the disk.
@@ -67,7 +65,7 @@ func fixOrphanedFiles() error {
 	}
 	for _, channel := range channels {
 		if !channel.FolderExists() {
-			database.DestroyChannel(channel.ChannelId)
+			database.DestroyChannel(channel.ChannelID)
 		}
 	}
 
@@ -85,7 +83,7 @@ func fixOrphanedFiles() error {
 		err := helpers.CheckVideo(recording.AbsoluteFilePath())
 		if err != nil {
 			log.Errorf("The file '%s' is corrupted, deleting from disk ... ", recording.Filename)
-			if err := database.DestroyRecording(recording.RecordingId); err != nil {
+			if err := database.DestroyRecording(recording.RecordingID); err != nil {
 				log.Errorf("Deleted file '%s'", recording.Filename)
 			}
 		}

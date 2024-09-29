@@ -4,11 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	log "github.com/sirupsen/logrus"
-	"github.com/srad/streamsink/conf"
-	"github.com/srad/streamsink/database"
-	"github.com/srad/streamsink/helpers"
-	"github.com/srad/streamsink/network"
 	"io"
 	"os"
 	"os/exec"
@@ -16,17 +11,23 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	log "github.com/sirupsen/logrus"
+	"github.com/srad/streamsink/conf"
+	"github.com/srad/streamsink/database"
+	"github.com/srad/streamsink/helpers"
+	"github.com/srad/streamsink/network"
 )
 
 type StreamInfo struct {
 	IsOnline      bool                 `json:"isOnline" extensions:"!x-nullable"`
 	IsTerminating bool                 `extensions:"!x-nullable"`
-	Url           string               `extensions:"!x-nullable"`
+	URL           string               `extensions:"!x-nullable"`
 	ChannelName   database.ChannelName `json:"channelName" extensions:"!x-nullable"`
 }
 
 type ProcessInfo struct {
-	Id     database.ChannelId `json:"id"`
+	ID     database.ChannelID `json:"id"`
 	Pid    int                `json:"pid"`
 	Path   string             `json:"path"`
 	Args   string             `json:"args"`
@@ -34,20 +35,20 @@ type ProcessInfo struct {
 }
 
 var (
-	recInfo    = make(map[database.ChannelId]*database.Recording)
-	streamInfo = make(map[database.ChannelId]StreamInfo)
+	recInfo    = make(map[database.ChannelID]*database.Recording)
+	streamInfo = make(map[database.ChannelID]StreamInfo)
 	// Pointer to process which executed FFMPEG
-	streams = make(map[database.ChannelId]*exec.Cmd)
+	streams = make(map[database.ChannelID]*exec.Cmd)
 )
 
 func (si *StreamInfo) Screenshot() error {
-	return helpers.ExtractFirstFrame(si.Url, conf.FrameWidth, filepath.Join(si.ChannelName.AbsoluteChannelDataPath(), database.SnapshotFilename))
+	return helpers.ExtractFirstFrame(si.URL, conf.FrameWidth, filepath.Join(si.ChannelName.AbsoluteChannelDataPath(), database.SnapshotFilename))
 }
 
 // CaptureChannel Starts and also waits for the stream to end or being killed
 // This code is intentionally procedural and contains all the steps to finish a recording.
-func CaptureChannel(id database.ChannelId, url string, skip uint) error {
-	channel, err := database.GetChannelById(id)
+func CaptureChannel(id database.ChannelID, url string, skip uint) error {
+	channel, err := database.GetChannelByID(id)
 	if err != nil {
 		return err
 	}
@@ -57,17 +58,17 @@ func CaptureChannel(id database.ChannelId, url string, skip uint) error {
 	}
 
 	// Folder could not be created and does not exist yet.
-	if err := channel.ChannelName.MkDir(); err != nil && !os.IsExist(err) {
-		return err
+	if errMkDir := channel.ChannelName.MkDir(); errMkDir != nil && !os.IsExist(errMkDir) {
+		return errMkDir
 	}
 
-	recording, outputFilePath, err := database.NewRecording(channel.ChannelId, "recording")
+	recording, outputFilePath, err := database.NewRecording(channel.ChannelID, "recording")
 	if err != nil {
 		return err
 	}
 
 	log.Infoln("----------------------------------------Capturing----------------------------------------")
-	log.Infoln("Url: " + url)
+	log.Infoln("URL: " + url)
 	log.Infoln("to: " + outputFilePath)
 
 	recInfo[id] = recording
@@ -111,14 +112,14 @@ func CaptureChannel(id database.ChannelId, url string, skip uint) error {
 	}
 
 	// Finish recording
-	duration := time.Now().Sub(recording.CreatedAt)
+	duration := time.Since(recording.CreatedAt)
 
 	// Query the latest minimum recording duration or set a default of 10min.
 
 	log.Infof("Minimum recording duration for channel %s is %dmin", channel.ChannelName, channel.MinDuration)
 
 	// Duration might have changed since the process launch.
-	channel, errChannel := database.GetChannelById(id)
+	channel, errChannel := database.GetChannelByID(id)
 	var minDuration = 10 * time.Minute // default
 	if errChannel != nil {
 		log.Errorf("[Capture] Error querying channel-id %d: %s", id, errChannel)
@@ -129,17 +130,17 @@ func CaptureChannel(id database.ChannelId, url string, skip uint) error {
 	// Keep the recording
 	if duration.Seconds() >= minDuration.Seconds() {
 		info := Info(id)
-		if newRecording, err := database.CreateRecording(info.ChannelId, info.Filename, "recording"); err != nil {
+		if newRecording, err := database.CreateRecording(info.ChannelID, info.Filename, "recording"); err != nil {
 			log.Errorf("[Info] Error adding recording '%s': %s", outputFilePath, err)
 		} else {
 			network.BroadCastClients(network.RecordingAddEvent, newRecording)
 
-			if job, err := EnqueuePreviewJob(newRecording.RecordingId); err != nil {
+			job, err := EnqueuePreviewJob(newRecording.RecordingID)
+			if err != nil {
 				log.Errorf("[FinishRecording] Error enqueuing job for %s", err)
 				return err
-			} else {
-				log.Infof("[FinishRecording] Job enqueued %v\n", job)
 			}
+			log.Infof("[FinishRecording] Job enqueued %v\n", job)
 		}
 	} else { // Throw away
 		log.Infof("[FinishRecording] Deleting stream '%s/%s' because it is too short (%dmin)", channel.ChannelName, recording.Filename, duration)
@@ -154,19 +155,19 @@ func CaptureChannel(id database.ChannelId, url string, skip uint) error {
 	return nil
 }
 
-func GetRecordingMinutes(id database.ChannelId) float64 {
+func GetRecordingMinutes(id database.ChannelID) float64 {
 	if _, ok := streams[id]; ok {
-		return time.Now().Sub(recInfo[id].CreatedAt).Minutes()
+		return time.Since(recInfo[id].CreatedAt).Minutes()
 	}
 	return 0
 }
 
-func Info(id database.ChannelId) *database.Recording {
+func Info(id database.ChannelID) *database.Recording {
 	return recInfo[id]
 }
 
-func Start(id database.ChannelId) error {
-	channel, err := database.GetChannelById(id)
+func Start(id database.ChannelID) error {
+	channel, err := database.GetChannelByID(id)
 	if err != nil {
 		return err
 	}
@@ -176,8 +177,8 @@ func Start(id database.ChannelId) error {
 		return err
 	}
 
-	url, err := channel.QueryStreamUrl()
-	streamInfo[channel.ChannelId] = StreamInfo{IsOnline: url != "", Url: url, ChannelName: channel.ChannelName, IsTerminating: false}
+	url, err := channel.QueryStreamURL()
+	streamInfo[channel.ChannelID] = StreamInfo{IsOnline: url != "", URL: url, ChannelName: channel.ChannelName, IsTerminating: false}
 	if url == "" {
 		// Channel offline
 		return fmt.Errorf("no url found for channel '%s'", channel.ChannelName)
@@ -205,8 +206,8 @@ func Start(id database.ChannelId) error {
 }
 
 func TerminateAll() {
-	for channelId := range streams {
-		if err := TerminateProcess(channelId); err != nil {
+	for channelID := range streams {
+		if err := TerminateProcess(channelID); err != nil {
 			log.Errorf("Error terminating channel: %s", err)
 		}
 	}
@@ -214,50 +215,49 @@ func TerminateAll() {
 
 // TerminateProcess Interrupt the ffmpeg recording process
 // There's maximum one recording job per channel.
-func TerminateProcess(id database.ChannelId) error {
+func TerminateProcess(id database.ChannelID) error {
 	// Is current recording at all?
 	if cmd, ok := streams[id]; ok {
 		if info, ok2 := streamInfo[id]; ok2 {
 			streamInfo[id] = StreamInfo{
 				IsOnline:      info.IsOnline,
 				IsTerminating: true, // <---------------- only update.
-				Url:           info.Url,
+				URL:           info.URL,
 				ChannelName:   info.ChannelName,
 			}
 		}
 		if err := cmd.Process.Signal(os.Interrupt); err != nil && !strings.Contains(err.Error(), "255") {
 			log.Errorf("[TerminateProcess] Error killing process for channel id %d: %s", id, err)
 			return err
-		} else {
-			log.Infof("[TerminateProcess] Killed process: %d", id)
 		}
+		log.Infof("[TerminateProcess] Killed process: %d", id)
 	}
 
 	return nil
 }
 
-func IsOnline(id database.ChannelId) bool {
+func IsOnline(id database.ChannelID) bool {
 	if _, ok := streamInfo[id]; ok {
 		return streamInfo[id].IsOnline
 	}
 	return false
 }
 
-func IsTerminating(id database.ChannelId) bool {
+func IsTerminating(id database.ChannelID) bool {
 	if _, ok := streamInfo[id]; ok {
 		return streamInfo[id].IsTerminating
 	}
 	return false
 }
 
-func IsRecordingStream(id database.ChannelId) bool {
+func IsRecordingStream(id database.ChannelID) bool {
 	if _, ok := streams[id]; ok {
 		return true
 	}
 	return false
 }
 
-func DeleteStreamData(id database.ChannelId) {
+func DeleteStreamData(id database.ChannelID) {
 	delete(streams, id)
 	delete(recInfo, id)
 	delete(streamInfo, id)
@@ -275,7 +275,7 @@ func ProcessList() []*ProcessInfo {
 		args := strings.TrimSpace(strings.Join(cmd.Args, " "))
 
 		info = append(info, &ProcessInfo{
-			Id:     id,
+			ID:     id,
 			Pid:    cmd.Process.Pid,
 			Path:   cmd.Path,
 			Args:   args,
@@ -294,12 +294,12 @@ func startThumbnailWorker(ctx context.Context) {
 			log.Infoln("[startThumbnailWorker] stopped")
 			return
 		case <-time.After(captureThumbInterval):
-			for channelId, info := range streamInfo {
-				if info.Url != "" && !info.IsTerminating {
+			for channelID, info := range streamInfo {
+				if info.URL != "" && !info.IsTerminating {
 					if err := info.Screenshot(); err != nil {
-						log.Errorf("[Recorder] Error extracting first frame of channel-id %d: %s", channelId, err)
+						log.Errorf("[Recorder] Error extracting first frame of channel-id %d: %s", channelID, err)
 					} else {
-						network.BroadCastClients(network.ChannelThumbnailEvent, channelId)
+						network.BroadCastClients(network.ChannelThumbnailEvent, channelID)
 					}
 				}
 			}

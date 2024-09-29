@@ -3,23 +3,24 @@ package database
 import (
 	"errors"
 	"fmt"
-	"github.com/astaxie/beego/utils"
-	log "github.com/sirupsen/logrus"
-	"gorm.io/gorm"
 	"os/exec"
 	"path"
 	"strings"
 	"time"
+
+	"github.com/astaxie/beego/utils"
+	log "github.com/sirupsen/logrus"
+	"gorm.io/gorm"
 )
 
 // Channel Represent a single stream, that shall be recorded. It can also serve as a folder for videos.
 type Channel struct {
-	ChannelId   ChannelId   `json:"channelId" gorm:"autoIncrement;primaryKey;column:channel_id" extensions:"!x-nullable"`
+	ChannelID   ChannelID   `json:"channelId" gorm:"autoIncrement;primaryKey;column:channel_id" extensions:"!x-nullable"`
 	ChannelName ChannelName `json:"channelName" gorm:"unique;not null;" extensions:"!x-nullable"`
 	DisplayName string      `json:"displayName" gorm:"not null;default:''" extensions:"!x-nullable"`
 	SkipStart   uint        `json:"skipStart" gorm:"not null;default:0" extensions:"!x-nullable"`
 	MinDuration uint        `json:"minDuration" gorm:"not null;default:0" extensions:"!x-nullable"`
-	Url         string      `json:"url" gorm:"not null;default:''" extensions:"!x-nullable"`
+	URL         string      `json:"url" gorm:"not null;default:''" extensions:"!x-nullable"`
 	Tags        *Tags       `json:"tags" gorm:"type:text;default:null"`
 	Fav         bool        `json:"fav" gorm:"index:idx_fav,not null" extensions:"!x-nullable"`
 	IsPaused    bool        `json:"isPaused" gorm:"not null,default:false" extensions:"!x-nullable"`
@@ -36,26 +37,25 @@ type Channel struct {
 
 func CreateChannel(channelName ChannelName, displayName, url string) (*Channel, error) {
 	var channel *Channel
-	if err := Db.Model(Channel{}).Where("channel_name = ?", channelName).First(&channel).Error; err != nil {
+	if err := DB.Model(Channel{}).Where("channel_name = ?", channelName).First(&channel).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			newChannel := newChannel(channelName, displayName, url)
-			if err := Db.Create(&newChannel).Error; err != nil {
+			if err := DB.Create(&newChannel).Error; err != nil {
 				return nil, err
-			} else {
-				return &newChannel, nil
 			}
+			return &newChannel, nil
 		}
 	}
 
 	return channel, nil
 }
 
-func DestroyChannelRecordings(channelId ChannelId) error {
-	if channelId == 0 {
+func DestroyChannelRecordings(channelID ChannelID) error {
+	if channelID == 0 {
 		return errors.New("invalid channel id")
 	}
 
-	channel, errChannel := GetChannelById(channelId)
+	channel, errChannel := GetChannelByID(channelID)
 	if errChannel != nil {
 		return errChannel
 	}
@@ -65,7 +65,7 @@ func DestroyChannelRecordings(channelId ChannelId) error {
 		log.Errorln(err)
 	} else {
 		for _, job := range jobs {
-			if err := DeleteJob(job.JobId); err != nil {
+			if err := DeleteJob(job.JobID); err != nil {
 				log.Errorf("Error destroying job: %s", err)
 			}
 		}
@@ -73,15 +73,15 @@ func DestroyChannelRecordings(channelId ChannelId) error {
 
 	// 2. Delete records.
 	var recordings []*Recording
-	if err := Db.Model(&Recording{}).
-		Where("channel_id = ?", channelId).
+	if err := DB.Model(&Recording{}).
+		Where("channel_id = ?", channelID).
 		Find(&recordings).Error; err != nil {
 		log.Errorf("No recordings found to destroy for channel %s", channel.ChannelName)
 		return err
 	}
 
 	for _, recording := range recordings {
-		if err := DestroyRecording(recording.RecordingId); err != nil {
+		if err := DestroyRecording(recording.RecordingID); err != nil {
 			log.Errorf("Error deleting recording %s: %s", recording.Filename, err)
 		}
 	}
@@ -90,7 +90,7 @@ func DestroyChannelRecordings(channelId ChannelId) error {
 }
 
 func CreateChannelDetail(channel Channel) (*Channel, error) {
-	if err := Db.Create(&channel).Error; err != nil {
+	if err := DB.Create(&channel).Error; err != nil {
 		return nil, err
 	}
 
@@ -102,7 +102,7 @@ func CreateChannelDetail(channel Channel) (*Channel, error) {
 	return &channel, nil
 }
 
-func (channel *Channel) ExistsJson() bool {
+func (channel *Channel) ExistsJSON() bool {
 	return utils.FileExists(channel.jsonPath())
 }
 
@@ -116,21 +116,21 @@ func (channel *Channel) jsonPath() string {
 
 func (channel *Channel) Update() error {
 	// Validation
-	url := strings.TrimSpace(channel.Url)
+	url := strings.TrimSpace(channel.URL)
 	displayName := strings.TrimSpace(channel.DisplayName)
 
 	if len(url) == 0 || len(displayName) == 0 {
 		return fmt.Errorf("invalid parameters: %v", channel)
 	}
 
-	err := Db.Save(&channel).Error
+	err := DB.Save(&channel).Error
 
 	return err
 }
 
-func (channel *Channel) QueryStreamUrl() (string, error) {
+func (channel *Channel) QueryStreamURL() (string, error) {
 	// We only want to extract the URL, disable all additional text output
-	cmd := exec.Command("youtube-dl", "--force-ipv4", "--ignore-errors", "--no-warnings", "--youtube-skip-dash-manifest", "-f best/bestvideo", "--get-url", channel.Url)
+	cmd := exec.Command("youtube-dl", "--force-ipv4", "--ignore-errors", "--no-warnings", "--youtube-skip-dash-manifest", "-f best/bestvideo", "--get-url", channel.URL)
 	stdout, err := cmd.CombinedOutput()
 	output := strings.TrimSpace(string(stdout))
 
@@ -144,7 +144,7 @@ func (channel *Channel) QueryStreamUrl() (string, error) {
 func ChannelList() ([]*Channel, error) {
 	var channels []*Channel
 
-	err := Db.Model(&Channel{}).
+	err := DB.Model(&Channel{}).
 		Select("channels.*", "(SELECT COUNT(*) FROM recordings WHERE recordings.channel_id = channels.channel_id) recordings_count", "(SELECT SUM(size) FROM recordings WHERE recordings.channel_name = channels.channel_name) recordings_size").
 		Find(&channels).Error
 
@@ -158,7 +158,7 @@ func ChannelList() ([]*Channel, error) {
 func ChannelListNotDeleted() ([]*Channel, error) {
 	var result []*Channel
 
-	err := Db.Model(&Channel{}).
+	err := DB.Model(&Channel{}).
 		Where("channels.deleted = ?", false).
 		Select("channels.*", "(SELECT COUNT(*) FROM recordings WHERE recordings.channel_id = channels.channel_id) recordings_count", "(SELECT SUM(size) FROM recordings WHERE recordings.channel_id = channels.channel_id) recordings_size").
 		Find(&result).Error
@@ -174,7 +174,7 @@ func EnabledChannelList() ([]*Channel, error) {
 	var channels []*Channel
 
 	// Query favourites first
-	err := Db.Model(&Channel{}).
+	err := DB.Model(&Channel{}).
 		Where("deleted = ?", false).
 		Where("is_paused = ?", false).
 		Select("channels.*", "(SELECT COUNT(*) FROM recordings WHERE recordings.channel_id = channels.channel_id) recordings_count").
@@ -194,7 +194,7 @@ func newChannel(channelName ChannelName, displayName, url string) Channel {
 		DisplayName: displayName,
 		SkipStart:   0,
 		MinDuration: 10,
-		Url:         strings.TrimSpace(url),
+		URL:         strings.TrimSpace(url),
 		Tags:        nil,
 		Fav:         false,
 		IsPaused:    false,

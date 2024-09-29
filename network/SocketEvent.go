@@ -22,6 +22,7 @@ const (
 	JobStartEvent       SocketEventName = "job:start"
 	JobProgressEvent    SocketEventName = "job:progress"
 	JobDoneEvent        SocketEventName = "job:done"
+	JobActivate         SocketEventName = "job:activate"
 	JobErrorEvent       SocketEventName = "job:error"
 	JobPreviewDoneEvent SocketEventName = "job:preview:done"
 	JobDeleteEvent      SocketEventName = "job:delete"
@@ -89,6 +90,7 @@ type wsConnection struct {
 }
 
 func (d *wsDispatcher) heartBeat() {
+	log.Infoln("Starting websocket heartbeat ...")
 	for {
 		BroadCastClients("heartbeat", 10)
 		time.Sleep(time.Second * 10)
@@ -96,25 +98,22 @@ func (d *wsDispatcher) heartBeat() {
 }
 
 func WsListen() {
-	log.Infoln("Starting websocket heartbeat ...")
 	go dispatcher.heartBeat()
 	for {
-		select {
-		case m := <-broadCastChannel:
-			dispatcher.broadCast(m)
-		}
+		m := <-broadCastChannel
+		dispatcher.broadCast(m)
 	}
 }
 
 // WsHandler TODO: Remove *ws from slice in close connection via ws.SetCloseHandler
 func WsHandler(c *gin.Context) {
 	ws, err := upGrader.Upgrade(c.Writer, c.Request, nil)
-	defer ws.Close()
-
 	if err != nil {
 		log.Errorf("error get connection: %s", err)
 		return
 	}
+
+	defer ws.Close()
 
 	dispatcher.addWs(wsConnection{ws: ws})
 	ws.SetCloseHandler(func(code int, text string) error {

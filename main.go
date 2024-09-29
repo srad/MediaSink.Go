@@ -57,9 +57,8 @@ func main() {
 	go func() {
 		if err := server.ListenAndServe(); err != nil {
 			log.Fatalln(err)
-		} else {
-			log.Infof("[main] start http server listening %s", endPoint)
 		}
+		log.Infof("[main] start http server listening %s", endPoint)
 	}()
 
 	<-c
@@ -68,7 +67,7 @@ func main() {
 func cleanup() {
 	log.Infoln("cleanup ...")
 	services.StopJobProcessing()
-	_ = services.StopRecorder()
+	services.StopRecorder()
 	log.Infoln("cleanup complete")
 }
 

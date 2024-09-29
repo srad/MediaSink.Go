@@ -2,9 +2,10 @@ package v1
 
 import (
 	"errors"
+	"net/http"
+
 	"github.com/gin-gonic/gin"
 	"github.com/srad/streamsink/app"
-	"net/http"
 )
 
 // GetUserProfile godoc

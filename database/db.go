@@ -2,6 +2,8 @@ package database
 
 import (
 	"fmt"
+	"os"
+
 	log "github.com/sirupsen/logrus"
 	"github.com/srad/streamsink/conf"
 	"gorm.io/driver/mysql"
@@ -9,10 +11,9 @@ import (
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
-	"os"
 )
 
-var Db *gorm.DB
+var DB *gorm.DB
 
 func Init() {
 	cfg := conf.Read()
@@ -51,27 +52,29 @@ func Init() {
 	if err != nil {
 		panic("failed to connect models")
 	}
-	Db = db
+	DB = db
 
 	migrate()
 }
 
 func migrate() {
 	// Migrate the schema
-	if err := Db.AutoMigrate(&User{}); err != nil {
+	if err := DB.AutoMigrate(&User{}); err != nil {
 		panic(fmt.Sprintf("[Migrate] Error user: %s", err))
 	}
-	if err := Db.AutoMigrate(&Channel{}); err != nil {
+	if err := DB.AutoMigrate(&Channel{}); err != nil {
 		panic(fmt.Sprintf("[Migrate] Error Channel: %s", err))
 	}
-	if err := Db.AutoMigrate(&Recording{}); err != nil {
+	if err := DB.AutoMigrate(&Recording{}); err != nil {
 		panic(fmt.Sprintf("[Migrate] Error Info: %s", err))
 	}
-	if err := Db.AutoMigrate(&Job{}); err != nil {
+	if err := DB.AutoMigrate(&Job{}); err != nil {
 		panic(fmt.Sprintf("[Migrate] Error Job: %s", err))
 	}
-	if err := Db.AutoMigrate(&Setting{}); err != nil {
+	if err := DB.AutoMigrate(&Setting{}); err != nil {
 		panic(fmt.Sprintf("[Migrate] Error Setting: %s", err))
 	}
-	InitSettings()
+	if err := InitSettings(); err != nil {
+		log.Panicf("[Setting] Init error: %s", err)
+	}
 }

@@ -1,8 +1,9 @@
 package app
 
 import (
-	log "github.com/sirupsen/logrus"
 	"net/http"
+
+	log "github.com/sirupsen/logrus"
 
 	"github.com/astaxie/beego/validation"
 	"github.com/gin-gonic/gin"
@@ -13,8 +14,6 @@ func MarkErrors(errors []*validation.Error) {
 	for _, err := range errors {
 		log.Errorln(err.Key, err.Message)
 	}
-
-	return
 }
 
 // BindAndValid binds and validates data

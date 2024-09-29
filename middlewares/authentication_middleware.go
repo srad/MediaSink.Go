@@ -3,14 +3,15 @@ package middlewares
 import (
 	"errors"
 	"fmt"
-	"github.com/gin-gonic/gin"
-	"github.com/golang-jwt/jwt/v4"
-	"github.com/srad/streamsink/app"
-	"github.com/srad/streamsink/services"
 	"net/http"
 	"os"
 	"strings"
 	"time"
+
+	"github.com/gin-gonic/gin"
+	"github.com/golang-jwt/jwt/v4"
+	"github.com/srad/streamsink/app"
+	"github.com/srad/streamsink/services"
 )
 
 func CheckAuthorizationHeader(c *gin.Context) {
@@ -58,11 +59,12 @@ func CheckAuthorizationHeader(c *gin.Context) {
 
 	// Interface conversion for numbers on map interface seems to be float64, wtf?
 	id := uint(claims["id"].(float64))
-	if user, err := services.GetUserById(id); err == nil {
+	user, err := services.GetUserByID(id)
+	if err == nil {
 		appG.Error(http.StatusUnauthorized, err)
 		return
-	} else {
-		c.Set("currentUser", user)
-		c.Next()
 	}
+
+	c.Set("currentUser", user)
+	c.Next()
 }

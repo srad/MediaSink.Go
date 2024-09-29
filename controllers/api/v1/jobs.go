@@ -1,12 +1,13 @@
 package v1
 
 import (
+	"net/http"
+	"strconv"
+
 	"github.com/srad/streamsink/helpers"
 	"github.com/srad/streamsink/models/requests"
 	"github.com/srad/streamsink/models/responses"
 	"github.com/srad/streamsink/services"
-	"net/http"
-	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"github.com/srad/streamsink/app"
@@ -33,13 +34,13 @@ func AddJob(c *gin.Context) {
 		return
 	}
 
-	recording, err := database.RecordingId(id).FindRecordingById()
+	recording, err := database.RecordingID(id).FindRecordingByID()
 	if err != nil {
 		appG.Error(http.StatusBadRequest, err)
 		return
 	}
 
-	job, err := services.EnqueuePreviewJob(recording.RecordingId)
+	job, err := services.EnqueuePreviewJob(recording.RecordingID)
 	if err != nil {
 		appG.Error(http.StatusInternalServerError, err)
 		return

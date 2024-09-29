@@ -1,10 +1,11 @@
 package v1
 
 import (
-	"github.com/srad/streamsink/helpers"
-	"github.com/srad/streamsink/models/requests"
 	"net/http"
 	"strconv"
+
+	"github.com/srad/streamsink/helpers"
+	"github.com/srad/streamsink/models/requests"
 
 	"github.com/gin-gonic/gin"
 	"github.com/srad/streamsink/app"
@@ -107,7 +108,7 @@ func GetRecording(c *gin.Context) {
 		return
 	}
 
-	recording, err := database.RecordingId(id).FindById()
+	recording, err := database.RecordingID(id).FindByID()
 	if err != nil {
 		appG.Response(http.StatusInternalServerError, err)
 		return
@@ -157,7 +158,7 @@ func GeneratePreview(c *gin.Context) {
 		return
 	}
 
-	job, err := services.EnqueuePreviewJob(database.RecordingId(id))
+	job, err := services.EnqueuePreviewJob(database.RecordingID(id))
 	if err != nil {
 		appG.Response(http.StatusInternalServerError, err)
 		return
@@ -249,7 +250,7 @@ func CutRecording(c *gin.Context) {
 		return
 	}
 
-	job, err := services.EnqueueCuttingJob(database.RecordingId(id), &helpers.CutArgs{
+	job, err := services.EnqueueCuttingJob(database.RecordingID(id), &helpers.CutArgs{
 		Starts:                cutRequest.Starts,
 		Ends:                  cutRequest.Ends,
 		DeleteAfterCompletion: cutRequest.DeleteAfterCompletion,
@@ -284,7 +285,7 @@ func Convert(c *gin.Context) {
 	}
 	mediaType := c.Param("mediaType")
 
-	job, err := services.EnqueueConversionJob(database.RecordingId(id), mediaType)
+	job, err := services.EnqueueConversionJob(database.RecordingID(id), mediaType)
 	if err != nil {
 		appG.Response(http.StatusInternalServerError, err)
 		return
@@ -391,14 +392,14 @@ func DeleteRecording(c *gin.Context) {
 		return
 	}
 
-	rec, err := database.RecordingId(id).FindRecordingById()
+	rec, err := database.RecordingID(id).FindRecordingByID()
 	if err != nil {
 		appG.Response(http.StatusInternalServerError, err)
 		return
 	}
 
 	if rec != nil {
-		if err2 := database.DestroyRecording(rec.RecordingId); err2 != nil {
+		if err2 := database.DestroyRecording(rec.RecordingID); err2 != nil {
 			appG.Response(http.StatusInternalServerError, err2)
 			return
 		}

@@ -2,14 +2,14 @@ package services
 
 import (
 	"errors"
-	"fmt"
+	"os"
+	"time"
+
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/srad/streamsink/database"
 	"github.com/srad/streamsink/models/requests"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
-	"os"
-	"time"
 )
 
 func CreateUser(auth requests.AuthenticationRequest) error {
@@ -31,8 +31,6 @@ func CreateUser(auth requests.AuthenticationRequest) error {
 
 		return nil
 	}
-
-	return nil
 }
 
 // AuthenticateUser Returns a JWT string if the authentication was successful.
@@ -52,19 +50,13 @@ func AuthenticateUser(auth requests.AuthenticationRequest) (string, error) {
 	}
 
 	generateToken := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"id":  user.UserId,
+		"id":  user.UserID,
 		"exp": time.Now().Add(time.Hour * 24).Unix(),
 	})
 
-	if token, err := generateToken.SignedString([]byte(os.Getenv("SECRET"))); err != nil {
-		fmt.Errorf("failed to generate token: %s", err.Error())
-	} else {
-		return token, err
-	}
-
-	return "", errors.New("error authenticating user")
+	return generateToken.SignedString([]byte(os.Getenv("SECRET")))
 }
 
-func GetUserById(claim uint) (*database.User, error) {
-	return database.FindUserById(claim)
+func GetUserByID(claim uint) (*database.User, error) {
+	return database.FindUserByID(claim)
 }

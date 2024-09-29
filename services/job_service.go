@@ -3,13 +3,14 @@ package services
 import (
 	"context"
 	"fmt"
+	"os"
+	"strings"
+	"time"
+
 	log "github.com/sirupsen/logrus"
 	"github.com/srad/streamsink/database"
 	"github.com/srad/streamsink/helpers"
 	"github.com/srad/streamsink/network"
-	"os"
-	"strings"
-	"time"
 )
 
 var (
@@ -32,9 +33,9 @@ func processJobs(ctx context.Context) {
 			return
 		case <-time.After(sleepBetweenRounds):
 			processing = true
-			job, err := database.GetNextJob()
-			if err != nil {
-				_ = job.Error(err)
+			job, errNextJob := database.GetNextJob()
+			if errNextJob != nil {
+				_ = job.Error(errNextJob)
 				continue
 			}
 			if job == nil {
@@ -43,29 +44,32 @@ func processJobs(ctx context.Context) {
 
 			if err := job.Activate(); err != nil {
 				log.Errorf("Error activating job: %s", err)
-				return
+				continue
 			}
 
-			var jobErr error = nil
+			network.BroadCastClients(network.JobActivate, JobMessage{Job: job})
 
 			switch job.Task {
 			case database.TaskPreview:
-				jobErr = processPreview(job)
+				handleJob(job, processPreview(job))
 			case database.TaskCut:
-				jobErr = processCutting(job)
+				handleJob(job, processCutting(job))
 			case database.TaskConvert:
-				jobErr = processConversion(job)
+				handleJob(job, processConversion(job))
 			}
+		}
+	}
+}
 
-			if jobErr != nil {
-				_ = job.Error(jobErr)
-				network.BroadCastClients(network.JobErrorEvent, JobMessage{
-					Data: jobErr,
-					Job:  job,
-				})
-			} else {
-				_ = job.Completed()
-			}
+func handleJob(job *database.Job, err error) {
+	if err != nil {
+		if err := job.Error(err); err != nil {
+			log.Errorln(err)
+		}
+		network.BroadCastClients(network.JobErrorEvent, JobMessage{Data: err, Job: job})
+	} else {
+		if err := job.Completed(); err != nil {
+			log.Errorln(err)
 		}
 	}
 }
@@ -73,14 +77,14 @@ func processJobs(ctx context.Context) {
 // PreviewJobs Handles one single job.
 // Intentionally procedural, all steps can be read from top to bottom.
 func processPreview(job *database.Job) error {
-	recording, err := job.RecordingId.FindRecordingById()
+	recording, err := job.RecordingID.FindRecordingByID()
 	if err != nil {
 		return err
 	}
 	log.Infof("[previewJobs] Recording: %v", recording)
 
 	// Delete any old previews first
-	if err := database.DestroyPreviews(recording.RecordingId); err != nil {
+	if err := database.DestroyPreviews(recording.RecordingID); err != nil {
 		log.Errorf("[Job] Error deleting existing previews: %s", err)
 	}
 
@@ -123,8 +127,8 @@ func processPreview(job *database.Job) error {
 	if _, err := helpers.GeneratePreviews(previewArgs); err != nil {
 		// 2. Delete the file if it is corrupted
 		if checkFileErr := helpers.CheckVideo(job.ChannelName.GetRecordingsPaths(job.Filename).Filepath); checkFileErr != nil {
-			if rec, errJob := job.RecordingId.FindRecordingById(); errJob != nil && rec != nil {
-				_ = database.DestroyRecording(rec.RecordingId)
+			if rec, errJob := job.RecordingID.FindRecordingByID(); errJob != nil && rec != nil {
+				_ = database.DestroyRecording(rec.RecordingID)
 			}
 
 			return fmt.Errorf("error generating previews for file %s is corrupt: %s", job.Filename, checkFileErr)
@@ -135,7 +139,7 @@ func processPreview(job *database.Job) error {
 	}
 
 	// 4. Went ok. Now generate previews.
-	if err := database.AddPreviewPaths(recording.RecordingId); err != nil {
+	if err := database.AddPreviewPaths(recording.RecordingID); err != nil {
 		return fmt.Errorf("error adding previews: %s", err)
 	}
 
@@ -179,17 +183,17 @@ func processConversion(job *database.Job) error {
 			log.Errorf("error deleting file %s: %s", result.Filepath, errDelete)
 		}
 		return message
-	} else {
-		log.Infof("[conversionJobs] Completed conversion of '%s' with args '%s'", job.Filename, *job.Args)
 	}
 
+	log.Infof("[conversionJobs] Completed conversion of '%s' with args '%s'", job.Filename, *job.Args)
+
 	// Also, when fails, destroy it, some reason it is foul.
-	if _, err := database.CreateRecording(job.ChannelId, database.RecordingFileName(result.Filename), "recording"); err != nil {
+	if _, err := database.CreateRecording(job.ChannelID, database.RecordingFileName(result.Filename), "recording"); err != nil {
 		if errRemove := os.Remove(result.Filepath); errRemove != nil {
 			return fmt.Errorf("error deleting file %s: %s", result.Filepath, errRemove)
 		}
 	} else {
-		if _, errJob := EnqueuePreviewJob(job.RecordingId); errJob != nil {
+		if _, errJob := EnqueuePreviewJob(job.RecordingID); errJob != nil {
 			return fmt.Errorf("error enqueuing preview job for %s: %s", result.Filename, errJob)
 		}
 	}
@@ -326,20 +330,20 @@ func processCutting(job *database.Job) error {
 		log.Errorf("Error reading video information for file '%s': %s", filename, err)
 	}
 
-	cutRecording, errCreate := database.CreateRecording(job.ChannelId, filename, "cut")
+	cutRecording, errCreate := database.CreateRecording(job.ChannelID, filename, "cut")
 	if errCreate != nil {
 		return errCreate
 	}
 
 	// Successfully added cut record, enqueue preview job
-	if _, err = EnqueuePreviewJob(cutRecording.RecordingId); err != nil {
-		log.Errorf("Error adding preview for cutting job %d: %s", job.JobId, err)
+	if _, err = EnqueuePreviewJob(cutRecording.RecordingID); err != nil {
+		log.Errorf("Error adding preview for cutting job %d: %s", job.JobID, err)
 		return err
 	}
 
 	// The original file shall be deleted after the process if successful.
 	if cutArgs.DeleteAfterCompletion {
-		if err := database.DestroyRecording(job.RecordingId); err != nil {
+		if err := database.DestroyRecording(job.RecordingID); err != nil {
 			log.Errorf("Eror deleting recording after cutting job for %s: %s", outputFile, err)
 		}
 	}
@@ -347,20 +351,20 @@ func processCutting(job *database.Job) error {
 	return nil
 }
 
-func EnqueueConversionJob(id database.RecordingId, mediaType string) (*database.Job, error) {
+func EnqueueConversionJob(id database.RecordingID, mediaType string) (*database.Job, error) {
 	return enqueueJob[string](id, database.TaskConvert, &mediaType)
 }
 
-func EnqueuePreviewJob(id database.RecordingId) (*database.Job, error) {
+func EnqueuePreviewJob(id database.RecordingID) (*database.Job, error) {
 	return enqueueJob[*any](id, database.TaskPreview, nil)
 }
 
-func EnqueueCuttingJob(id database.RecordingId, args *helpers.CutArgs) (*database.Job, error) {
+func EnqueueCuttingJob(id database.RecordingID, args *helpers.CutArgs) (*database.Job, error) {
 	return enqueueJob(id, database.TaskCut, args)
 }
 
-func enqueueJob[T any](id database.RecordingId, task database.JobTask, args *T) (*database.Job, error) {
-	if recording, err := id.FindRecordingById(); err != nil {
+func enqueueJob[T any](id database.RecordingID, task database.JobTask, args *T) (*database.Job, error) {
+	if recording, err := id.FindRecordingByID(); err != nil {
 		return nil, err
 	} else {
 		if job, err2 := database.CreateJob(recording, task, args); err2 != nil {
@@ -372,7 +376,7 @@ func enqueueJob[T any](id database.RecordingId, task database.JobTask, args *T) 
 	}
 }
 
-func AddPreviews(id database.RecordingId, task database.JobTask) error {
+func AddPreviews(id database.RecordingID, task database.JobTask) error {
 	if jobExists, err := database.JobExists(id, task); err != nil {
 		return err
 	} else {

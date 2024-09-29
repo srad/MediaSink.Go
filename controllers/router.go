@@ -1,9 +1,10 @@
 package controllers
 
 import (
-	"github.com/srad/streamsink/middlewares"
 	"net/http"
 	"time"
+
+	"github.com/srad/streamsink/middlewares"
 
 	"github.com/srad/streamsink/conf"
 	"github.com/srad/streamsink/docs"
@@ -13,7 +14,7 @@ import (
 	v1 "github.com/srad/streamsink/controllers/api/v1"
 
 	"github.com/gin-gonic/gin"
-	"github.com/swaggo/files"
+	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
 )
 

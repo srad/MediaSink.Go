@@ -40,7 +40,7 @@ func TestAbsoluteChannelFilePath(t *testing.T) {
 
 func TestMakeRecordingFilename(t *testing.T) {
 	channelName := ChannelName("my_channel")
-	filePattern, _ := regexp.Compile("^[a-z0-9_]+_\\d\\d\\d\\d_\\d\\d_\\d\\d_\\d\\d_\\d\\d_\\d\\d.mp4$")
+	filePattern, _ := regexp.Compile(`^[a-z0-9_]+_\\d\\d\\d\\d_\\d\\d_\\d\\d_\\d\\d_\\d\\d_\\d\\d.mp4$`)
 	expected := fmt.Sprintf("%s_%s.mp4", channelName.String(), filePattern)
 	fact, _ := ChannelName(channelName).MakeRecordingFilename()
 
@@ -51,7 +51,7 @@ func TestMakeRecordingFilename(t *testing.T) {
 
 func TestCreateMp3Filename(t *testing.T) {
 	channelName := ChannelName("my_channel")
-	filePattern, _ := regexp.Compile("^[a-z0-9_]+_\\d\\d\\d\\d_\\d\\d_\\d\\d_\\d\\d_\\d\\d_\\d\\d.mp3")
+	filePattern, _ := regexp.Compile(`^[a-z0-9_]+_\\d\\d\\d\\d_\\d\\d_\\d\\d_\\d\\d_\\d\\d_\\d\\d.mp3`)
 	expected := fmt.Sprintf("%s_%s.mp3", channelName.String(), filePattern)
 	fact, _ := channelName.MakeMp3Filename()
 

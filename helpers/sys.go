@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	log "github.com/sirupsen/logrus"
 	"io"
 	"os"
 	"os/exec"
@@ -14,6 +13,8 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	log "github.com/sirupsen/logrus"
 )
 
 var (
@@ -40,7 +41,7 @@ type PipeMessage struct {
 }
 
 type SysInfo struct {
-	CpuInfo  CPUInfo  `json:"cpuInfo"`
+	CPUInfo  CPUInfo  `json:"cpuInfo"`
 	DiskInfo DiskInfo `json:"diskInfo"`
 	NetInfo  NetInfo  `json:"netInfo"`
 }
@@ -74,7 +75,7 @@ func (CPULoad) TableName() string {
 }
 
 type CPUInfo struct {
-	LoadCpu []CPULoad `json:"loadCpu"`
+	LoadCPU []CPULoad `json:"loadCpu"`
 }
 
 type CPUMeasure struct {
@@ -169,7 +170,7 @@ func Interrupt(pid int) error {
 	return nil
 }
 
-func CpuUsage(waitSeconds uint64) (*CPUInfo, error) {
+func CPUUsage(waitSeconds uint64) (*CPUInfo, error) {
 	cpu := CPUInfo{}
 
 	measure0, err := cpuMeasures()
@@ -187,7 +188,7 @@ func CpuUsage(waitSeconds uint64) (*CPUInfo, error) {
 	for i := 0; i < len(measure1); i++ {
 		dIdle := measure1[i].Idle - measure0[i].Idle
 		dTotal := measure1[i].Total - measure0[i].Total
-		cpu.LoadCpu = append(cpu.LoadCpu, CPULoad{CPU: measure1[i].CPU, Load: 1.0 - (dIdle / dTotal)})
+		cpu.LoadCPU = append(cpu.LoadCPU, CPULoad{CPU: measure1[i].CPU, Load: 1.0 - (dIdle / dTotal)})
 	}
 
 	return &cpu, nil
@@ -225,7 +226,7 @@ func cpuMeasures() ([]CPUMeasure, error) {
 			continue
 		}
 		if strings.Contains(cols[0], "cpu") {
-			idle, total, err := parseCpuStats(cols)
+			idle, total, err := parseCPUStats(cols)
 			if err != nil {
 				return nil, err
 			}
@@ -239,7 +240,7 @@ func cpuMeasures() ([]CPUMeasure, error) {
 // OUTPUT: | CPUx | user | nice | system | idle | iowait | irq | softirq |
 //
 //	0      1      2       3       4       5       6       7
-func parseCpuStats(cols []string) (float64, float64, error) {
+func parseCPUStats(cols []string) (float64, float64, error) {
 	var vals []uint64
 	sum := uint64(0)
 
@@ -296,7 +297,7 @@ func Info(path, networkDev string, measureSeconds uint64) (*SysInfo, error) {
 		return nil, err
 	}
 
-	cpuUsage, err := CpuUsage(measureSeconds)
+	cpuUsage, err := CPUUsage(measureSeconds)
 	if err != nil {
 		return nil, err
 	}
@@ -307,7 +308,7 @@ func Info(path, networkDev string, measureSeconds uint64) (*SysInfo, error) {
 	}
 
 	info := &SysInfo{
-		CpuInfo:  *cpuUsage,
+		CPUInfo:  *cpuUsage,
 		DiskInfo: *disk,
 		NetInfo:  *diffNet,
 	}

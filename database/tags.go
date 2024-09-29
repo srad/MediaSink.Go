@@ -9,7 +9,7 @@ import (
 )
 
 var (
-	rTags, _ = regexp.Compile("^[a-z\\-0-9]+(,[a-z\\-0-9]+)*$")
+	rTags, _ = regexp.Compile(`^[a-z\-0-9]+(,[a-z\-0-9]+)*$`)
 )
 
 type Tags []string

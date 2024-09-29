@@ -3,24 +3,25 @@ package database
 import (
 	"errors"
 	"fmt"
-	log "github.com/sirupsen/logrus"
-	"gorm.io/gorm"
 	"os"
 	"path/filepath"
+
+	log "github.com/sirupsen/logrus"
+	"gorm.io/gorm"
 )
 
-type ChannelId uint
+type ChannelID uint
 
-func (channelId ChannelId) TagChannel(tags *Tags) error {
-	return Db.Table("channels").
+func (channelId ChannelID) TagChannel(tags *Tags) error {
+	return DB.Table("channels").
 		Where("channel_id = ?", channelId).
 		Update("tags", tags).Error
 }
 
-func GetChannelById(id ChannelId) (*Channel, error) {
+func GetChannelByID(id ChannelID) (*Channel, error) {
 	var channel *Channel
 
-	err := Db.Model(&Channel{}).
+	err := DB.Model(&Channel{}).
 		Where("channel_id = ?", id).
 		Select("*").
 		Find(&channel).Error
@@ -32,10 +33,10 @@ func GetChannelById(id ChannelId) (*Channel, error) {
 	return channel, nil
 }
 
-func GetChannelByIdWithRecordings(id ChannelId) (*Channel, error) {
+func GetChannelByIDWithRecordings(id ChannelID) (*Channel, error) {
 	var channel *Channel
 
-	err := Db.Model(&Channel{}).
+	err := DB.Model(&Channel{}).
 		Preload("Recordings").
 		Where("channels.channel_id = ?", id).
 		Select("*", "(SELECT COUNT(*) FROM recordings WHERE recordings.channel_id = channels.channel_id) recordings_count", "(SELECT SUM(size) FROM recordings WHERE recordings.channel_name = channels.channel_name) recordings_size").
@@ -48,28 +49,28 @@ func GetChannelByIdWithRecordings(id ChannelId) (*Channel, error) {
 	return channel, nil
 }
 
-func (channelId ChannelId) FavChannel() error {
-	return Db.Table("channels").
+func (channelId ChannelID) FavChannel() error {
+	return DB.Table("channels").
 		Where("channel_id = ?", channelId).
 		Update("fav", true).Error
 }
 
-func (channelId ChannelId) UnFavChannel() error {
-	return Db.Table("channels").
+func (channelId ChannelID) UnFavChannel() error {
+	return DB.Table("channels").
 		Where("channel_id = ?", channelId).
 		Update("fav", false).Error
 }
 
 // TryDeleteChannel Delete all recordings and mark channel to delete.
 // Often the folder is locked for multiple reasons and can only be deleted on restart.
-func TryDeleteChannel(channelId ChannelId) error {
-	if channelId == 0 {
+func TryDeleteChannel(channelID ChannelID) error {
+	if channelID == 0 {
 		return errors.New("channel id must not be 0")
 	}
 
 	var channel Channel
-	if err := Db.Model(&Channel{}).
-		Where("channel_id = ?", channelId).
+	if err := DB.Model(&Channel{}).
+		Where("channel_id = ?", channelID).
 		Select("channel_id", "channel_name").
 		First(&channel).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -78,7 +79,7 @@ func TryDeleteChannel(channelId ChannelId) error {
 		return err
 	}
 
-	if err := DestroyChannelRecordings(channelId); err != nil {
+	if err := DestroyChannelRecordings(channelID); err != nil {
 		log.Errorf("Error deleting recordings of channel '%s': %s", channel.ChannelName, err)
 		return err
 	}
@@ -90,31 +91,31 @@ func TryDeleteChannel(channelId ChannelId) error {
 
 		log.Errorf("Error deleting channel folder: %s", err)
 
-		if err2 := MarkChannelAsDeleted(channelId); err2 != nil {
+		if err2 := MarkChannelAsDeleted(channelID); err2 != nil {
 			log.Errorln(err2)
 		}
 		return err
 	}
 
 	// Removed channel folder successfully. Not delete from database.
-	if err := DeleteChannel(channelId); err != nil {
+	if err := DeleteChannel(channelID); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func DeleteChannel(channelId ChannelId) error {
-	if channelId == 0 {
+func DeleteChannel(channelID ChannelID) error {
+	if channelID == 0 {
 		return errors.New("channel id must not be 0")
 	}
 
-	return Db.Where("channel_id = ?", channelId).Delete(&Channel{}).Error
+	return DB.Where("channel_id = ?", channelID).Delete(&Channel{}).Error
 }
 
-func MarkChannelAsDeleted(channelId ChannelId) error {
-	if err := Db.Model(&Channel{}).
-		Where("channel_id = ?", channelId).
+func MarkChannelAsDeleted(channelID ChannelID) error {
+	if err := DB.Model(&Channel{}).
+		Where("channel_id = ?", channelID).
 		Update("deleted", true).Error; err != nil {
 		return fmt.Errorf("error marking channel as deleted: %s", err)
 	}
@@ -122,8 +123,8 @@ func MarkChannelAsDeleted(channelId ChannelId) error {
 	return nil
 }
 
-func DestroyChannel(channelId ChannelId) error {
-	channel, err := GetChannelById(channelId)
+func DestroyChannel(channelID ChannelID) error {
+	channel, err := GetChannelByID(channelID)
 	if err != nil {
 		return err
 	}
@@ -133,14 +134,14 @@ func DestroyChannel(channelId ChannelId) error {
 		log.Infof("Error deleting channel folder: %s", err)
 		return err
 	}
-	if err := Db.Where("channel_id = ?", channel.ChannelId).Delete(Channel{}).Error; err != nil {
+	if err := DB.Where("channel_id = ?", channel.ChannelID).Delete(Channel{}).Error; err != nil {
 		return err
 	}
 	return nil
 }
 
-func (channelId ChannelId) PauseChannel(pauseVal bool) error {
-	if err := Db.Table("channels").
+func (channelId ChannelID) PauseChannel(pauseVal bool) error {
+	if err := DB.Table("channels").
 		Where("channel_id = ?", channelId).
 		Update("is_paused", pauseVal).Error; err != nil {
 		return err
@@ -149,8 +150,8 @@ func (channelId ChannelId) PauseChannel(pauseVal bool) error {
 	return nil
 }
 
-func NewRecording(channelId ChannelId, videoType string) (*Recording, string, error) {
-	channel, err := GetChannelById(channelId)
+func NewRecording(channelID ChannelID, videoType string) (*Recording, string, error) {
+	channel, err := GetChannelByID(channelID)
 	if err != nil {
 		return nil, "", err
 	}
@@ -160,7 +161,7 @@ func NewRecording(channelId ChannelId, videoType string) (*Recording, string, er
 	filePath := channel.ChannelName.AbsoluteChannelFilePath(filename)
 
 	return &Recording{
-			ChannelId:     channel.ChannelId,
+			ChannelID:     channel.ChannelID,
 			ChannelName:   channel.ChannelName,
 			Filename:      filename,
 			Bookmark:      false,

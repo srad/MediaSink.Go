@@ -1,10 +1,11 @@
 package database
 
 import (
-	"github.com/srad/streamsink/helpers"
 	"path/filepath"
 	"runtime"
 	"testing"
+
+	"github.com/srad/streamsink/helpers"
 )
 
 var (

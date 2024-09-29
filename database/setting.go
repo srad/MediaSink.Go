@@ -3,9 +3,10 @@ package database
 import (
 	"errors"
 	"fmt"
+	"strconv"
+
 	log "github.com/sirupsen/logrus"
 	"gorm.io/gorm"
-	"strconv"
 )
 
 type Setting struct {
@@ -19,9 +20,8 @@ const (
 )
 
 func InitSettings() error {
-	if err := Db.FirstOrCreate(
+	if err := DB.FirstOrCreate(
 		&Setting{SettingKey: ReqInterval, SettingValue: "15", SettingType: "int"}).Error; err != nil {
-		log.Errorf("[Setting] Init error: %s", err)
 		return err
 	}
 
@@ -31,7 +31,7 @@ func InitSettings() error {
 func GetValue(settingKey string) (interface{}, error) {
 	sett := Setting{}
 
-	if err := Db.Table("settings").First(&sett, &Setting{SettingKey: settingKey}).Error; err != nil {
+	if err := DB.Table("settings").First(&sett, &Setting{SettingKey: settingKey}).Error; err != nil {
 		log.Errorf("[GetValue] Error retreiving setting: %s", err)
 		return nil, err
 	}
@@ -50,9 +50,9 @@ func GetValue(settingKey string) (interface{}, error) {
 }
 
 func (setting *Setting) Save() error {
-	if err := Db.Model(&setting).Where("setting_key = ? ", setting.SettingKey).Error; err != nil {
+	if err := DB.Model(&setting).Where("setting_key = ? ", setting.SettingKey).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			if err2 := Db.Create(&setting).Error; err2 != nil {
+			if err2 := DB.Create(&setting).Error; err2 != nil {
 				return err2
 			}
 		} else {

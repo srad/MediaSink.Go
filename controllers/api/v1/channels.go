@@ -2,16 +2,17 @@ package v1
 
 import (
 	"fmt"
+	"io"
+	"net/http"
+	"os"
+	"strconv"
+
 	"github.com/gin-gonic/gin"
 	log "github.com/sirupsen/logrus"
 	"github.com/srad/streamsink/app"
 	"github.com/srad/streamsink/database"
 	"github.com/srad/streamsink/models/requests"
 	"github.com/srad/streamsink/services"
-	"io"
-	"net/http"
-	"os"
-	"strconv"
 )
 
 // https://github.com/swaggo/swag/blob/master/README.md#declarative-comments-format
@@ -140,7 +141,7 @@ func CreateChannel(c *gin.Context) {
 func UpdateChannel(c *gin.Context) {
 	appG := app.Gin{C: c}
 
-	// Id
+	// ID
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
 		appG.Error(http.StatusBadRequest, err)
@@ -156,12 +157,12 @@ func UpdateChannel(c *gin.Context) {
 	}
 
 	channel := database.Channel{
-		ChannelId:   database.ChannelId(id),
+		ChannelID:   database.ChannelID(id),
 		ChannelName: database.ChannelName(data.ChannelName),
 		DisplayName: data.DisplayName,
 		SkipStart:   data.SkipStart,
 		MinDuration: data.MinDuration,
-		Url:         data.Url,
+		URL:         data.Url,
 		Tags:        data.Tags,
 		Fav:         data.Fav,
 		IsPaused:    data.IsPaused,
@@ -175,8 +176,8 @@ func UpdateChannel(c *gin.Context) {
 		return
 	}
 
-	if channel.IsPaused == true {
-		if err := services.TerminateProcess(channel.ChannelId); err != nil {
+	if channel.IsPaused {
+		if err := services.TerminateProcess(channel.ChannelID); err != nil {
 			message := fmt.Errorf("error stopping stream: %s", err)
 			log.Errorln(message)
 			appG.Error(http.StatusInternalServerError, message)
@@ -206,7 +207,7 @@ func DeleteChannel(c *gin.Context) {
 		return
 	}
 
-	if err := services.DeleteChannel(database.ChannelId(id)); err != nil {
+	if err := services.DeleteChannel(database.ChannelID(id)); err != nil {
 		appG.Error(http.StatusInternalServerError, err)
 		return
 	}
@@ -241,8 +242,8 @@ func TagChannel(c *gin.Context) {
 		return
 	}
 
-	channelId := database.ChannelId(id)
-	if err := channelId.TagChannel(request.Tags); err != nil {
+	channelID := database.ChannelID(id)
+	if err := channelID.TagChannel(request.Tags); err != nil {
 		log.Errorln(err)
 		appG.Error(http.StatusInternalServerError, err)
 		return
@@ -271,10 +272,10 @@ func ResumeChannel(c *gin.Context) {
 		return
 	}
 
-	channelId := database.ChannelId(id)
+	channelID := database.ChannelID(id)
 
-	if err := services.Start(channelId); err != nil {
-		log.Errorf("[ResumeChannel] Error resuming channel-id %d: %s", channelId, err)
+	if err := services.Start(channelID); err != nil {
+		log.Errorf("[ResumeChannel] Error resuming channel-id %d: %s", channelID, err)
 		appG.Error(http.StatusInternalServerError, err)
 		return
 	}
@@ -301,9 +302,9 @@ func FavChannel(c *gin.Context) {
 		return
 	}
 
-	channelId := database.ChannelId(id)
+	channelID := database.ChannelID(id)
 
-	if err := channelId.FavChannel(); err != nil {
+	if err := channelID.FavChannel(); err != nil {
 		appG.Error(http.StatusInternalServerError, err)
 		return
 	}
@@ -330,9 +331,9 @@ func UnFavChannel(c *gin.Context) {
 		return
 	}
 
-	channelId := database.ChannelId(id)
+	channelID := database.ChannelID(id)
 
-	if err := channelId.UnFavChannel(); err != nil {
+	if err := channelID.UnFavChannel(); err != nil {
 		appG.Error(http.StatusInternalServerError, err)
 		return
 	}
@@ -369,9 +370,8 @@ func UploadChannel(c *gin.Context) {
 		return
 	}
 
-	channelId := database.ChannelId(id)
-	recording, outputPath, err := database.NewRecording(channelId, "recording")
-	database.CreateRecording(recording.ChannelId, recording.Filename, "recording")
+	channelID := database.ChannelID(id)
+	recording, outputPath, err := database.NewRecording(channelID, "recording")
 
 	out, err := os.Create(outputPath)
 	if err != nil {
@@ -390,7 +390,7 @@ func UploadChannel(c *gin.Context) {
 		return
 	}
 
-	if _, err := services.EnqueuePreviewJob(recording.RecordingId); err != nil {
+	if _, err := services.EnqueuePreviewJob(recording.RecordingID); err != nil {
 		appG.Error(http.StatusInternalServerError, err)
 		return
 	}
@@ -417,13 +417,13 @@ func PauseChannel(c *gin.Context) {
 		return
 	}
 
-	channelId := database.ChannelId(id)
+	channelID := database.ChannelID(id)
 
-	if err := services.TerminateProcess(channelId); err != nil {
+	if err := services.TerminateProcess(channelID); err != nil {
 		log.Errorf("Error teminating process: %s", err)
 	}
 
-	if err := channelId.PauseChannel(true); err != nil {
+	if err := channelID.PauseChannel(true); err != nil {
 		appG.Error(http.StatusInternalServerError, err)
 		return
 	}

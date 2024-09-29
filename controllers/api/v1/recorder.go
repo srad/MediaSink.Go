@@ -1,9 +1,10 @@
 package v1
 
 import (
+	"net/http"
+
 	log "github.com/sirupsen/logrus"
 	"github.com/srad/streamsink/models/responses"
-	"net/http"
 
 	"github.com/gin-gonic/gin"
 	"github.com/srad/streamsink/app"

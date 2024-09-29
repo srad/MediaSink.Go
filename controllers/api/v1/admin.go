@@ -1,8 +1,9 @@
 package v1
 
 import (
-	"github.com/srad/streamsink/models/responses"
 	"net/http"
+
+	"github.com/srad/streamsink/models/responses"
 
 	"github.com/gin-gonic/gin"
 	"github.com/srad/streamsink/app"

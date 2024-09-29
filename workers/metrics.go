@@ -15,36 +15,36 @@ var (
 func StartMetrics(networkDev string) {
 	ctx, c := context.WithCancel(context.Background())
 	cancelMetrics = c
-	go trackCpu(ctx)
-	go trackNetwork(networkDev, ctx)
+	go trackCPU(ctx)
+	go trackNetwork(ctx, networkDev)
 }
 
 func StopMetrics() {
 	cancelMetrics()
 }
 
-func trackCpu(ctx context.Context) {
+func trackCPU(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			log.Infoln("[trackCpu] stopped")
+			log.Infoln("[trackCPU] stopped")
 			return
 		default:
 			// sleeps automatically
-			cpu, err := helpers.CpuUsage(30)
+			cpu, err := helpers.CPUUsage(30)
 			if err != nil {
-				log.Errorf("[trackCpu] Error reasing cpu: %s", err)
+				log.Errorf("[trackCPU] Error reasing cpu: %s", err)
 				return
 			}
 
-			if err := database.Db.Model(&helpers.CPULoad{}).Create(cpu.LoadCpu).Error; err != nil {
-				log.Errorf("[trackCpu] Error saving metric: %s", err)
+			if err := database.DB.Model(&helpers.CPULoad{}).Create(cpu.LoadCPU).Error; err != nil {
+				log.Errorf("[trackCPU] Error saving metric: %s", err)
 			}
 		}
 	}
 }
 
-func trackNetwork(networkDev string, ctx context.Context) {
+func trackNetwork(ctx context.Context, networkDev string) {
 	for {
 		select {
 		case <-ctx.Done():
@@ -56,8 +56,8 @@ func trackNetwork(networkDev string, ctx context.Context) {
 				log.Errorln("[trackNetwork] stopped")
 				return
 			}
-			if err := database.Db.Model(&helpers.NetInfo{}).Create(netInfo).Error; err != nil {
-				log.Errorf("[trackCpu] Error saving metric: %s", err)
+			if err := database.DB.Model(&helpers.NetInfo{}).Create(netInfo).Error; err != nil {
+				log.Errorf("[trackCPU] Error saving metric: %s", err)
 			}
 		}
 	}

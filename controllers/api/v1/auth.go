@@ -1,11 +1,12 @@
 package v1
 
 import (
+	"net/http"
+
 	"github.com/gin-gonic/gin"
 	"github.com/srad/streamsink/app"
 	"github.com/srad/streamsink/models/requests"
 	"github.com/srad/streamsink/services"
-	"net/http"
 )
 
 // CreateUser godoc

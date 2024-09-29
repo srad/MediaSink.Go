@@ -3,19 +3,20 @@ package services
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
+
 	log "github.com/sirupsen/logrus"
 	"github.com/srad/streamsink/conf"
 	"github.com/srad/streamsink/database"
 	"github.com/srad/streamsink/helpers"
-	"os"
-	"path/filepath"
 )
 
 var (
-	ctx, cancelImport     = context.WithCancel(context.Background())
-	importing             = false
-	importSize        int = 0
-	importProgress    int = 0
+	ctx, cancelImport = context.WithCancel(context.Background())
+	importing         = false
+	importSize        int
+	importProgress    int
 )
 
 func StartImport() {
@@ -127,7 +128,7 @@ func ImportChannels(context.Context) error {
 			}
 
 			// File seems ok, try to add.
-			newRecording, errAdd := database.AddIfNotExists(newChannel.ChannelId, newChannel.ChannelName, database.RecordingFileName(file.Name()))
+			newRecording, errAdd := database.AddIfNotExists(newChannel.ChannelID, newChannel.ChannelName, database.RecordingFileName(file.Name()))
 			if errAdd != nil {
 				log.Errorf("[Import/%s] Error: %s", channelName, errAdd)
 				continue
@@ -140,12 +141,12 @@ func ImportChannels(context.Context) error {
 			// ---------------------------------------------------------------------------------
 			if database.PreviewsExist(newRecording.ChannelName, newRecording.Filename) {
 				log.Infof("[Import/%s] Preview files exist", channelName)
-				if err := AddPreviews(newRecording.RecordingId, database.TaskPreview); err != nil {
+				if err := AddPreviews(newRecording.RecordingID, database.TaskPreview); err != nil {
 					log.Errorln(err)
 				}
 			} else {
 				log.Infof("[Import/%s] Adding job for: %s", channelName, file.Name())
-				if _, err := EnqueuePreviewJob(newRecording.RecordingId); err != nil {
+				if _, err := EnqueuePreviewJob(newRecording.RecordingID); err != nil {
 					log.Errorln(err)
 				}
 			}

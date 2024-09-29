@@ -11,5 +11,4 @@ type Gin struct {
 // Response setting gin.JSON
 func (g *Gin) Response(httpCode int, data interface{}) {
 	g.C.JSON(httpCode, data)
-	return
 }

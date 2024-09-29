@@ -4,15 +4,16 @@ import (
 	"database/sql/driver"
 	"errors"
 	"fmt"
-	log "github.com/sirupsen/logrus"
-	"github.com/srad/streamsink/conf"
-	"github.com/srad/streamsink/helpers"
 	"io"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
+
+	log "github.com/sirupsen/logrus"
+	"github.com/srad/streamsink/conf"
+	"github.com/srad/streamsink/helpers"
 )
 
 var (

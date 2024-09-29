@@ -52,19 +52,19 @@ func checkStreams() {
 		}
 
 		// Get the current models value, in case it case been updated meanwhile.
-		if result, err := database.GetChannelById(channel.ChannelId); err != nil {
+		if result, err := database.GetChannelByID(channel.ChannelID); err != nil {
 			log.Errorf("[checkStreams] Error channel %s: %s", channel.ChannelName, err)
 			continue
 		} else {
-			if IsRecordingStream(result.ChannelId) || result.IsPaused {
+			if IsRecordingStream(result.ChannelID) || result.IsPaused {
 				continue
 			}
 
-			if err := Start(result.ChannelId); err != nil {
-				network.BroadCastClients(network.ChannelOfflineEvent, result.ChannelId)
+			if err := Start(result.ChannelID); err != nil {
+				network.BroadCastClients(network.ChannelOfflineEvent, result.ChannelID)
 			} else {
-				network.BroadCastClients(network.ChannelOnlineEvent, result.ChannelId)
-				network.BroadCastClients(network.ChannelStartEvent, result.ChannelId)
+				network.BroadCastClients(network.ChannelOnlineEvent, result.ChannelID)
+				network.BroadCastClients(network.ChannelStartEvent, result.ChannelID)
 			}
 
 			// StopRecorder between each check
@@ -89,14 +89,12 @@ func StartRecorder() {
 	log.Infoln("[Recorder] StartRecorder recording thread")
 }
 
-func StopRecorder() error {
+func StopRecorder() {
 	log.Infoln("[StopRecorder] Stopping recorder ...")
 
 	isPaused = true
 	cancelRecorder()
 	TerminateAll()
-
-	return nil
 }
 
 func GeneratePosters() error {
