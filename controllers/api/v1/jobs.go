@@ -14,18 +14,18 @@ import (
 	"github.com/srad/streamsink/database"
 )
 
-// AddJob godoc
+// AddPreviewJobs godoc
 // @Summary     Enqueue a preview job
 // @Description Enqueue a preview job for a video in a channel. For now only preview jobs allowed via REST
 // @Tags        jobs
 // @Param       id path string  true  "Recording item id"
 // @Accept      json
 // @Produce     json
-// @Success     200 {object} database.Job
-// @Failure     400 {} http.StatusBadRequest
-// @Failure     500 {} http.StatusInternalServerError
+// @Success     200 {object} []database.Job
+// @Failure     400 {} string "Error message"
+// @Failure     500 {} string "Error message"
 // @Router      /jobs/{id} [post]
-func AddJob(c *gin.Context) {
+func AddPreviewJobs(c *gin.Context) {
 	appG := app.Gin{C: c}
 
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
@@ -36,17 +36,17 @@ func AddJob(c *gin.Context) {
 
 	recording, err := database.RecordingID(id).FindRecordingByID()
 	if err != nil {
-		appG.Error(http.StatusBadRequest, err)
+		appG.Error(http.StatusInternalServerError, err)
 		return
 	}
 
-	job, err := services.EnqueuePreviewJob(recording.RecordingID)
+	job1, job2, job3, err := recording.EnqueuePreviewsJob()
 	if err != nil {
 		appG.Error(http.StatusInternalServerError, err)
 		return
 	}
 
-	appG.Response(http.StatusOK, &job)
+	appG.Response(http.StatusOK, []*database.Job{job1, job2, job3})
 }
 
 // StopJob godoc
@@ -57,8 +57,8 @@ func AddJob(c *gin.Context) {
 // @Accept      json
 // @Produce     json
 // @Success     200
-// @Failure     400 {string} http.StatusBadRequest
-// @Failure     500 {string} http.StatusInternalServerError
+// @Failure     400 {} string "Error message"
+// @Failure     500 {} string "Error message"
 // @Router      /jobs/stop/{pid} [post]
 func StopJob(c *gin.Context) {
 	appG := app.Gin{C: c}
@@ -85,8 +85,8 @@ func StopJob(c *gin.Context) {
 // @Accept      json
 // @Produce     json
 // @Success     200 {} http.StatusOK
-// @Failure     400 {string} http.StatusBadRequest
-// @Failure     500 {string} http.StatusInternalServerError
+// @Failure     400 {} string "Error message"
+// @Failure     500 {} string "Error message"
 // @Router      /jobs/{id} [delete]
 func DestroyJob(c *gin.Context) {
 	appG := app.Gin{C: c}
@@ -98,7 +98,7 @@ func DestroyJob(c *gin.Context) {
 	}
 
 	if err := services.DeleteJob(uint(id)); err != nil {
-		appG.Error(http.StatusBadRequest, err)
+		appG.Error(http.StatusInternalServerError, err)
 		return
 	}
 
@@ -113,7 +113,8 @@ func DestroyJob(c *gin.Context) {
 // @Produce     json
 // @Param       JobsRequest body requests.JobsRequest true "Job pagination properties"
 // @Success     200 {object} responses.JobsResponse
-// @Failure     500 {} string http.StatusInternalServerError
+// @Failure     400 {} string "Error message"
+// @Failure     500 {} string "Error message"
 // @Router      /jobs/list [post]
 func JobsList(c *gin.Context) {
 	appG := app.Gin{C: c}

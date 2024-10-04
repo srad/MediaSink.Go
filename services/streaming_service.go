@@ -135,12 +135,9 @@ func CaptureChannel(id database.ChannelID, url string, skip uint) error {
 		} else {
 			network.BroadCastClients(network.RecordingAddEvent, newRecording)
 
-			job, err := EnqueuePreviewJob(newRecording.RecordingID)
-			if err != nil {
-				log.Errorf("[FinishRecording] Error enqueuing job for %s", err)
+			if _, _, _, errPreviews := newRecording.EnqueuePreviewsJob(); errPreviews != nil {
 				return err
 			}
-			log.Infof("[FinishRecording] Job enqueued %v\n", job)
 		}
 	} else { // Throw away
 		log.Infof("[FinishRecording] Deleting stream '%s/%s' because it is too short (%dmin)", channel.ChannelName, recording.Filename, duration)

@@ -134,19 +134,33 @@ func ImportChannels(context.Context) error {
 				continue
 			}
 
-			// ---------------------------------------------------------------------------------
-			// Not new record inserted and therefore not automatically new previews generated.
-			// So check if the files exist and if not generate them.
-			// Create preview if any not existent
-			// ---------------------------------------------------------------------------------
-			if database.PreviewsExist(newRecording.ChannelName, newRecording.Filename) {
-				log.Infof("[Import/%s] Preview files exist", channelName)
-				if err := AddPreviews(newRecording.RecordingID, database.TaskPreview); err != nil {
+			// Check if the preview files exist and add to the record data otherwise generate new.
+			if database.PreviewFileExists(newRecording.ChannelName, newRecording.Filename, database.PreviewCover) {
+				if err := newRecording.UpdatePreviewPath(database.PreviewCover); err != nil {
 					log.Errorln(err)
 				}
 			} else {
-				log.Infof("[Import/%s] Adding job for: %s", channelName, file.Name())
-				if _, err := EnqueuePreviewJob(newRecording.RecordingID); err != nil {
+				if _, err := newRecording.EnqueuePreviewCoverJob(); err != nil {
+					log.Errorln(err)
+				}
+			}
+
+			if database.PreviewFileExists(newRecording.ChannelName, newRecording.Filename, database.PreviewStripe) {
+				if err := newRecording.UpdatePreviewPath(database.PreviewStripe); err != nil {
+					log.Errorln(err)
+				}
+			} else {
+				if _, err := newRecording.EnqueuePreviewStripeJob(); err != nil {
+					log.Errorln(err)
+				}
+			}
+
+			if database.PreviewFileExists(newRecording.ChannelName, newRecording.Filename, database.PreviewVideo) {
+				if err := newRecording.UpdatePreviewPath(database.PreviewVideo); err != nil {
+					log.Errorln(err)
+				}
+			} else {
+				if _, err := newRecording.EnqueuePreviewVideoJob(); err != nil {
 					log.Errorln(err)
 				}
 			}

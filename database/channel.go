@@ -81,7 +81,7 @@ func DestroyChannelRecordings(channelID ChannelID) error {
 	}
 
 	for _, recording := range recordings {
-		if err := DestroyRecording(recording.RecordingID); err != nil {
+		if err := recording.DestroyRecording(); err != nil {
 			log.Errorf("Error deleting recording %s: %s", recording.Filename, err)
 		}
 	}

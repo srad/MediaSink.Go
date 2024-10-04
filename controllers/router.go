@@ -90,7 +90,7 @@ func Setup(version, commit string) http.Handler {
 		apiV1.PATCH("/channels/:id/tags", middlewares.CheckAuthorizationHeader, v1.TagChannel)
 
 		// Jobs
-		apiV1.POST("/jobs/:id", middlewares.CheckAuthorizationHeader, v1.AddJob)
+		apiV1.POST("/jobs/:id", middlewares.CheckAuthorizationHeader, v1.AddPreviewJobs)
 		apiV1.POST("/jobs/stop/:pid", middlewares.CheckAuthorizationHeader, v1.StopJob)
 		apiV1.DELETE("/jobs/:id", middlewares.CheckAuthorizationHeader, v1.DestroyJob)
 		apiV1.POST("/jobs/list", middlewares.CheckAuthorizationHeader, v1.JobsList)
@@ -121,7 +121,7 @@ func Setup(version, commit string) http.Handler {
 
 		apiV1.POST("/recordings/:id/:mediaType/convert", middlewares.CheckAuthorizationHeader, v1.Convert)
 		apiV1.POST("/recordings/:id/cut", middlewares.CheckAuthorizationHeader, v1.CutRecording)
-		apiV1.POST("/recordings/:id/preview", middlewares.CheckAuthorizationHeader, v1.GeneratePreview)
+		apiV1.POST("/recordings/:id/preview", middlewares.CheckAuthorizationHeader, v1.GeneratePreviews)
 
 		apiV1.DELETE("/recordings/:id", middlewares.CheckAuthorizationHeader, v1.DeleteRecording)
 

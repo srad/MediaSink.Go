@@ -27,7 +27,7 @@ type RecordingPaths struct {
 	AbsoluteStripePath     string
 	AbsoluteRecordingsPath string
 	AbsoluteVideosPath     string
-	AbsolutePosterPath     string
+	AbsoluteCoverPath      string
 	Filepath               string
 	RelativeVideosPath     string
 	RelativeStripePath     string
@@ -174,10 +174,10 @@ func (channelName ChannelName) GetRecordingsPaths(name RecordingFileName) Record
 		Filepath:           channelName.AbsoluteChannelFilePath(name),
 		RelativeVideosPath: filepath.Join(channelName.RelativeDataPath(), helpers.VideosFolder, mp4),
 		RelativeStripePath: filepath.Join(channelName.RelativeDataPath(), helpers.StripesFolder, stripeJpg),
-		RelativeCoverPath:  filepath.Join(channelName.RelativeDataPath(), helpers.PostersFolder, posterJpg),
+		RelativeCoverPath:  filepath.Join(channelName.RelativeDataPath(), helpers.CoverFolder, posterJpg),
 		AbsoluteVideosPath: filepath.Join(channelName.AbsoluteChannelDataPath(), helpers.VideosFolder, mp4),
 		AbsoluteStripePath: filepath.Join(channelName.AbsoluteChannelDataPath(), helpers.StripesFolder, stripeJpg),
-		AbsolutePosterPath: filepath.Join(channelName.AbsoluteChannelDataPath(), helpers.PostersFolder, posterJpg),
+		AbsoluteCoverPath:  filepath.Join(channelName.AbsoluteChannelDataPath(), helpers.CoverFolder, posterJpg),
 		JPG:                stripeJpg,
 		MP4:                mp4,
 	}

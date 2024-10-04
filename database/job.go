@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/srad/streamsink/network"
 	"time"
 
 	"gorm.io/gorm/clause"
@@ -15,7 +16,9 @@ import (
 
 const (
 	TaskConvert        JobTask   = "convert"
-	TaskPreview        JobTask   = "preview"
+	TaskPreviewCover   JobTask   = "preview-cover"
+	TaskPreviewStrip   JobTask   = "preview-stripe"
+	TaskPreviewVideo   JobTask   = "preview-video"
 	TaskCut            JobTask   = "cut"
 	StatusJobCompleted JobStatus = "completed"
 	StatusJobOpen      JobStatus = "open"
@@ -46,7 +49,7 @@ type Job struct {
 	Task   JobTask   `json:"task" gorm:"not null;default:preview" extensions:"!x-nullable"`
 	Status JobStatus `json:"status" gorm:"not null;default:completed" extensions:"!x-nullable"`
 
-	Filepath    string     `json:"pathRelative" gorm:"not null;default:null;" extensions:"!x-nullable"`
+	Filepath    string     `json:"filepath" gorm:"not null;default:null;" extensions:"!x-nullable"`
 	Active      bool       `json:"active" gorm:"not null;default:false" extensions:"!x-nullable"`
 	CreatedAt   time.Time  `json:"createdAt" gorm:"not null;default:current_timestamp;index:idx_create_at" extensions:"!x-nullable"`
 	StartedAt   *time.Time `json:"startedAt" gorm:"default:null" extensions:"!x-nullable"`
@@ -130,17 +133,21 @@ func (job *Job) updateStatus(status JobStatus, reason *string) error {
 		Updates(map[string]interface{}{"status": status, "info": reason, "active": false}).Error
 }
 
-func JobExists(recordingID RecordingID, task JobTask) (bool, error) {
+func JobExists(recordingID RecordingID, task JobTask) (*Job, bool, error) {
 	if recordingID == 0 {
-		return false, errors.New("recording id is 0")
+		return nil, false, errors.New("recording id is 0")
 	}
 
-	var count int64 = 0
-	if err := DB.Model(&Job{}).Where("recording_id = ? AND task = ?", recordingID, task).Count(&count).Error; err != nil {
-		return false, err
+	var job *Job
+	result := DB.Model(&Job{}).Where("recording_id = ? AND task = ? AND status = ?", recordingID, task, StatusJobOpen).First(&job)
+	if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+		return nil, false, nil
+	}
+	if result.Error != nil {
+		return nil, false, result.Error
 	}
 
-	return count > 0, nil
+	return job, result.RowsAffected > 0, nil
 }
 
 // DeleteJob If an existing PID is assigned to the job,
@@ -176,7 +183,9 @@ func DeleteJob(id uint) error {
 func GetNextJob() (*Job, error) {
 	var job *Job
 	err := DB.Where("status = ? AND active = ?", StatusJobOpen, false).
-		Order("jobs.created_at asc").
+		Preload("Channel").
+		Preload("Recording").
+		Order("jobs.created_at ASC").
 		First(&job).Error
 
 	if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -284,4 +293,74 @@ func CreateJob[T any](recording *Recording, task JobTask, args *T) (*Job, error)
 	err := job.CreateJob()
 
 	return job, err
+}
+
+func (recording *Recording) EnqueueConversionJob(mediaType string) (*Job, error) {
+	return enqueueJob[string](recording, TaskConvert, &mediaType)
+}
+
+func (recording *Recording) EnqueuePreviewsJob() (*Job, *Job, *Job, error) {
+	job1, err1 := recording.EnqueuePreviewCoverJob()
+	job2, err2 := recording.EnqueuePreviewStripeJob()
+	job3, err3 := recording.EnqueuePreviewVideoJob()
+
+	return job1, job2, job3, errors.Join(err1, err2, err3)
+}
+
+func (recording *Recording) EnqueuePreviewStripeJob() (*Job, error) {
+	job, exists, err := JobExists(recording.RecordingID, TaskPreviewStrip)
+	if err != nil {
+		return job, err
+	}
+	if exists {
+		return job, nil
+	}
+	return enqueueJob[*any](recording, TaskPreviewStrip, nil)
+}
+
+func (recording *Recording) EnqueuePreviewCoverJob() (*Job, error) {
+	job, exists, err := JobExists(recording.RecordingID, TaskPreviewCover)
+	if err != nil {
+		return job, err
+	}
+	if exists {
+		return job, nil
+	}
+	return enqueueJob[*any](recording, TaskPreviewCover, nil)
+}
+
+func (recording *Recording) EnqueuePreviewVideoJob() (*Job, error) {
+	job, exists, err := JobExists(recording.RecordingID, TaskPreviewVideo)
+	if err != nil {
+		return job, err
+	}
+	if exists {
+		return job, nil
+	}
+	return enqueueJob[*any](recording, TaskPreviewVideo, nil)
+}
+
+func (recording *Recording) EnqueueCuttingJob(args *helpers.CutArgs) (*Job, error) {
+	return enqueueJob(recording, TaskCut, args)
+}
+
+func enqueueJob[T any](recording *Recording, task JobTask, args *T) (*Job, error) {
+	if job, err := CreateJob(recording, task, args); err != nil {
+		return nil, err
+	} else {
+		network.BroadCastClients(network.JobCreateEvent, job)
+		return job, nil
+	}
+}
+
+func EnqueueCuttingJob(id uint, args *helpers.CutArgs) (*Job, error) {
+	if rec, err := RecordingID(id).FindRecordingByID(); err != nil {
+		return nil, err
+	} else {
+		if job, err := rec.EnqueueCuttingJob(args); err != nil {
+			return nil, err
+		} else {
+			return job, nil
+		}
+	}
 }

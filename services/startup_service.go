@@ -29,7 +29,7 @@ func deleteOrphanedRecordings() error {
 	for _, recording := range recordings {
 		filePath := recording.ChannelName.AbsoluteChannelFilePath(recording.Filename)
 		if !utils.FileExists(filePath) {
-			database.DestroyRecording(recording.RecordingID)
+			recording.DestroyRecording()
 		}
 	}
 
@@ -79,11 +79,11 @@ func fixOrphanedFiles() error {
 	}
 
 	for _, recording := range recordings {
-		log.Infof("Handling channel file %s", recording.AbsoluteFilePath())
-		err := helpers.CheckVideo(recording.AbsoluteFilePath())
+		log.Infof("Handling channel file %s", recording.AbsoluteChannelFilepath())
+		err := helpers.CheckVideo(recording.AbsoluteChannelFilepath())
 		if err != nil {
 			log.Errorf("The file '%s' is corrupted, deleting from disk ... ", recording.Filename)
-			if err := database.DestroyRecording(recording.RecordingID); err != nil {
+			if err := recording.DestroyRecording(); err != nil {
 				log.Errorf("Deleted file '%s'", recording.Filename)
 			}
 		}

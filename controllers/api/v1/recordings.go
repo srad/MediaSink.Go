@@ -27,7 +27,7 @@ func GetRecordings(c *gin.Context) {
 	recordings, err := database.RecordingsList()
 
 	if err != nil {
-		appG.Response(http.StatusInternalServerError, nil)
+		appG.Error(http.StatusInternalServerError, nil)
 		return
 	}
 
@@ -47,7 +47,7 @@ func GeneratePosters(c *gin.Context) {
 	appG := app.Gin{C: c}
 
 	if err := services.GeneratePosters(); err != nil {
-		appG.Response(http.StatusInternalServerError, err)
+		appG.Error(http.StatusInternalServerError, err)
 		return
 	}
 
@@ -67,7 +67,7 @@ func UpdateVideoInfo(c *gin.Context) {
 	appG := app.Gin{C: c}
 	// TODO Make into a cancelable job
 	if err := services.UpdateVideoInfo(); err != nil {
-		appG.Response(http.StatusInternalServerError, err)
+		appG.Error(http.StatusInternalServerError, err)
 		return
 	}
 	appG.Response(http.StatusOK, nil)
@@ -104,13 +104,13 @@ func GetRecording(c *gin.Context) {
 
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		appG.Response(http.StatusBadRequest, err)
+		appG.Error(http.StatusBadRequest, err)
 		return
 	}
 
-	recording, err := database.RecordingID(id).FindByID()
+	recording, err := database.RecordingID(id).FindRecordingByID()
 	if err != nil {
-		appG.Response(http.StatusInternalServerError, err)
+		appG.Error(http.StatusInternalServerError, err)
 		return
 	}
 
@@ -131,40 +131,44 @@ func GetBookmarks(c *gin.Context) {
 	recordings, err := database.BookmarkList()
 
 	if err != nil {
-		appG.Response(http.StatusInternalServerError, nil)
+		appG.Error(http.StatusInternalServerError, nil)
 		return
 	}
 
 	appG.Response(http.StatusOK, recordings)
 }
 
-// GeneratePreview godoc
+// GeneratePreviews godoc
 // @Summary     Generate preview for a certain video in a channel
 // @Description Generate preview for a certain video in a channel.
 // @Tags        recordings
 // @Accept      json
 // @Produce     json
 // @Param       id path uint true "Recording item id"
-// @Success     200 {object} database.Job
+// @Success     200 {object} []database.Job
 // @Failure     400 {} string "Error message"
 // @Failure     500 {} string "Error message"
 // @Router      /recordings/{id}/preview [post]
-func GeneratePreview(c *gin.Context) {
+func GeneratePreviews(c *gin.Context) {
 	appG := app.Gin{C: c}
 
-	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
-	if err != nil {
-		appG.Response(http.StatusBadRequest, err)
+	id, errConvert := strconv.ParseUint(c.Param("id"), 10, 32)
+	if errConvert != nil {
+		appG.Error(http.StatusBadRequest, errConvert)
 		return
 	}
 
-	job, err := services.EnqueuePreviewJob(database.RecordingID(id))
-	if err != nil {
-		appG.Response(http.StatusInternalServerError, err)
+	if recording, err := database.RecordingID(id).FindRecordingByID(); err != nil {
+		appG.Error(http.StatusInternalServerError, err)
 		return
+	} else {
+		if job1, job2, job3, err := recording.EnqueuePreviewsJob(); err != nil {
+			appG.Error(http.StatusInternalServerError, err)
+			return
+		} else {
+			appG.Response(http.StatusOK, []*database.Job{job1, job2, job3})
+		}
 	}
-
-	appG.Response(http.StatusOK, job)
 }
 
 // FavRecording godoc
@@ -183,12 +187,12 @@ func FavRecording(c *gin.Context) {
 
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		appG.Response(http.StatusBadRequest, err)
+		appG.Error(http.StatusBadRequest, err)
 		return
 	}
 
 	if err := database.FavRecording(uint(id), true); err != nil {
-		appG.Response(http.StatusInternalServerError, err)
+		appG.Error(http.StatusInternalServerError, err)
 		return
 	}
 
@@ -211,12 +215,12 @@ func UnfavRecording(c *gin.Context) {
 
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		appG.Response(http.StatusBadRequest, err)
+		appG.Error(http.StatusBadRequest, err)
 		return
 	}
 
 	if err := database.FavRecording(uint(id), false); err != nil {
-		appG.Response(http.StatusInternalServerError, err)
+		appG.Error(http.StatusInternalServerError, err)
 		return
 	}
 
@@ -240,27 +244,27 @@ func CutRecording(c *gin.Context) {
 
 	cutRequest := &requests.CutRequest{}
 	if err := c.BindJSON(cutRequest); err != nil {
-		appG.Response(http.StatusBadRequest, err)
+		appG.Error(http.StatusBadRequest, err)
 		return
 	}
 
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		appG.Response(http.StatusBadRequest, err)
+		appG.Error(http.StatusBadRequest, err)
 		return
 	}
 
-	job, err := services.EnqueueCuttingJob(database.RecordingID(id), &helpers.CutArgs{
+	args := &helpers.CutArgs{
 		Starts:                cutRequest.Starts,
 		Ends:                  cutRequest.Ends,
 		DeleteAfterCompletion: cutRequest.DeleteAfterCompletion,
-	})
-	if err != nil {
-		appG.Response(http.StatusInternalServerError, err)
-		return
 	}
-
-	appG.Response(http.StatusOK, job)
+	if job, err := database.EnqueueCuttingJob(uint(id), args); err != nil {
+		appG.Error(http.StatusBadRequest, err)
+		return
+	} else {
+		appG.Response(http.StatusOK, job)
+	}
 }
 
 // Convert godoc
@@ -280,18 +284,22 @@ func Convert(c *gin.Context) {
 
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		appG.Response(http.StatusBadRequest, err)
+		appG.Error(http.StatusBadRequest, err)
 		return
 	}
 	mediaType := c.Param("mediaType")
 
-	job, err := services.EnqueueConversionJob(database.RecordingID(id), mediaType)
-	if err != nil {
-		appG.Response(http.StatusInternalServerError, err)
+	if rec, err := database.RecordingID(id).FindRecordingByID(); err != nil {
+		appG.Error(http.StatusInternalServerError, err)
 		return
+	} else {
+		if job, err := rec.EnqueueConversionJob(mediaType); err != nil {
+			appG.Error(http.StatusInternalServerError, err)
+			return
+		} else {
+			appG.Response(http.StatusOK, job)
+		}
 	}
-
-	appG.Response(http.StatusOK, job)
 }
 
 // FilterRecordings godoc
@@ -310,7 +318,7 @@ func FilterRecordings(c *gin.Context) {
 
 	limit, err := strconv.Atoi(c.Param("limit"))
 	if err != nil {
-		appG.Response(http.StatusBadRequest, err)
+		appG.Error(http.StatusBadRequest, err)
 		return
 	}
 
@@ -319,7 +327,7 @@ func FilterRecordings(c *gin.Context) {
 
 	recordings, err := database.SortBy(column, order, limit)
 	if err != nil {
-		appG.Response(http.StatusInternalServerError, err)
+		appG.Error(http.StatusInternalServerError, err)
 		return
 	}
 
@@ -341,14 +349,14 @@ func GetRandomRecordings(c *gin.Context) {
 
 	limit, err := strconv.Atoi(c.Param("limit"))
 	if err != nil {
-		appG.Response(http.StatusInternalServerError, err)
+		appG.Error(http.StatusInternalServerError, err)
 		return
 	}
 
 	recordings, err := database.FindRandom(limit)
 
 	if err != nil {
-		appG.Response(http.StatusInternalServerError, err)
+		appG.Error(http.StatusInternalServerError, err)
 		return
 	}
 
@@ -388,19 +396,19 @@ func DeleteRecording(c *gin.Context) {
 
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		appG.Response(http.StatusBadRequest, err)
+		appG.Error(http.StatusBadRequest, err)
 		return
 	}
 
 	rec, err := database.RecordingID(id).FindRecordingByID()
 	if err != nil {
-		appG.Response(http.StatusInternalServerError, err)
+		appG.Error(http.StatusInternalServerError, err)
 		return
 	}
 
 	if rec != nil {
-		if err2 := database.DestroyRecording(rec.RecordingID); err2 != nil {
-			appG.Response(http.StatusInternalServerError, err2)
+		if err2 := rec.DestroyRecording(); err2 != nil {
+			appG.Error(http.StatusInternalServerError, err2)
 			return
 		}
 	}

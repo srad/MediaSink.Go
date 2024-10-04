@@ -108,12 +108,12 @@ func GeneratePosters() error {
 
 	i := 1
 	for _, rec := range recordings {
-		filepath := rec.AbsoluteFilePath()
+		filepath := rec.AbsoluteChannelFilepath()
 		log.Infof("[GeneratePosters] %s (%d/%d)", filepath, i, count)
 
 		video := &helpers.Video{FilePath: filepath}
 
-		if err := video.CreatePreviewPoster(rec.DataFolder(), helpers.FileNameWithoutExtension(rec.Filename.String())+".jpg"); err != nil {
+		if _, err := video.ExecPreviewCover(rec.DataFolder()); err != nil {
 			log.Errorf("[GeneratePosters] Error creating poster: %s", err)
 		}
 		i++
