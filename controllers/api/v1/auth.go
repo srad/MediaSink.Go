@@ -44,7 +44,7 @@ func CreateUser(c *gin.Context) {
 // @Param       AuthenticationRequest body requests.AuthenticationRequest true "Username and password"
 // @Accept      json
 // @Produce     json
-// @Success     200 {string} JWT token for authentication
+// @Success     200 LoginResponse JWT token for authentication
 // @Failure     400 {} http.StatusBadRequest
 // @Failure     500 {} http.StatusInternalServerError
 // @Router      /auth/login [post]

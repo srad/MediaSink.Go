@@ -405,18 +405,15 @@ func (recording *Recording) UpdatePreviewPath(previewType PreviewType) error {
 
 	switch previewType {
 	case PreviewStripe:
-		return DB.
-			Model(&Recording{}).
+		return DB.Model(&Recording{}).
 			Where("recording_id = ?", recording.RecordingID).
 			Update("preview_stripe", paths.RelativeStripePath).Error
 	case PreviewVideo:
-		return DB.
-			Model(&Recording{}).
+		return DB.Model(&Recording{}).
 			Where("recording_id = ?", recording.RecordingID).
 			Update("preview_video", paths.RelativeVideosPath).Error
 	case PreviewCover:
-		return DB.
-			Model(&Recording{}).
+		return DB.Model(&Recording{}).
 			Where("recording_id = ?", recording.RecordingID).
 			Update("preview_cover", paths.RelativeCoverPath).Error
 	}

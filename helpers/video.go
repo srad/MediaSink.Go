@@ -245,7 +245,7 @@ func (video *Video) CreatePreviewTimelapse(args *PreviewVideoArgs) (string, erro
 			}
 		},
 		Command:     "ffmpeg",
-		CommandArgs: []string{"-i", video.FilePath, "-y", "-progress", "pipe:1", "-q:v", "0", "-threads", fmt.Sprint(conf.ThreadCount), "-an", "-r", "5", "-filter_complex", fmt.Sprintf("setpts=0.06667*PTS,scale=-2:%d,color=c=red:s=320x5[bar];[0][bar]overlay=-w+(w/10)*t:H-h:shortest=1", args.FrameHeight), "-hide_banner", "-loglevel", "error", "-stats", "-movflags", "faststart", filepath.Join(dir, args.OutFile)},
+		CommandArgs: []string{"-i", video.FilePath, "-y", "-progress", "pipe:1", "-q:v", "0", "-threads", fmt.Sprint(conf.ThreadCount), "-an", "-vf", fmt.Sprintf("select=not(mod(n\\,%d)),scale=-2:%d", args.FrameDistance, args.FrameHeight), "-hide_banner", "-loglevel", "error", "-stats", "-fps_mode", "vfr", "-movflags", "faststart", filepath.Join(dir, args.OutFile)},
 	})
 }
 

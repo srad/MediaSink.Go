@@ -21,7 +21,7 @@ func CheckAuthorizationHeader(c *gin.Context) {
 	if authHeader == "" {
 		// Workaround for JWT over websockets. The bearer can also be sent as get parameter.
 		if getAuth, exists := c.GetQuery("Authorization"); exists && getAuth != "" {
-			authHeader = getAuth
+			authHeader = "Bearer " + getAuth
 		} else {
 			appG.Error(http.StatusUnauthorized, errors.New("authorization header is missing"))
 			return
@@ -60,7 +60,7 @@ func CheckAuthorizationHeader(c *gin.Context) {
 	// Interface conversion for numbers on map interface seems to be float64, wtf?
 	id := uint(claims["id"].(float64))
 	user, err := services.GetUserByID(id)
-	if err == nil {
+	if err != nil {
 		appG.Error(http.StatusUnauthorized, err)
 		return
 	}

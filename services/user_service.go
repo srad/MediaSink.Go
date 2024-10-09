@@ -57,6 +57,6 @@ func AuthenticateUser(auth requests.AuthenticationRequest) (string, error) {
 	return generateToken.SignedString([]byte(os.Getenv("SECRET")))
 }
 
-func GetUserByID(claim uint) (*database.User, error) {
-	return database.FindUserByID(claim)
+func GetUserByID(userId uint) (*database.User, error) {
+	return database.FindUserByID(userId)
 }

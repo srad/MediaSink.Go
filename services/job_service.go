@@ -20,9 +20,9 @@ var (
 	processing          = false
 )
 
-type JobMessage struct {
+type JobMessage[T any] struct {
 	Job  *database.Job `json:"job"`
-	Data interface{}   `json:"data"`
+	Data T             `json:"data"`
 }
 
 func processJobs(ctx context.Context) {
@@ -47,11 +47,12 @@ func processJobs(ctx context.Context) {
 				log.Errorf("Error activating job: %s", err)
 				continue
 			}
-			network.BroadCastClients(network.JobActivate, JobMessage{Job: job})
+			network.BroadCastClients(network.JobActivate, JobMessage[any]{Job: job})
 			if err := executeJob(job); err != nil {
 				log.Errorln(err)
+				network.BroadCastClients(network.JobErrorEvent, JobMessage[string]{Job: job, Data: err.Error()})
 			}
-			network.BroadCastClients(network.JobInactive, JobMessage{Job: job})
+			network.BroadCastClients(network.JobDeactivate, JobMessage[any]{Job: job})
 		}
 	}
 }
@@ -79,12 +80,11 @@ func executeJob(job *database.Job) error {
 func handleJob(job *database.Job, err error) error {
 	if err != nil {
 		errErrStore := job.Error(err)
-		network.BroadCastClients(network.JobErrorEvent, JobMessage{Data: err, Job: job})
+		network.BroadCastClients(network.JobErrorEvent, JobMessage[string]{Data: err.Error(), Job: job})
 		return errErrStore
 	} else {
 		return job.Completed()
 	}
-	return nil
 }
 
 func processPreviewStrip(job *database.Job, video *helpers.Video) error {
@@ -98,24 +98,24 @@ func processPreviewStrip(job *database.Job, video *helpers.Video) error {
 				log.Errorf("[Job] Error updating job info: %s", err)
 			}
 
-			network.BroadCastClients(network.JobStartEvent, JobMessage{
+			network.BroadCastClients(network.JobStartEvent, JobMessage[helpers.TaskInfo]{
 				Job:  job,
 				Data: info,
 			})
 		},
 		OnProgress: func(info helpers.TaskProgress) {
-			network.BroadCastClients(network.JobProgressEvent, JobMessage{
+			network.BroadCastClients(network.JobProgressEvent, JobMessage[helpers.TaskProgress]{
 				Job:  job,
 				Data: info})
 		},
 		OnEnd: func(info helpers.TaskComplete) {
-			network.BroadCastClients(network.JobDoneEvent, JobMessage{
+			network.BroadCastClients(network.JobDoneEvent, JobMessage[helpers.TaskComplete]{
 				Data: info,
 				Job:  job,
 			})
 		},
 		OnError: func(err error) {
-			network.BroadCastClients(network.JobErrorEvent, JobMessage{
+			network.BroadCastClients(network.JobErrorEvent, JobMessage[string]{
 				Data: err.Error(),
 				Job:  job,
 			})
@@ -128,10 +128,8 @@ func processPreviewStrip(job *database.Job, video *helpers.Video) error {
 	if _, err := video.ExecPreviewStripe(previewArgs, conf.FrameCount, 256, job.Recording.Packets); err != nil {
 		return err
 	} else {
-		job.Recording.UpdatePreviewPath(database.PreviewStripe)
+		return job.Recording.UpdatePreviewPath(database.PreviewStripe)
 	}
-
-	return nil
 }
 
 func processPreviewVideo(job *database.Job, video *helpers.Video) error {
@@ -145,24 +143,24 @@ func processPreviewVideo(job *database.Job, video *helpers.Video) error {
 				log.Errorf("[Job] Error updating job info: %s", err)
 			}
 
-			network.BroadCastClients(network.JobStartEvent, JobMessage{
+			network.BroadCastClients(network.JobStartEvent, JobMessage[helpers.TaskInfo]{
 				Job:  job,
 				Data: info,
 			})
 		},
 		OnProgress: func(info helpers.TaskProgress) {
-			network.BroadCastClients(network.JobProgressEvent, JobMessage{
+			network.BroadCastClients(network.JobProgressEvent, JobMessage[helpers.TaskProgress]{
 				Job:  job,
 				Data: info})
 		},
 		OnEnd: func(info helpers.TaskComplete) {
-			network.BroadCastClients(network.JobDoneEvent, JobMessage{
+			network.BroadCastClients(network.JobDoneEvent, JobMessage[helpers.TaskComplete]{
 				Data: info,
 				Job:  job,
 			})
 		},
 		OnError: func(err error) {
-			network.BroadCastClients(network.JobErrorEvent, JobMessage{
+			network.BroadCastClients(network.JobErrorEvent, JobMessage[string]{
 				Data: err.Error(),
 				Job:  job,
 			})
@@ -203,10 +201,10 @@ func processConversion(job *database.Job) error {
 				log.Errorf("Error updating job progress: %s", err)
 			}
 
-			network.BroadCastClients(network.JobProgressEvent, JobMessage{Job: job, Data: info})
+			network.BroadCastClients(network.JobProgressEvent, JobMessage[helpers.TaskProgress]{Job: job, Data: info})
 		},
 		OnError: func(err error) {
-			network.BroadCastClients(network.JobErrorEvent, JobMessage{Job: job, Data: err.Error()})
+			network.BroadCastClients(network.JobErrorEvent, JobMessage[string]{Job: job, Data: err.Error()})
 		},
 		InputPath:  job.ChannelName.AbsoluteChannelPath(),
 		Filename:   job.Filename.String(),
@@ -271,7 +269,7 @@ func processCutting(job *database.Job) error {
 			OnStart: func(info *helpers.CommandInfo) {
 				_ = job.UpdateInfo(info.Pid, info.Command)
 
-				network.BroadCastClients(network.JobStartEvent, JobMessage{
+				network.BroadCastClients(network.JobStartEvent, JobMessage[helpers.TaskInfo]{
 					Job: job,
 					Data: helpers.TaskInfo{
 						Steps:   2,
@@ -283,7 +281,7 @@ func processCutting(job *database.Job) error {
 				})
 			},
 			OnProgress: func(s string) {
-				network.BroadCastClients(network.JobProgressEvent, JobMessage{Job: job, Data: s})
+				network.BroadCastClients(network.JobProgressEvent, JobMessage[string]{Job: job, Data: s})
 			},
 		}, inputPath, segFiles[i], start, cutArgs.Ends[i])
 		// Failed, delete all segments
@@ -319,7 +317,7 @@ func processCutting(job *database.Job) error {
 
 	errMerge := helpers.MergeVideos(&helpers.MergeArgs{
 		OnStart: func(info helpers.CommandInfo) {
-			network.BroadCastClients(network.JobStartEvent, JobMessage{
+			network.BroadCastClients(network.JobStartEvent, JobMessage[helpers.TaskInfo]{
 				Job: job,
 				Data: helpers.TaskInfo{
 					Steps:   2,
@@ -335,7 +333,7 @@ func processCutting(job *database.Job) error {
 			//network.BroadCastClients("job:progress", JobMessage{Job: job, Data: info})
 		},
 		OnErr: func(err error) {
-			network.BroadCastClients(network.JobErrorEvent, JobMessage{Job: job, Data: err.Error()})
+			network.BroadCastClients(network.JobErrorEvent, JobMessage[string]{Job: job, Data: err.Error()})
 		},
 		MergeFileAbsolutePath:  mergeFileAbsolutePath,
 		AbsoluteOutputFilepath: outputFile,
@@ -384,7 +382,7 @@ func processCutting(job *database.Job) error {
 		if err != nil {
 			return err
 		}
-		recording.DestroyRecording()
+		return recording.DestroyRecording()
 	}
 
 	return nil

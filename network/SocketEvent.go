@@ -23,7 +23,7 @@ const (
 	JobProgressEvent    SocketEventName = "job:progress"
 	JobDoneEvent        SocketEventName = "job:done"
 	JobActivate         SocketEventName = "job:activate"
-	JobInactive         SocketEventName = "job:inactive"
+	JobDeactivate       SocketEventName = "job:deactivate"
 	JobErrorEvent       SocketEventName = "job:error"
 	JobPreviewDoneEvent SocketEventName = "job:preview:done"
 	JobDeleteEvent      SocketEventName = "job:delete"

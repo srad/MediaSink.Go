@@ -43,7 +43,7 @@ func FindUserByUsername(username string) (*User, error) {
 
 func FindUserByID(id uint) (*User, error) {
 	var user *User
-	if err := DB.Where("user_id = ?", id).First(user).Error; err != nil {
+	if err := DB.Where("user_id = ?", id).First(&user).Error; err != nil {
 		return nil, err
 	}
 
