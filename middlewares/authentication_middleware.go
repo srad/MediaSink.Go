@@ -3,6 +3,7 @@ package middlewares
 import (
 	"errors"
 	"fmt"
+	log "github.com/sirupsen/logrus"
 	"net/http"
 	"os"
 	"strings"
@@ -22,6 +23,7 @@ func CheckAuthorizationHeader(c *gin.Context) {
 		// Workaround for JWT over websockets. The bearer can also be sent as get parameter.
 		if getAuth, exists := c.GetQuery("Authorization"); exists && getAuth != "" {
 			authHeader = "Bearer " + getAuth
+			log.Info("Received authentication as get parameter. Likely from a socket.")
 		} else {
 			appG.Error(http.StatusUnauthorized, errors.New("authorization header is missing"))
 			return
@@ -41,7 +43,11 @@ func CheckAuthorizationHeader(c *gin.Context) {
 		}
 		return []byte(os.Getenv("SECRET")), nil
 	})
-	if err != nil || !token.Valid {
+	if err != nil {
+		appG.Error(http.StatusInternalServerError, errors.New("invalid or expired token"))
+		return
+	}
+	if !token.Valid {
 		appG.Error(http.StatusUnauthorized, errors.New("invalid or expired token"))
 		return
 	}

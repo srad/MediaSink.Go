@@ -267,6 +267,14 @@ func (job *Job) Activate() error {
 	return DB.Model(&Job{}).Where("job_id = ?", job.JobID).Updates(map[string]interface{}{"started_at": time.Now(), "active": true}).Error
 }
 
+func (job *Job) Deactivate() error {
+	if job.JobID == 0 {
+		return errors.New("invalid job id")
+	}
+
+	return DB.Model(&Job{}).Where("job_id = ?", job.JobID).Update("active", false).Error
+}
+
 func CreateJob[T any](recording *Recording, task JobTask, args *T) (*Job, error) {
 	data := ""
 	if args != nil {

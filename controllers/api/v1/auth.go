@@ -16,9 +16,9 @@ import (
 // @Param       AuthenticationRequest body requests.AuthenticationRequest true "Username and password"
 // @Accept      json
 // @Produce     json
-// @Success     200
-// @Failure     400 {} http.StatusBadRequest
-// @Failure     500 {} http.StatusInternalServerError
+// @Success     200 {} nil "JWT token for authentication"
+// @Failure     400 {string} string "Error message"
+// @Failure     500 {string} string "Error message"
 // @Router      /auth/signup [post]
 func CreateUser(c *gin.Context) {
 	appG := app.Gin{C: c}
@@ -38,15 +38,15 @@ func CreateUser(c *gin.Context) {
 }
 
 // Login godoc
-// @Summary     Create new user
-// @Description Create new user
+// @Summary     User login
+// @Description User login
 // @Tags        auth
 // @Param       AuthenticationRequest body requests.AuthenticationRequest true "Username and password"
 // @Accept      json
 // @Produce     json
-// @Success     200 LoginResponse JWT token for authentication
-// @Failure     400 {} http.StatusBadRequest
-// @Failure     500 {} http.StatusInternalServerError
+// @Success     200 {object} responses.LoginResponse "JWT token for authentication"
+// @Failure     401 {string} string "Error message"
+// @Failure     400 {string} string "Error message"
 // @Router      /auth/login [post]
 func Login(c *gin.Context) {
 	appG := app.Gin{C: c}

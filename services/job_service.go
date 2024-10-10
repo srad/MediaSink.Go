@@ -52,6 +52,10 @@ func processJobs(ctx context.Context) {
 				log.Errorln(err)
 				network.BroadCastClients(network.JobErrorEvent, JobMessage[string]{Job: job, Data: err.Error()})
 			}
+			// actually job.Complete() and job.Error() set active=false, but GORM is a troublemakers ORM.
+			if err := job.Deactivate(); err != nil {
+				log.Errorf("Error deactivating job: %s", err)
+			}
 			network.BroadCastClients(network.JobDeactivate, JobMessage[any]{Job: job})
 		}
 	}
