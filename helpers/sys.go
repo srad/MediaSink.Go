@@ -47,10 +47,10 @@ type SysInfo struct {
 }
 
 type DiskInfo struct {
-	SizeFormattedGb  string `json:"sizeFormattedGb" extensions:"!x-nullable"`
-	UsedFormattedGb  string `json:"usedFormattedGb" extensions:"!x-nullable"`
-	AvailFormattedGb string `json:"availFormattedGb" extensions:"!x-nullable"`
-	Pcent            string `json:"pcent" extensions:"!x-nullable"`
+	SizeFormattedGb  int `json:"sizeFormattedGb" extensions:"!x-nullable"`
+	UsedFormattedGb  int `json:"usedFormattedGb" extensions:"!x-nullable"`
+	AvailFormattedGb int `json:"availFormattedGb" extensions:"!x-nullable"`
+	Pcent            int `json:"pcent" extensions:"!x-nullable"`
 }
 
 type NetInfo struct {
@@ -264,7 +264,16 @@ func DiskUsage(path string) (*DiskInfo, error) {
 	lines := strings.Split(out, "\n")
 	parts := strings.Fields(lines[1])
 
-	return &DiskInfo{SizeFormattedGb: parts[0], UsedFormattedGb: parts[1], AvailFormattedGb: parts[2], Pcent: parts[3]}, nil
+	size, err1 := ParseNumbers(parts[0])
+	used, err2 := ParseNumbers(parts[1])
+	avail, err3 := ParseNumbers(parts[2])
+	pcent, err4 := ParseNumbers(parts[3])
+
+	if err1 != nil || err2 != nil || err3 != nil || err4 != nil {
+		return nil, errors.Join(err1, err2, err3, err4)
+	}
+
+	return &DiskInfo{SizeFormattedGb: size, UsedFormattedGb: used, AvailFormattedGb: avail, Pcent: pcent}, nil
 }
 
 func NetMeasure(networkDev string, measureSeconds uint64) (*NetInfo, error) {

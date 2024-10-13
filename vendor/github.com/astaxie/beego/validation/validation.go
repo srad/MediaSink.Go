@@ -273,13 +273,10 @@ func (v *Validation) apply(chk Validator, obj interface{}) *Result {
 		Field = parts[0]
 		Name = parts[1]
 		Label = parts[2]
-		if len(Label) == 0 {
-			Label = Field
-		}
 	}
 
 	err := &Error{
-		Message:    Label + " " + chk.DefaultMessage(),
+		Message:    Label + chk.DefaultMessage(),
 		Key:        key,
 		Name:       Name,
 		Field:      Field,
@@ -296,25 +293,19 @@ func (v *Validation) apply(chk Validator, obj interface{}) *Result {
 	}
 }
 
-// key must like aa.bb.cc or aa.bb.
 // AddError adds independent error message for the provided key
 func (v *Validation) AddError(key, message string) {
 	Name := key
 	Field := ""
 
-	Label := ""
 	parts := strings.Split(key, ".")
 	if len(parts) == 3 {
 		Field = parts[0]
 		Name = parts[1]
-		Label = parts[2]
-		if len(Label) == 0 {
-			Label = Field
-		}
 	}
 
 	err := &Error{
-		Message: Label + " " + message,
+		Message: message,
 		Key:     key,
 		Name:    Name,
 		Field:   Field,
@@ -389,6 +380,7 @@ func (v *Validation) Valid(obj interface{}) (b bool, err error) {
 					currentField = objV.Field(i).Elem().Interface()
 				}
 			}
+
 
 			chk := Required{""}.IsSatisfied(currentField)
 			if !hasRequired && v.RequiredFirst && !chk {

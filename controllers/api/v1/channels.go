@@ -266,19 +266,24 @@ func TagChannel(c *gin.Context) {
 func ResumeChannel(c *gin.Context) {
 	appG := app.Gin{C: c}
 
-	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
-	if err != nil {
-		appG.Error(http.StatusBadRequest, err)
+	id, errParse := strconv.ParseUint(c.Param("id"), 10, 32)
+	if errParse != nil {
+		appG.Error(http.StatusBadRequest, errParse)
 		return
 	}
 
 	channelID := database.ChannelID(id)
+	if err := channelID.PauseChannel(false); err != nil {
+		appG.Error(http.StatusInternalServerError, err)
+		return
+	}
 
 	if err := services.Start(channelID); err != nil {
 		log.Errorf("[ResumeChannel] Error resuming channel-id %d: %s", channelID, err)
 		appG.Error(http.StatusInternalServerError, err)
 		return
 	}
+
 	log.Infof("Resuming channel %d", id)
 	appG.Response(http.StatusOK, nil)
 }
