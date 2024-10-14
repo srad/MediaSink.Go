@@ -175,7 +175,7 @@ func Start(id database.ChannelID) (bool, error) {
 	}
 
 	url, err := channel.QueryStreamURL()
-	streamInfo[channel.ChannelID] = StreamInfo{IsOnline: url != "", URL: url, ChannelName: channel.ChannelName, IsTerminating: false}
+	streamInfo[channel.ChannelID] = StreamInfo{IsOnline: url != "", URL: url, ChannelName: channel.ChannelName, IsTerminating: streamInfo[channel.ChannelID].IsTerminating}
 	if url == "" {
 		// Channel offline: No errors, and not started.
 		// return fmt.Errorf("no url found for channel '%s'", channel.ChannelName)
