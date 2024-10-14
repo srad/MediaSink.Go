@@ -60,9 +60,9 @@ func checkStreams() {
 				continue
 			}
 
-			if err := Start(result.ChannelID); err != nil {
+			if started, err := Start(result.ChannelID); started && err != nil {
 				network.BroadCastClients(network.ChannelOfflineEvent, result.ChannelID)
-			} else {
+			} else if started {
 				network.BroadCastClients(network.ChannelOnlineEvent, result.ChannelID)
 				network.BroadCastClients(network.ChannelStartEvent, result.ChannelID)
 			}

@@ -163,26 +163,26 @@ func Info(id database.ChannelID) *database.Recording {
 	return recInfo[id]
 }
 
-func Start(id database.ChannelID) error {
+func Start(id database.ChannelID) (bool, error) {
 	channel, err := database.GetChannelByID(id)
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	// Stop any previous recording, restart
 	if err := id.PauseChannel(false); err != nil {
-		return err
+		return false, err
 	}
 
 	url, err := channel.QueryStreamURL()
 	streamInfo[channel.ChannelID] = StreamInfo{IsOnline: url != "", URL: url, ChannelName: channel.ChannelName, IsTerminating: false}
 	if url == "" {
-		// Channel offline
+		// Channel offline: No errors, and not started.
 		// return fmt.Errorf("no url found for channel '%s'", channel.ChannelName)
-		return nil
+		return false, nil
 	}
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	log.Infof("[Start] Starting '%s' at '%s'", channel.ChannelName, url)
@@ -200,7 +200,7 @@ func Start(id database.ChannelID) error {
 		}
 	}()
 
-	return nil
+	return true, nil
 }
 
 func TerminateAll() {

@@ -278,7 +278,7 @@ func ResumeChannel(c *gin.Context) {
 		return
 	}
 
-	if err := services.Start(channelID); err != nil {
+	if _, err := services.Start(channelID); err != nil {
 		log.Errorf("[ResumeChannel] Error resuming channel-id %d: %s", channelID, err)
 		appG.Error(http.StatusInternalServerError, err)
 		return
