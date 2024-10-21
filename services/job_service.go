@@ -71,7 +71,8 @@ func executeJob(job *database.Job) error {
 	case database.TaskPreviewStrip:
 		return handleJob(job, processPreviewStrip(job, &video))
 	case database.TaskPreviewVideo:
-		return handleJob(job, processPreviewVideo(job, &video))
+		// video jobs won't be created for now.
+		return nil //handleJob(job, processPreviewVideo(job, &video))
 	case database.TaskCut:
 		return handleJob(job, processCutting(job))
 	case database.TaskConvert:
@@ -233,7 +234,7 @@ func processConversion(job *database.Job) error {
 			return fmt.Errorf("error deleting file %s: %s", result.Filepath, errRemove)
 		}
 	} else {
-		if _, _, _, errPreviews := recording.EnqueuePreviewsJob(); errPreviews != nil {
+		if _, _, errPreviews := recording.EnqueuePreviewsJob(); errPreviews != nil {
 			return errPreviews
 		}
 	}
@@ -376,7 +377,7 @@ func processCutting(job *database.Job) error {
 	}
 
 	// Successfully added cut record, enqueue preview job
-	if _, _, _, errPreview := cutRecording.EnqueuePreviewsJob(); errPreview != nil {
+	if _, _, errPreview := cutRecording.EnqueuePreviewsJob(); errPreview != nil {
 		return errPreview
 	}
 

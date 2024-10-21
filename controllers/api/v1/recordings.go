@@ -162,11 +162,11 @@ func GeneratePreviews(c *gin.Context) {
 		appG.Error(http.StatusInternalServerError, err)
 		return
 	} else {
-		if job1, job2, job3, err := recording.EnqueuePreviewsJob(); err != nil {
+		if job1, job2, err := recording.EnqueuePreviewsJob(); err != nil {
 			appG.Error(http.StatusInternalServerError, err)
 			return
 		} else {
-			appG.Response(http.StatusOK, []*database.Job{job1, job2, job3})
+			appG.Response(http.StatusOK, []*database.Job{job1, job2})
 		}
 	}
 }

@@ -395,7 +395,7 @@ func UploadChannel(c *gin.Context) {
 		return
 	}
 
-	if _, _, _, err := recording.EnqueuePreviewsJob(); err != nil {
+	if _, _, err := recording.EnqueuePreviewsJob(); err != nil {
 		appG.Error(http.StatusInternalServerError, err)
 		return
 	}

@@ -135,7 +135,7 @@ func CaptureChannel(id database.ChannelID, url string, skip uint) error {
 		} else {
 			network.BroadCastClients(network.RecordingAddEvent, newRecording)
 
-			if _, _, _, errPreviews := newRecording.EnqueuePreviewsJob(); errPreviews != nil {
+			if _, _, errPreviews := newRecording.EnqueuePreviewsJob(); errPreviews != nil {
 				return err
 			}
 		}

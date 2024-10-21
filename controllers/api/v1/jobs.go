@@ -40,13 +40,13 @@ func AddPreviewJobs(c *gin.Context) {
 		return
 	}
 
-	job1, job2, job3, err := recording.EnqueuePreviewsJob()
+	job1, job2, err := recording.EnqueuePreviewsJob()
 	if err != nil {
 		appG.Error(http.StatusInternalServerError, err)
 		return
 	}
 
-	appG.Response(http.StatusOK, []*database.Job{job1, job2, job3})
+	appG.Response(http.StatusOK, []*database.Job{job1, job2})
 }
 
 // StopJob godoc

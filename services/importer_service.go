@@ -155,15 +155,24 @@ func ImportChannels(context.Context) error {
 				}
 			}
 
+			// Destroy all preview videos for now.
 			if database.PreviewFileExists(newRecording.ChannelName, newRecording.Filename, database.PreviewVideo) {
-				if err := newRecording.UpdatePreviewPath(database.PreviewVideo); err != nil {
+				if err := database.DeletePreview(newRecording.ChannelName, newRecording.Filename, database.PreviewVideo); err != nil {
 					log.Errorln(err)
 				}
-			} else {
-				if _, err := newRecording.EnqueuePreviewVideoJob(); err != nil {
+				if err := newRecording.NilPreview(database.PreviewVideo); err != nil {
 					log.Errorln(err)
 				}
 			}
+			//if database.PreviewFileExists(newRecording.ChannelName, newRecording.Filename, database.PreviewVideo) {
+			//	if err := newRecording.UpdatePreviewPath(database.PreviewVideo); err != nil {
+			//		log.Errorln(err)
+			//	}
+			//} else {
+			//	if _, err := newRecording.EnqueuePreviewVideoJob(); err != nil {
+			//		log.Errorln(err)
+			//	}
+			//}
 		}
 	}
 

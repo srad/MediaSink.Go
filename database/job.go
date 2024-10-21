@@ -307,12 +307,12 @@ func (recording *Recording) EnqueueConversionJob(mediaType string) (*Job, error)
 	return enqueueJob[string](recording, TaskConvert, &mediaType)
 }
 
-func (recording *Recording) EnqueuePreviewsJob() (*Job, *Job, *Job, error) {
+func (recording *Recording) EnqueuePreviewsJob() (*Job, *Job, error) {
 	job1, err1 := recording.EnqueuePreviewCoverJob()
 	job2, err2 := recording.EnqueuePreviewStripeJob()
-	job3, err3 := recording.EnqueuePreviewVideoJob()
+	//job3, err3 := recording.EnqueuePreviewVideoJob()
 
-	return job1, job2, job3, errors.Join(err1, err2, err3)
+	return job1, job2, errors.Join(err1, err2)
 }
 
 func (recording *Recording) EnqueuePreviewStripeJob() (*Job, error) {
@@ -337,16 +337,16 @@ func (recording *Recording) EnqueuePreviewCoverJob() (*Job, error) {
 	return enqueueJob[*any](recording, TaskPreviewCover, nil)
 }
 
-func (recording *Recording) EnqueuePreviewVideoJob() (*Job, error) {
-	job, exists, err := JobExists(recording.RecordingID, TaskPreviewVideo)
-	if err != nil {
-		return job, err
-	}
-	if exists {
-		return job, nil
-	}
-	return enqueueJob[*any](recording, TaskPreviewVideo, nil)
-}
+//func (recording *Recording) EnqueuePreviewVideoJob() (*Job, error) {
+//	job, exists, err := JobExists(recording.RecordingID, TaskPreviewVideo)
+//	if err != nil {
+//		return job, err
+//	}
+//	if exists {
+//		return job, nil
+//	}
+//	return enqueueJob[*any](recording, TaskPreviewVideo, nil)
+//}
 
 func (recording *Recording) EnqueueCuttingJob(args *helpers.CutArgs) (*Job, error) {
 	return enqueueJob(recording, TaskCut, args)

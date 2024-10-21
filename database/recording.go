@@ -137,14 +137,35 @@ func PreviewFileExists(channelName ChannelName, filename RecordingFileName, prev
 
 	switch previewType {
 	case PreviewStripe:
-		return utils.FileExists(paths.AbsoluteStripePath)
+		return utils.FileExists(paths.AbsolutePreviewStripePath)
 	case PreviewVideo:
-		return utils.FileExists(paths.AbsoluteVideosPath)
+		return utils.FileExists(paths.AbsolutePreviewVideosPath)
 	case PreviewCover:
-		return utils.FileExists(paths.AbsoluteCoverPath)
+		return utils.FileExists(paths.AbsolutePreviewCoverPath)
 	}
 
 	return false
+}
+
+func DeletePreview(channelName ChannelName, filename RecordingFileName, previewType PreviewType) error {
+	paths := GetPaths(channelName, filename)
+
+	switch previewType {
+	case PreviewStripe:
+		if err := os.Remove(paths.AbsolutePreviewStripePath); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+	case PreviewVideo:
+		if err := os.Remove(paths.AbsolutePreviewVideosPath); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+	case PreviewCover:
+		if err := os.Remove(paths.AbsolutePreviewCoverPath); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func CreateRecording(channelId ChannelID, filename RecordingFileName, videoType string) (*Recording, error) {
@@ -365,7 +386,7 @@ func (recording *Recording) DestroyPreview(previewType PreviewType) error {
 	switch previewType {
 
 	case PreviewStripe:
-		if err := os.Remove(paths.AbsoluteStripePath); err != nil && !os.IsNotExist(err) {
+		if err := os.Remove(paths.AbsolutePreviewStripePath); err != nil && !os.IsNotExist(err) {
 			return fmt.Errorf("error deleting '%s' from channel '%s': %w", paths.RelativeStripePath, recording.ChannelName, err)
 		}
 
@@ -374,7 +395,7 @@ func (recording *Recording) DestroyPreview(previewType PreviewType) error {
 			Where("recording_id = ?", recording.RecordingID).Update("preview_stripe", nil).Error
 
 	case PreviewVideo:
-		if err := os.Remove(paths.AbsoluteVideosPath); err != nil && !os.IsNotExist(err) {
+		if err := os.Remove(paths.AbsolutePreviewVideosPath); err != nil && !os.IsNotExist(err) {
 			err = fmt.Errorf("error deleting '%s' from channel '%s': %w", paths.RelativeVideosPath, recording.ChannelName, err)
 		}
 		return DB.
@@ -383,7 +404,7 @@ func (recording *Recording) DestroyPreview(previewType PreviewType) error {
 			Update("preview_video", nil).Error
 
 	case PreviewCover:
-		if err := os.Remove(paths.AbsoluteCoverPath); err != nil && !os.IsNotExist(err) {
+		if err := os.Remove(paths.AbsolutePreviewCoverPath); err != nil && !os.IsNotExist(err) {
 			err = fmt.Errorf("error deleting '%s' from channel '%s': %w", paths.RelativeCoverPath, paths.RelativeCoverPath, err)
 		}
 		return DB.
@@ -421,6 +442,30 @@ func (recording *Recording) UpdatePreviewPath(previewType PreviewType) error {
 	return nil
 }
 
+func (recording *Recording) NilPreview(previewType PreviewType) error {
+	validate := validator.New(validator.WithRequiredStructEnabled())
+	if err := validate.Struct(recording); err != nil {
+		return err
+	}
+
+	switch previewType {
+	case PreviewStripe:
+		return DB.Model(&Recording{}).
+			Where("recording_id = ?", recording.RecordingID).
+			Update("preview_stripe", nil).Error
+	case PreviewVideo:
+		return DB.Model(&Recording{}).
+			Where("recording_id = ?", recording.RecordingID).
+			Update("preview_video", nil).Error
+	case PreviewCover:
+		return DB.Model(&Recording{}).
+			Where("recording_id = ?", recording.RecordingID).
+			Update("preview_cover", nil).Error
+	}
+
+	return nil
+}
+
 func (recording *Recording) nilPreviews() error {
 	validate := validator.New(validator.WithRequiredStructEnabled())
 	if err := validate.Struct(recording); err != nil {
@@ -440,13 +485,13 @@ func DeletePreviewFiles(channelName ChannelName, filename RecordingFileName) err
 	paths := channelName.GetRecordingsPaths(filename)
 
 	var err1, err2, err3 error
-	if err := os.Remove(paths.AbsoluteVideosPath); err != nil && !os.IsNotExist(err) {
+	if err := os.Remove(paths.AbsolutePreviewVideosPath); err != nil && !os.IsNotExist(err) {
 		err1 = fmt.Errorf("error deleting '%s' from channel '%s': %w", paths.RelativeVideosPath, channelName, err)
 	}
-	if err := os.Remove(paths.AbsoluteStripePath); err != nil && !os.IsNotExist(err) {
+	if err := os.Remove(paths.AbsolutePreviewStripePath); err != nil && !os.IsNotExist(err) {
 		err2 = fmt.Errorf("error deleting '%s' from channel '%s': %w", paths.RelativeStripePath, channelName, err)
 	}
-	if err := os.Remove(paths.AbsoluteCoverPath); err != nil && !os.IsNotExist(err) {
+	if err := os.Remove(paths.AbsolutePreviewCoverPath); err != nil && !os.IsNotExist(err) {
 		err3 = fmt.Errorf("error deleting '%s' from channel '%s': %w", paths.RelativeCoverPath, channelName, err)
 	}
 
