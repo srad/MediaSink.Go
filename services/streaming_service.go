@@ -78,6 +78,7 @@ func CaptureChannel(id database.ChannelID, url string, skip uint) error {
 
 	sterr, _ := streams[id].StderrPipe()
 
+	// Wait until command stops.
 	if err := streams[id].Start(); err != nil {
 		log.Errorf("cmd.Start: %s", err)
 		return err
@@ -90,7 +91,7 @@ func CaptureChannel(id database.ChannelID, url string, skip uint) error {
 	// Wait for process to exit
 	if err := streams[id].Wait(); err != nil && !strings.Contains(err.Error(), "255") {
 		log.Errorf("[Capture] Wait for process exit '%s' error: %s", channel.ChannelName, err)
-		DeleteStreamData(id)
+
 		if err := os.Remove(outputFilePath); err != nil {
 			log.Errorf("[Capture] Error deleting recording file '%s': %s", outputFilePath, err)
 		}
@@ -147,8 +148,6 @@ func CaptureChannel(id database.ChannelID, url string, skip uint) error {
 		}
 	}
 
-	DeleteStreamData(id)
-
 	return nil
 }
 
@@ -198,6 +197,7 @@ func Start(id database.ChannelID) (bool, error) {
 		if err := CaptureChannel(id, url, channel.SkipStart); err != nil {
 			log.Errorf("Error capturing video: %s", err)
 		}
+		DeleteStreamData(id)
 	}()
 
 	return true, nil
