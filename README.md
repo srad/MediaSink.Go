@@ -167,6 +167,7 @@ services:
 TIMEZONE=Europe/Berlin
 DATA_PATH=/path/to/files
 DISK=/mnt/disk1
+NGINX_CONF_PATH=/path/to/nginx.conf
 
 # Client
 APP_NAME=MediaSink
