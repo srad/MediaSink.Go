@@ -86,8 +86,6 @@ The official Docker image for MediaSink.Go is available on [Docker Hub](https://
 
 #### Docker Compose Setup
 
-Docker compose setup:
-
 ```yaml
 mediasink-server:
   image: sedrad/mediasink-server
