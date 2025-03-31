@@ -65,7 +65,7 @@ The configuration file is located at `conf/app.yml` and can be modified to custo
 ### Build the Project
 
 ```sh
-./run.sql
+./run.sh
 ```
 
 ### Run Test
