@@ -1,69 +1,139 @@
-﻿# StreamSink.Go
+# MediaSink.Go
 
- [![Build Status](https://teamcity.sedrad.com/app/rest/builds/buildType:(id:StreamSinkGo_Build)/statusIcon)](https://teamcity.sedrad.com/viewType.html?buildTypeId=StreamSinkGo_Build&guest=1)
+![License](https://img.shields.io/badge/license-AGPL--v3-blue)
+![Go Version](https://img.shields.io/badge/Go-1.x-blue)
+[![Build Status](https://teamcity.sedrad.com/app/rest/builds/buildType:(id:MediaSinkGo_Build)/statusIcon)](https://teamcity.sedrad.com/viewType.html?buildTypeId=MediaSinkGo_Build&guest=1)
+![Build](https://img.shields.io/github/actions/workflow/status/srad/MediaSink.Go/build.yml)
 
-StreamSink is an automated streaming recording server written in Go, which exposes a REST API.
-It also manages the recorded catalogue, creates previews and has an API for cutting the recorded videos.
+MediaSink.Go is a powerful web-based media management and streaming server written in Go. It provides automated stream recording capabilities and a REST API for video editing, making it an ideal solution for media-heavy applications. The project also includes a web-based user interface, available at [MediaSink.Vue](https://github.com/srad/MediaSink.Vue), which offers an intuitive way to manage media files and interact with the server.
 
-Which streaming services are supported? Just look at the `youtubedl` [youtube-dl supported sites](https://ytdl-org.github.io/youtube-dl/supportedsites.html)
+## Features
+- **Automated Stream Recording**: Capture and store video streams automatically.
+- **REST API for Video Editing**: Perform video editing tasks programmatically.
+- **Web-Based User Interface**: Manage media files and interact with the server using [MediaSink.Vue](https://github.com/srad/MediaSink.Vue).
+- **Scalable & Lightweight**: Optimized for performance with a minimal resource footprint.
+- **Easy Integration**: RESTful API for seamless integration with other applications.
 
-The server will automatically keep checking streams and start recording them, once
-they are online. When streams have finished or have been paused by the used, they will be added to the catalogue.
+## Installation
 
-A Vue client [StreamSink.Vue](https://github.com/srad/StreamSink.Vue) is provided as a UI.
+This is mainly for development purposes. In production you'd use the Docker image.
 
-## Setup
+### Prerequisites
+- Go 1.x or later
+- FFmpeg (for video processing capabilities)
+- youtube-dl
+- FFprobe
+- SQLite 3
 
-You need to run the client and server separately in order to use the application.
+If you run the application outside of Docker, you must manually install FFmpeg, youtube-dl, FFprobe, and SQLite 3.
+- Go 1.x or later
+- FFmpeg (for video processing capabilities)
 
-### Server
+Debian setup:
 
-The application is primarily crafted for Linux but also has code paths specifically for Windows but still does not work well on Windows,
-due to process communication issues.
-So, it is recommended to use Linux, since process management works on Linux.
+```sh
+sudo apt update && sudo apt install -y wget ffmpeg youtube-dl sqlite3
+```
 
-The server requires that four applications being accessible from the environment: `ffmpeg`, `ffprobe`, `youtubedl`.
-All are available for Linux and Windows. Below are more specific descriptions for a setup.
+Go setup (replace with latest version):
 
-You can also use docker, but since `ffmpeg` is used with high CPU usage, you might want to run a native server instance.
+```sh
+sudo apt update
+sudo apt install -y wget
+wget https://golang.org/dl/go1.20.5.linux-amd64.tar.gz  # Replace with the latest version if needed
+sudo tar -C /usr/local -xvzf go1.20.5.linux-amd64.tar.gz
+echo "export PATH=$PATH:/usr/local/go/bin" >> ~/.bashrc
+source ~/.bashrc
+```
 
-#### Config
+### Clone the Repository
+```sh
+git clone https://github.com/srad/MediaSink.Go.git
+cd MediaSink.Go
+```
 
-The server has one config file under `conf/app.yml` which must provide
-the listed values. You can copy the default `conf.app.default.yml` to `conf.app.yml`.
+Run a build: 
 
-### Client
+```sh
+./build.sh
+```
 
-A UI for the server is provided at, and can be deploy with the
+The configuration file is located at `conf/app.yml` and can be modified to customize the server settings.
 
-### Linux
+### Build the Project
 
-You can install all required applications via the default packet manager, but it is recommended to compile ffmpeg from source, since the
-repo version of distros are typically far behind. However, you can still use the maintainer's version without any problem.
+```sh
+./run.sql
+```
 
-A setup script `setup.sh` is provided and installs all needed packages under Ubuntu and Debian and also compiles
-ffmpeg from source.
+### Run Test
 
-### Windows
-
-The server uses SQLite3 for storage and Go requires specific build tools in order to compile on Windows:
-
-1. Install gcc from here http://tdm-gcc.tdragon.net/download
-2. Install the font under `assets/..`
-3. Download ffmpeg and place it into the global system path
-
-#### Issue with Windows
-
-The server needs read and execute permissions on processes on Windows.
-It is also not enough to run the application as administrator, although
-it will work without these permissions, Windows will cause an and error
-exit code 255 (insufficient permission to manage process).
-
-## Run Test
-
-```go
+```sh
 go test ./...
 ```
+
+## Usage
+
+### API Endpoints
+MediaSink.Go provides a REST API to manage video recording and editing. Below are some key endpoints:
+For a complete API reference, check the [API Documentation](https://github.com/srad/MediaSink.Go/wiki/API-Docs).
+
+## Docker
+
+The official Docker image for MediaSink.Go is available on [Docker Hub](https://hub.docker.com/r/sedrad/mediasink-server). It contains all necessary dependencies, including FFmpeg, Sqlite 3, and does not depend on any other service, so you can run it without any additional setup.
+
+#### Docker Compose Setup
+
+Docker compose setup:
+
+```yaml
+mediasink-server:
+  image: sedrad/mediasink-server
+  environment:
+    - TZ=${TIMEZONE}
+  volumes:
+    - ${DATA_PATH}:/recordings
+    - ${DISK}:/disk
+  ports:
+    - "3000:3000"
+```
+
+`.env` file:
+
+```
+# Timezone for the server
+TIMEZONE=Europe/Berlin
+
+# Path where recorded videos will be stored
+DATA_PATH=/path/to/recordings
+
+# Path to the disk root. This is used to query the disk status.
+DISK=/mnt/disk1
+```
+
+#### Deploy
+
+```sh
+docker-compose --env-file .env up -d
+```
+
+## Contributing
+We welcome contributions! To get started:
+1. Fork the repository.
+2. Create a new branch.
+3. Make your changes and commit them.
+4. Submit a pull request.
+
+## License
+MediaSink.Go is dual-licensed under the GNU Affero General Public License (AGPL) and a commercial license.
+
+- **Open-Source Use (AGPL License)**: MediaSink.Go is free to use, modify, and distribute under the terms of the [GNU AGPL v3](https://www.gnu.org/licenses/agpl-3.0.html). Any modifications and derivative works must also be open-sourced under the same license.
+- **Commercial Use**: Companies that wish to use MediaSink.Go without AGPL restrictions must obtain a commercial license. For more details, please refer to the [LICENSE](LICENSE) file or contact us for licensing inquiries.
+MediaSink.Go is available for free for non-profit and educational institutions. However, a commercial license is required for companies. For more details, please refer to the [LICENSE](LICENSE) file or contact us for licensing inquiries.
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+
+## Contact
+For issues and feature requests, please use the [GitHub Issues](https://github.com/srad/MediaSink.Go/issues) section.
 
 ## Notes & Limitations
 
@@ -77,3 +147,7 @@ it will try to recover all recordings on the next launch. However, due to the na
 streaming videos and the crashing behavior, the video files might get corrupted.
 In this case they will be automatically delete from the system, after they have been
 checked for integrity. Otherwise, they are added to the library.
+
+
+---
+Star the repo if you find it useful! ⭐
