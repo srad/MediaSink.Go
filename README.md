@@ -84,12 +84,12 @@ For a complete API reference, check the [API Documentation](https://github.com/s
 
 The official Docker image for MediaSink.Go is available on [Docker Hub](https://hub.docker.com/r/sedrad/mediasink-server). It contains all necessary dependencies, including FFmpeg, Sqlite 3, and does not depend on any other service, so you can run it without any additional setup.
 
-#### Docker Compose Setup
+#### Server Docker Compose Setup
 
 ```yaml
 services:
   # Static files are served by nginx
-  recordings:
+  files:
     image: nginx
     environment:
       - TZ=${TIMEZONE}
@@ -117,10 +117,63 @@ services:
 TIMEZONE=Europe/Berlin
 
 # Path where recorded videos will be stored
-DATA_PATH=/path/to/recordings
+DATA_PATH=/path/to/files
 
 # Path to the disk root. This is used to query the disk status.
 DISK=/mnt/disk1
+```
+
+#### Entire setup with client
+
+```yml
+services:
+  files:
+    image: "nginx"
+    environment:
+      - TZ=${TIMEZONE}
+    volumes:
+      - ${DATA_PATH}:/usr/share/nginx/html:ro
+      - "{NGINX_CONF_PATH}:/etc/nginx/nginx.conf:ro"
+    ports:
+      - "4000:80"
+
+  mediasink-server:
+    image: sedrad/mediasink-server
+    environment:
+      - TZ=${TIMEZONE}
+    volumes:
+      - ${DATA_PATH}:/recordings
+      - ${DISK}:/disk
+    ports:
+      - "3000:3000"
+
+  mediasink-client:
+    image: sedrad/mediasink-vue
+    environment:
+      - TZ=${TIMEZONE}
+      - APP_API_URL=${API_URL}
+      - APP_BASE=${BASE_URL}
+      - APP_NAME=${APP_NAME}
+      - APP_SOCKET_URL=${SOCKET_URL}
+      - APP_FILE_URL=${FILE_URL}
+    ports:
+      - "80:80"
+```
+
+`.env` file:
+
+```
+# Server
+TIMEZONE=Europe/Berlin
+DATA_PATH=/path/to/files
+DISK=/mnt/disk1
+
+# Client
+APP_NAME=MediaSink
+API_URL=http://<server-ip>:3000/api/v1
+BASE_URL=http://<server-ip>:3000
+SOCKET_URL=ws://<server-ip>:3000/api/v1/ws
+FILE_URL=http://<server-ip>:4000
 ```
 
 #### Deploy
