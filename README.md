@@ -8,11 +8,13 @@
 MediaSink.Go is a powerful web-based media management and streaming server written in Go. It provides automated stream recording capabilities and a REST API for video editing, making it an ideal solution for media-heavy applications. The project also includes a web-based user interface, available at [MediaSink.Vue](https://github.com/srad/MediaSink.Vue), which offers an intuitive way to manage media files and interact with the server.
 
 ## Features
+- **Media Management**: Scans all media and generate previews and organizes them. Allows bookmarking folders, channel, media items, and tagging the media.
 - **Automated Stream Recording**: Capture and store video streams automatically.
 - **REST API for Video Editing**: Perform video editing tasks programmatically.
 - **Web-Based User Interface**: Manage media files and interact with the server using [MediaSink.Vue](https://github.com/srad/MediaSink.Vue).
 - **Scalable & Lightweight**: Optimized for performance with a minimal resource footprint.
 - **Easy Integration**: RESTful API for seamless integration with other applications.
+- **Disaster Recovery**: The system has which means that if the system crashes during recordings or job execution, it will try to recover all recordings on the next launch.
 
 ## Installation
 
