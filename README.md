@@ -87,15 +87,27 @@ The official Docker image for MediaSink.Go is available on [Docker Hub](https://
 #### Docker Compose Setup
 
 ```yaml
-mediasink-server:
-  image: sedrad/mediasink-server
-  environment:
-    - TZ=${TIMEZONE}
-  volumes:
-    - ${DATA_PATH}:/recordings
-    - ${DISK}:/disk
-  ports:
-    - "3000:3000"
+services:
+  # Static files are served by nginx
+  recordings:
+    image: "nginx"
+    environment:
+      - TZ=Europe/Berlin
+    volumes:
+      - ${DATA_PATH}:/usr/share/nginx/html:ro
+      - "./nginx.conf:/etc/nginx/nginx.conf:ro"
+    ports:
+      - "4000:80"
+  
+  mediasink-server:
+    image: sedrad/mediasink-server
+    environment:
+      - TZ=${TIMEZONE}
+    volumes:
+      - ${DATA_PATH}:/recordings
+      - ${DISK}:/disk
+    ports:
+      - "3000:3000"
 ```
 
 `.env` file:
