@@ -90,9 +90,9 @@ The official Docker image for MediaSink.Go is available on [Docker Hub](https://
 services:
   # Static files are served by nginx
   recordings:
-    image: "nginx"
+    image: nginx
     environment:
-      - TZ=Europe/Berlin
+      - TZ=${TIMEZONE}
     volumes:
       - ${DATA_PATH}:/usr/share/nginx/html:ro
       - "./nginx.conf:/etc/nginx/nginx.conf:ro"
