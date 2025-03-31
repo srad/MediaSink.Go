@@ -1,4 +1,4 @@
-module github.com/srad/streamsink
+module github.com/srad/mediasink
 
 go 1.23.0
 

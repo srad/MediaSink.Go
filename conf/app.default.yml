@@ -1,5 +1,5 @@
 db:
-  filename: 'streamsink.sqlite3'
+  filename: 'mediasink.sqlite3'
 dirs:
   recordings: ''
   data: '.previews'

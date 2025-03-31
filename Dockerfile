@@ -130,9 +130,9 @@ ENV GOARCH=${TARGETARCH}
 # https://github.com/golang/go/issues/64190#issuecomment-1813243547
 # https://stackoverflow.com/questions/58244095/gcc-7-error-unrecognized-command-line-option-m64
 #RUN if [ "$TARGETPLATFORM" = "linux/arm64" ]; then apt install gccgo-arm-linux-gnueabihf binutils-arm-linux-gnueabi gcc-aarch64-linux-gnu -y; fi
-#RUN if [ "$TARGETPLATFORM" = "linux/arm64" ]; then GOARCH='arm' GOHOSTARCH='arm' CC=arm-linux-gnueabihf-gcc GOGCCFLAGS="-march=armv8-a" CXX=arm-linux-gnueabi-g++ go build -gcflags="-l -N" -o ./streamsink; else go build -o ./streamsink ; fi
+#RUN if [ "$TARGETPLATFORM" = "linux/arm64" ]; then GOARCH='arm' GOHOSTARCH='arm' CC=arm-linux-gnueabihf-gcc GOGCCFLAGS="-march=armv8-a" CXX=arm-linux-gnueabi-g++ go build -gcflags="-l -N" -o ./mediasink; else go build -o ./main ; fi
 
-RUN go build -o ./streamsink -ldflags="-X 'main.Version=$VERSION' -X 'main.Commit=$COMMIT'"
+RUN go build -o ./main -ldflags="-X 'main.Version=$VERSION' -X 'main.Commit=$COMMIT'"
 
 EXPOSE 3000
 

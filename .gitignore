@@ -18,14 +18,13 @@
 .idea
 .code
 app.yml
-streamsink
+main
+main.exe
 restart_service.sh
 ffmpeg
 recordings
-main
 .previews
 rename.sh
-/streamsink
 /docs/swagger.yaml
 /docs/swagger.json
 /docs/docs.go

@@ -1,13 +1,13 @@
 package v1
 
 import (
-	"net/http"
+    "net/http"
 
-	"github.com/srad/streamsink/models/responses"
+    "github.com/srad/mediasink/models/responses"
 
-	"github.com/gin-gonic/gin"
-	"github.com/srad/streamsink/app"
-	"github.com/srad/streamsink/services"
+    "github.com/gin-gonic/gin"
+    "github.com/srad/mediasink/app"
+    "github.com/srad/mediasink/services"
 )
 
 // TriggerImport godoc
@@ -21,12 +21,12 @@ import (
 // @Failure     500 {} http.StatusInternalServerError
 // @Router      /admin/import [post]
 func TriggerImport(c *gin.Context) {
-	appG := app.Gin{C: c}
+    appG := app.Gin{C: c}
 
-	services.StopImport()
-	services.StartImport()
+    services.StopImport()
+    services.StartImport()
 
-	appG.Response(http.StatusOK, nil)
+    appG.Response(http.StatusOK, nil)
 }
 
 // GetImportInfo godoc
@@ -40,17 +40,17 @@ func TriggerImport(c *gin.Context) {
 // @Failure     500 {} http.StatusInternalServerError
 // @Router      /admin/import [get]
 func GetImportInfo(c *gin.Context) {
-	appG := app.Gin{C: c}
+    appG := app.Gin{C: c}
 
-	progress, size := services.GetImportProgress()
+    progress, size := services.GetImportProgress()
 
-	info := responses.ImportInfoResponse{
-		IsImporting: services.IsImporting(),
-		Progress:    progress,
-		Size:        size,
-	}
+    info := responses.ImportInfoResponse{
+        IsImporting: services.IsImporting(),
+        Progress:    progress,
+        Size:        size,
+    }
 
-	appG.Response(http.StatusOK, info)
+    appG.Response(http.StatusOK, info)
 }
 
 // GetVersion godoc
@@ -64,9 +64,9 @@ func GetImportInfo(c *gin.Context) {
 // @Failure     500 {} http.StatusInternalServerError
 // @Router      /admin/version [get]
 func GetVersion(version, commit string) func(c *gin.Context) {
-	return func(c *gin.Context) {
-		appG := app.Gin{C: c}
+    return func(c *gin.Context) {
+        appG := app.Gin{C: c}
 
-		appG.Response(http.StatusOK, responses.ServerInfoResponse{Commit: commit, Version: version})
-	}
+        appG.Response(http.StatusOK, responses.ServerInfoResponse{Commit: commit, Version: version})
+    }
 }

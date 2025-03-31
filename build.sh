@@ -7,4 +7,5 @@ swag init
 export CGO_CFLAGS="-g -O2 -Wno-return-local-addr"
 VERSION=dev
 COMMIT="$(git rev-parse --short HEAD)"
-go build -o ./streamsink -ldflags="-X 'main.Version=$VERSION' -X 'main.Commit=$COMMIT'" -mod=mod
+go mod vendor
+go build -o ./main -ldflags="-X 'main.Version=$VERSION' -X 'main.Commit=$COMMIT'" -mod=mod

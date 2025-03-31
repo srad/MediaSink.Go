@@ -1,7 +1,7 @@
 recordings
-streamsink
-streamsink.sqlite3
-streamsink.service
+main
+main.exe
+mediasink.sqlite3
 *.md
 log.sh
 test.sh

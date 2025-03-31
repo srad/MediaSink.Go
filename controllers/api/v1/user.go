@@ -1,11 +1,11 @@
 package v1
 
 import (
-	"errors"
-	"net/http"
+    "errors"
+    "net/http"
 
-	"github.com/gin-gonic/gin"
-	"github.com/srad/streamsink/app"
+    "github.com/gin-gonic/gin"
+    "github.com/srad/mediasink/app"
 )
 
 // GetUserProfile godoc
@@ -18,13 +18,13 @@ import (
 // @Failure     400 {} http.StatusBadRequest
 // @Router      /user/profile [post]
 func GetUserProfile(c *gin.Context) {
-	appG := app.Gin{C: c}
-	user, exists := c.Get("currentUser")
+    appG := app.Gin{C: c}
+    user, exists := c.Get("currentUser")
 
-	if !exists {
-		appG.Error(http.StatusBadRequest, errors.New("user does not exist"))
-		return
-	}
+    if !exists {
+        appG.Error(http.StatusBadRequest, errors.New("user does not exist"))
+        return
+    }
 
-	appG.Response(http.StatusOK, user)
+    appG.Response(http.StatusOK, user)
 }
