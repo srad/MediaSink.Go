@@ -28,8 +28,6 @@ This is mainly for development purposes. In production you'd use the Docker imag
 - SQLite 3
 
 If you run the application outside of Docker, you must manually install FFmpeg, youtube-dl, FFprobe, and SQLite 3.
-- Go 1.x or later
-- FFmpeg (for video processing capabilities)
 
 Debian setup:
 
