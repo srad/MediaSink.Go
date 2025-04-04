@@ -1,14 +1,14 @@
 package v1
 
 import (
-    "net/http"
+	"net/http"
 
-    log "github.com/sirupsen/logrus"
-    "github.com/srad/mediasink/models/responses"
+	log "github.com/sirupsen/logrus"
+	"github.com/srad/mediasink/models/responses"
 
-    "github.com/gin-gonic/gin"
-    "github.com/srad/mediasink/app"
-    "github.com/srad/mediasink/services"
+	"github.com/gin-gonic/gin"
+	"github.com/srad/mediasink/app"
+	"github.com/srad/mediasink/services"
 )
 
 // IsRecording godoc
@@ -20,8 +20,8 @@ import (
 // @Success     500
 // @Router      /recorder [get]
 func IsRecording(c *gin.Context) {
-    appG := app.Gin{C: c}
-    appG.Response(http.StatusOK, &responses.RecordingStatusResponse{IsRecording: services.IsRecording()})
+	appG := app.Gin{C: c}
+	appG.Response(http.StatusOK, &responses.RecordingStatusResponse{IsRecording: services.IsRecording()})
 }
 
 // StopRecorder godoc
@@ -30,11 +30,11 @@ func IsRecording(c *gin.Context) {
 // @Success     200
 // @Router      /recorder/pause [post]
 func StopRecorder(c *gin.Context) {
-    appG := app.Gin{C: c}
+	appG := app.Gin{C: c}
 
-    go services.StopRecorder()
+	go services.StopRecorder()
 
-    appG.Response(http.StatusOK, nil)
+	appG.Response(http.StatusOK, nil)
 }
 
 // StartRecorder godoc
@@ -43,9 +43,9 @@ func StopRecorder(c *gin.Context) {
 // @Success     200
 // @Router      /recorder/resume [post]
 func StartRecorder(c *gin.Context) {
-    appG := app.Gin{C: c}
+	appG := app.Gin{C: c}
 
-    log.Infoln("Resuming recorder")
-    services.StartRecorder()
-    appG.Response(http.StatusOK, nil)
+	log.Infoln("Resuming recorder")
+	services.StartRecorder()
+	appG.Response(http.StatusOK, nil)
 }

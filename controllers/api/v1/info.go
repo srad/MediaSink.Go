@@ -1,14 +1,14 @@
 package v1
 
 import (
-    "net/http"
-    "strconv"
+	"net/http"
+	"strconv"
 
-    "github.com/srad/mediasink/helpers"
+	"github.com/srad/mediasink/helpers"
 
-    "github.com/gin-gonic/gin"
-    "github.com/srad/mediasink/app"
-    "github.com/srad/mediasink/conf"
+	"github.com/gin-gonic/gin"
+	"github.com/srad/mediasink/app"
+	"github.com/srad/mediasink/conf"
 )
 
 // GetInfo godoc
@@ -22,23 +22,23 @@ import (
 // @Failure     500 {}  http.StatusInternalServerError
 // @Router      /info/{seconds} [get]
 func GetInfo(c *gin.Context) {
-    appG := app.Gin{C: c}
-    cfg := conf.Read()
+	appG := app.Gin{C: c}
+	cfg := conf.Read()
 
-    secs := c.Param("seconds")
-    val, err := strconv.ParseUint(secs, 10, 64)
-    if err != nil {
-        appG.Error(http.StatusInternalServerError, err)
-    }
+	secs := c.Param("seconds")
+	val, err := strconv.ParseUint(secs, 10, 64)
+	if err != nil {
+		appG.Error(http.StatusInternalServerError, err)
+	}
 
-    data, err := helpers.Info(cfg.DataDisk, cfg.NetworkDev, val)
+	data, err := helpers.Info(cfg.DataDisk, cfg.NetworkDev, val)
 
-    if err != nil {
-        appG.Error(http.StatusInternalServerError, err)
-        return
-    }
+	if err != nil {
+		appG.Error(http.StatusInternalServerError, err)
+		return
+	}
 
-    appG.Response(http.StatusOK, data)
+	appG.Response(http.StatusOK, data)
 }
 
 // GetDiskInfo godoc
@@ -51,16 +51,16 @@ func GetInfo(c *gin.Context) {
 // @Failure     500 {}  http.StatusInternalServerError
 // @Router      /info/disk [get]
 func GetDiskInfo(c *gin.Context) {
-    appG := app.Gin{C: c}
+	appG := app.Gin{C: c}
 
-    cfg := conf.Read()
+	cfg := conf.Read()
 
-    info, err := helpers.DiskUsage(cfg.DataDisk)
+	info, err := helpers.DiskUsage(cfg.DataDisk)
 
-    if err != nil {
-        appG.Error(http.StatusInternalServerError, err)
-        return
-    }
+	if err != nil {
+		appG.Error(http.StatusInternalServerError, err)
+		return
+	}
 
-    appG.Response(http.StatusOK, info)
+	appG.Response(http.StatusOK, info)
 }

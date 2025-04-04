@@ -1,17 +1,17 @@
 package v1
 
 import (
-    "net/http"
-    "strconv"
+	"net/http"
+	"strconv"
 
-    "github.com/srad/mediasink/helpers"
-    "github.com/srad/mediasink/models/requests"
-    "github.com/srad/mediasink/models/responses"
-    "github.com/srad/mediasink/services"
+	"github.com/srad/mediasink/helpers"
+	"github.com/srad/mediasink/models/requests"
+	"github.com/srad/mediasink/models/responses"
+	"github.com/srad/mediasink/services"
 
-    "github.com/gin-gonic/gin"
-    "github.com/srad/mediasink/app"
-    "github.com/srad/mediasink/database"
+	"github.com/gin-gonic/gin"
+	"github.com/srad/mediasink/app"
+	"github.com/srad/mediasink/database"
 )
 
 // AddPreviewJobs godoc
@@ -26,27 +26,27 @@ import (
 // @Failure     500 {} string "Error message"
 // @Router      /jobs/{id} [post]
 func AddPreviewJobs(c *gin.Context) {
-    appG := app.Gin{C: c}
+	appG := app.Gin{C: c}
 
-    id, err := strconv.ParseUint(c.Param("id"), 10, 32)
-    if err != nil {
-        appG.Error(http.StatusBadRequest, err)
-        return
-    }
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		appG.Error(http.StatusBadRequest, err)
+		return
+	}
 
-    recording, err := database.RecordingID(id).FindRecordingByID()
-    if err != nil {
-        appG.Error(http.StatusInternalServerError, err)
-        return
-    }
+	recording, err := database.RecordingID(id).FindRecordingByID()
+	if err != nil {
+		appG.Error(http.StatusInternalServerError, err)
+		return
+	}
 
-    job1, job2, err := recording.EnqueuePreviewsJob()
-    if err != nil {
-        appG.Error(http.StatusInternalServerError, err)
-        return
-    }
+	job1, job2, err := recording.EnqueuePreviewsJob()
+	if err != nil {
+		appG.Error(http.StatusInternalServerError, err)
+		return
+	}
 
-    appG.Response(http.StatusOK, []*database.Job{job1, job2})
+	appG.Response(http.StatusOK, []*database.Job{job1, job2})
 }
 
 // StopJob godoc
@@ -61,20 +61,20 @@ func AddPreviewJobs(c *gin.Context) {
 // @Failure     500 {} string "Error message"
 // @Router      /jobs/stop/{pid} [post]
 func StopJob(c *gin.Context) {
-    appG := app.Gin{C: c}
+	appG := app.Gin{C: c}
 
-    pid, err := strconv.Atoi(c.Param("pid"))
-    if err != nil {
-        appG.Error(http.StatusBadRequest, err)
-        return
-    }
+	pid, err := strconv.Atoi(c.Param("pid"))
+	if err != nil {
+		appG.Error(http.StatusBadRequest, err)
+		return
+	}
 
-    if err := helpers.Interrupt(pid); err != nil {
-        appG.Error(http.StatusInternalServerError, err)
-        return
-    }
+	if err := helpers.Interrupt(pid); err != nil {
+		appG.Error(http.StatusInternalServerError, err)
+		return
+	}
 
-    appG.Response(http.StatusOK, pid)
+	appG.Response(http.StatusOK, pid)
 }
 
 // DestroyJob godoc
@@ -89,20 +89,20 @@ func StopJob(c *gin.Context) {
 // @Failure     500 {} string "Error message"
 // @Router      /jobs/{id} [delete]
 func DestroyJob(c *gin.Context) {
-    appG := app.Gin{C: c}
+	appG := app.Gin{C: c}
 
-    id, err := strconv.ParseUint(c.Param("id"), 10, 32)
-    if err != nil {
-        appG.Error(http.StatusBadRequest, err)
-        return
-    }
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		appG.Error(http.StatusBadRequest, err)
+		return
+	}
 
-    if err := services.DeleteJob(uint(id)); err != nil {
-        appG.Error(http.StatusInternalServerError, err)
-        return
-    }
+	if err := services.DeleteJob(uint(id)); err != nil {
+		appG.Error(http.StatusInternalServerError, err)
+		return
+	}
 
-    appG.Response(http.StatusOK, nil)
+	appG.Response(http.StatusOK, nil)
 }
 
 // JobsList godoc
@@ -117,26 +117,26 @@ func DestroyJob(c *gin.Context) {
 // @Failure     500 {} string "Error message"
 // @Router      /jobs/list [post]
 func JobsList(c *gin.Context) {
-    appG := app.Gin{C: c}
+	appG := app.Gin{C: c}
 
-    var request requests.JobsRequest
+	var request requests.JobsRequest
 
-    if err := c.BindJSON(&request); err != nil {
-        appG.Error(http.StatusBadRequest, err)
-        return
-    }
+	if err := c.BindJSON(&request); err != nil {
+		appG.Error(http.StatusBadRequest, err)
+		return
+	}
 
-    if jobs, totalCount, err := database.JobList(request.Skip, request.Take, request.States, request.SortOrder); err != nil {
-        appG.Error(http.StatusInternalServerError, err)
-        return
-    } else {
-        appG.Response(http.StatusOK, responses.JobsResponse{
-            Jobs:       jobs,
-            TotalCount: totalCount,
-            Skip:       request.Skip,
-            Take:       request.Take,
-        })
-    }
+	if jobs, totalCount, err := database.JobList(request.Skip, request.Take, request.States, request.SortOrder); err != nil {
+		appG.Error(http.StatusInternalServerError, err)
+		return
+	} else {
+		appG.Response(http.StatusOK, responses.JobsResponse{
+			Jobs:       jobs,
+			TotalCount: totalCount,
+			Skip:       request.Skip,
+			Take:       request.Take,
+		})
+	}
 }
 
 // PauseJobs godoc
@@ -146,9 +146,9 @@ func JobsList(c *gin.Context) {
 // @Success     200 {} nil
 // @Router      /jobs/pause [post]
 func PauseJobs(c *gin.Context) {
-    appG := app.Gin{C: c}
-    services.StopJobProcessing()
-    appG.Response(http.StatusOK, nil)
+	appG := app.Gin{C: c}
+	services.StopJobProcessing()
+	appG.Response(http.StatusOK, nil)
 }
 
 // ResumeJobs godoc
@@ -158,9 +158,9 @@ func PauseJobs(c *gin.Context) {
 // @Success     200 {} nil
 // @Router      /jobs/resume [post]
 func ResumeJobs(c *gin.Context) {
-    appG := app.Gin{C: c}
-    services.StartJobProcessing()
-    appG.Response(http.StatusOK, nil)
+	appG := app.Gin{C: c}
+	services.StartJobProcessing()
+	appG.Response(http.StatusOK, nil)
 }
 
 // IsProcessing godoc
@@ -171,6 +171,6 @@ func ResumeJobs(c *gin.Context) {
 // @Tags        jobs
 // @Router      /jobs/worker [get]
 func IsProcessing(c *gin.Context) {
-    appG := app.Gin{C: c}
-    appG.Response(http.StatusOK, &responses.JobWorkerStatus{IsProcessing: services.IsJobProcessing()})
+	appG := app.Gin{C: c}
+	appG.Response(http.StatusOK, &responses.JobWorkerStatus{IsProcessing: services.IsJobProcessing()})
 }

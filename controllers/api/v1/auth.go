@@ -1,12 +1,12 @@
 package v1
 
 import (
-    "net/http"
+	"net/http"
 
-    "github.com/gin-gonic/gin"
-    "github.com/srad/mediasink/app"
-    "github.com/srad/mediasink/models/requests"
-    "github.com/srad/mediasink/services"
+	"github.com/gin-gonic/gin"
+	"github.com/srad/mediasink/app"
+	"github.com/srad/mediasink/models/requests"
+	"github.com/srad/mediasink/services"
 )
 
 // CreateUser godoc
@@ -21,20 +21,20 @@ import (
 // @Failure     500 {string} string "Error message"
 // @Router      /auth/signup [post]
 func CreateUser(c *gin.Context) {
-    appG := app.Gin{C: c}
-    var auth requests.AuthenticationRequest
+	appG := app.Gin{C: c}
+	var auth requests.AuthenticationRequest
 
-    if err := c.BindJSON(&auth); err != nil {
-        appG.Error(http.StatusBadRequest, err)
-        return
-    }
+	if err := c.BindJSON(&auth); err != nil {
+		appG.Error(http.StatusBadRequest, err)
+		return
+	}
 
-    if err := services.CreateUser(auth); err != nil {
-        appG.Error(http.StatusInternalServerError, err)
-        return
-    } else {
-        appG.Response(http.StatusOK, nil)
-    }
+	if err := services.CreateUser(auth); err != nil {
+		appG.Error(http.StatusInternalServerError, err)
+		return
+	} else {
+		appG.Response(http.StatusOK, nil)
+	}
 }
 
 // Login godoc
@@ -49,19 +49,19 @@ func CreateUser(c *gin.Context) {
 // @Failure     400 {string} string "Error message"
 // @Router      /auth/login [post]
 func Login(c *gin.Context) {
-    appG := app.Gin{C: c}
+	appG := app.Gin{C: c}
 
-    var auth requests.AuthenticationRequest
-    if err := c.BindJSON(&auth); err != nil {
-        appG.Error(http.StatusBadRequest, err)
-        return
-    }
+	var auth requests.AuthenticationRequest
+	if err := c.BindJSON(&auth); err != nil {
+		appG.Error(http.StatusBadRequest, err)
+		return
+	}
 
-    jwt, err := services.AuthenticateUser(auth)
-    if err != nil {
-        appG.Error(http.StatusUnauthorized, err)
-        return
-    }
+	jwt, err := services.AuthenticateUser(auth)
+	if err != nil {
+		appG.Error(http.StatusUnauthorized, err)
+		return
+	}
 
-    appG.Response(http.StatusOK, gin.H{"token": jwt})
+	appG.Response(http.StatusOK, gin.H{"token": jwt})
 }
