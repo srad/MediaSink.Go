@@ -4,34 +4,43 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/srad/mediasink/network"
-	"time"
-
-	"gorm.io/gorm/clause"
-
 	log "github.com/sirupsen/logrus"
 	"github.com/srad/mediasink/helpers"
+	"github.com/srad/mediasink/network"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
+	"time"
 )
 
 const (
-	TaskConvert        JobTask   = "convert"
-	TaskPreviewCover   JobTask   = "preview-cover"
-	TaskPreviewStrip   JobTask   = "preview-stripe"
-	TaskPreviewVideo   JobTask   = "preview-video"
-	TaskCut            JobTask   = "cut"
+	TaskConvert      JobTask = "convert"
+	TaskPreviewCover JobTask = "preview-cover"
+	TaskPreviewStrip JobTask = "preview-stripe"
+	TaskPreviewVideo JobTask = "preview-video"
+	TaskCut          JobTask = "cut"
+
 	StatusJobCompleted JobStatus = "completed"
 	StatusJobOpen      JobStatus = "open"
 	StatusJobError     JobStatus = "error"
 	StatusJobCanceled  JobStatus = "canceled"
-	JobOrderASC        JobOrder  = "ASC"
-	JobOrderDESC       JobOrder  = "DESC"
+
+	JobOrderASC  JobOrder = "ASC"
+	JobOrderDESC JobOrder = "DESC"
 )
+
+func (job JobTask) String() string {
+	return string(job)
+}
+
+func (status JobStatus) String() string {
+	return string(status)
+}
 
 type JobTask string
 type JobStatus string
 type JobOrder string
 
+/*
 type Job struct {
 	Channel   Channel   `json:"-" gorm:"foreignKey:channel_id;references:channel_id;"`
 	Recording Recording `json:"-" gorm:"foreignKey:recording_id;references:recording_id"`
@@ -62,6 +71,7 @@ type Job struct {
 	Info     *string `json:"info" gorm:"default:null"`
 	Args     *string `json:"args" gorm:"default:null"`
 }
+*/
 
 func (job *Job) CreateJob() error {
 	return DB.Create(job).Error

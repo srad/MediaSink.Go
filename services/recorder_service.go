@@ -113,7 +113,12 @@ func GeneratePosters() error {
 
 		video := &helpers.Video{FilePath: filepath}
 
-		if _, err := video.ExecPreviewCover(rec.DataFolder()); err != nil {
+		if _, err := video.ExecPreviewCover(rec.DataFolder(), rec.Filename.String(),
+			func(info helpers.CommandInfo) {
+				log.Infof("[GeneratePosters] Exec command: %s", info.Command)
+			}, func(message helpers.PipeMessage) {
+				log.Errorf("[GeneratePosters] Exec command error: %s", message.Output)
+			}); err != nil {
 			log.Errorf("[GeneratePosters] Error creating poster: %s", err)
 		}
 		i++

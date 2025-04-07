@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/srad/mediasink/jobs"
 	"net/http"
 	"os"
 	"os/signal"
@@ -39,6 +40,7 @@ func main() {
 
 	services.StartUpJobs()
 	services.StartRecorder()
+	jobs.LoadPlugins("./plugins")
 	services.StartJobProcessing()
 
 	gin.SetMode("release")
@@ -69,6 +71,7 @@ func cleanup() {
 	services.StopJobProcessing()
 	services.StopRecorder()
 	log.Infoln("cleanup complete")
+	database.Close()
 }
 
 func setupFolders() {

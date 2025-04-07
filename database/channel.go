@@ -1,18 +1,20 @@
 package database
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"github.com/astaxie/beego/utils"
+	log "github.com/sirupsen/logrus"
+	"github.com/srad/mediasink/ent"
+	"gorm.io/gorm"
 	"os/exec"
 	"path"
 	"strings"
 	"time"
-
-	"github.com/astaxie/beego/utils"
-	log "github.com/sirupsen/logrus"
-	"gorm.io/gorm"
 )
 
+/*
 // Channel Represent a single stream, that shall be recorded. It can also serve as a folder for videos.
 type Channel struct {
 	ChannelID   ChannelID   `json:"channelId" gorm:"autoIncrement;primaryKey;column:channel_id" extensions:"!x-nullable"`
@@ -34,20 +36,16 @@ type Channel struct {
 	// 1:n
 	Recordings []Recording `json:"recordings" gorm:"foreignKey:channel_id;constraint:OnDelete:CASCADE"`
 }
+*/
 
-func CreateChannel(channelName ChannelName, displayName, url string) (*Channel, error) {
-	var channel *Channel
-	if err := DB.Model(Channel{}).Where("channel_name = ?", channelName).First(&channel).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			newChannel := newChannel(channelName, displayName, url)
-			if err := DB.Create(&newChannel).Error; err != nil {
-				return nil, err
-			}
-			return &newChannel, nil
-		}
-	}
+func CreateChannel(channelName ChannelName, displayName, url string) (*ent.Channel, error) {
+	ctx := context.Background()
 
-	return channel, nil
+	return Client.Channel.Create().
+		SetChannelName(channelName.String()).
+		SetDisplayName(displayName).
+		SetURL(url).
+		Save(ctx)
 }
 
 func DestroyChannelRecordings(channelID ChannelID) error {
@@ -61,7 +59,7 @@ func DestroyChannelRecordings(channelID ChannelID) error {
 	}
 
 	// 1. Terminate and delete all jobs.
-	if jobs, err := channel.Jobs(); err != nil {
+	if jobs, err := Client.Job.Query().Where(job.File) channel.Jobs(); err != nil {
 		log.Errorln(err)
 	} else {
 		for _, job := range jobs {

@@ -42,7 +42,12 @@ var (
 )
 
 func (si *StreamInfo) Screenshot() error {
-	return helpers.ExtractFirstFrame(si.URL, conf.FrameWidth, filepath.Join(si.ChannelName.AbsoluteChannelDataPath(), database.SnapshotFilename))
+	return helpers.ExtractFirstFrame(si.URL, conf.FrameWidth, filepath.Join(si.ChannelName.AbsoluteChannelDataPath(), database.SnapshotFilename),
+		func(info helpers.CommandInfo) {
+			log.Infof("Exec command: %s", info.Command)
+		}, func(message helpers.PipeMessage) {
+			log.Errorf("Exec command error: %s", message.Output)
+		})
 }
 
 // CaptureChannel Starts and also waits for the stream to end or being killed
@@ -187,7 +192,12 @@ func Start(id database.ChannelID) (bool, error) {
 	log.Infof("[Start] Starting '%s' at '%s'", channel.ChannelName, url)
 
 	go func() {
-		if err := helpers.ExtractFirstFrame(url, conf.FrameWidth, filepath.Join(channel.ChannelName.AbsoluteChannelDataPath(), database.SnapshotFilename)); err != nil {
+		if err := helpers.ExtractFirstFrame(url, conf.FrameWidth, filepath.Join(channel.ChannelName.AbsoluteChannelDataPath(), database.SnapshotFilename),
+			func(info helpers.CommandInfo) {
+				log.Infof("Extracting first frame command: %s", info.Command)
+			}, func(message helpers.PipeMessage) {
+				log.Errorf("Extracting first frame command error: %s", message.Output)
+			}); err != nil {
 			log.Errorf("Error: %s", err)
 		}
 	}()

@@ -174,7 +174,7 @@ func (video *Video) createPreviewStripe(arg *PreviewStripeArgs) error {
 	})
 }
 
-func (video *Video) createPreviewCover(outputDir, filename string) error {
+func (video *Video) createPreviewCover(outputDir, filename string, OnStart func(CommandInfo), OnPipeErr func(PipeMessage)) error {
 	coverDir := filepath.Join(outputDir, CoverFolder)
 	if err := os.MkdirAll(coverDir, 0777); err != nil {
 		return err
@@ -182,7 +182,7 @@ func (video *Video) createPreviewCover(outputDir, filename string) error {
 
 	path := filepath.Join(coverDir, filename)
 
-	return ExtractFirstFrame(video.FilePath, conf.FrameWidth, path)
+	return ExtractFirstFrame(video.FilePath, conf.FrameWidth, path, OnStart, OnPipeErr)
 }
 
 func (video *Video) createPreviewVideo(args *PreviewVideoArgs) (string, error) {
@@ -271,8 +271,10 @@ func calcFps(output string) (float64, error) {
 	return fps, nil
 }
 
-func ExtractFirstFrame(input, height, outputPathPoster string) error {
+func ExtractFirstFrame(input, height, outputPathPoster string, OnStart func(CommandInfo), OnPipeErr func(PipeMessage)) error {
 	err := ExecSync(&ExecArgs{
+		OnStart:     OnStart,
+		OnPipeErr:   OnPipeErr,
 		Command:     "ffmpeg",
 		CommandArgs: []string{"-y", "-hide_banner", "-loglevel", "error", "-i", input, "-r", "1", "-vf", "scale=" + height + ":-1", "-q:v", "2", "-frames:v", "1", outputPathPoster},
 	})
@@ -473,16 +475,14 @@ func (video Video) ExecPreviewVideo(args *VideoConversionArgs, extractCount uint
 	return &PreviewResult{Filename: args.Filename, FilePath: previewVideoDir}, nil
 }
 
-func (video Video) ExecPreviewCover(outputPath string) (*PreviewResult, error) {
-	basename := filepath.Base(video.FilePath)
-	filename := FileNameWithoutExtension(basename)
-	file := filename + ".jpg"
+func (video Video) ExecPreviewCover(outputPath, filename string, OnStart func(CommandInfo), OnPipeErr func(PipeMessage)) (*PreviewResult, error) {
+	filename = FileNameWithoutExtension(filename) + ".jpg"
 
-	if err := video.createPreviewCover(outputPath, file); err != nil {
+	if err := video.createPreviewCover(outputPath, filename, OnStart, OnPipeErr); err != nil {
 		return nil, fmt.Errorf("error generating poster for '%s': %s", video.FilePath, err)
 	}
 
-	return &PreviewResult{FilePath: video.FilePath, Filename: file}, nil
+	return &PreviewResult{FilePath: video.FilePath, Filename: filename}, nil
 }
 
 // CreatePreviewShots Create a separate preview image file, at every frame distance.

@@ -20,7 +20,8 @@ const (
 )
 
 var (
-	ThreadCount = uint(float32(runtime.NumCPU() / 2))
+	ThreadCount   = uint(float32(runtime.NumCPU() / 2))
+	configMissing = false
 )
 
 type Cfg struct {
@@ -66,7 +67,9 @@ func Read() Cfg {
 	viper.SetConfigName("conf/app") // name of config file (without extension)
 	viper.AddConfigPath("./")       // path to look for the config file in
 	err := viper.ReadInConfig()     // Find and read the config file
-	if err != nil {                 // Handle errors reading the config file
+	// Only log once, that not yml file has been found
+	if err != nil && !configMissing {
+		configMissing = true
 		log.Warnf("config file not found, will try to find env varibles: %s", err)
 	}
 

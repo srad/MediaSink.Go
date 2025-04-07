@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"github.com/srad/mediasink/conf"
 	"os"
@@ -52,7 +53,7 @@ func processJobs(ctx context.Context) {
 				log.Errorln(err)
 				network.BroadCastClients(network.JobErrorEvent, JobMessage[string]{Job: job, Data: err.Error()})
 			}
-			// actually job.Complete() and job.Error() set active=false, but GORM is a troublemakers ORM.
+			// actually job.Complete() and job.Error() set active=false, but GORM is a troublemaker ORM.
 			if err := job.Deactivate(); err != nil {
 				log.Errorf("Error deactivating job: %s", err)
 			}
@@ -84,9 +85,7 @@ func executeJob(job *database.Job) error {
 
 func handleJob(job *database.Job, err error) error {
 	if err != nil {
-		errErrStore := job.Error(err)
-		network.BroadCastClients(network.JobErrorEvent, JobMessage[string]{Data: err.Error(), Job: job})
-		return errErrStore
+		return job.Error(err)
 	} else {
 		return job.Completed()
 	}
@@ -183,7 +182,12 @@ func processPreviewVideo(job *database.Job, video *helpers.Video) error {
 }
 
 func processPreviewCover(job *database.Job, video *helpers.Video) error {
-	if _, err := video.ExecPreviewCover(job.ChannelName.AbsoluteChannelDataPath()); err != nil {
+	_, err := video.ExecPreviewCover(job.ChannelName.AbsoluteChannelDataPath(), job.Filename.String(), func(info helpers.CommandInfo) {
+		job.UpdateInfo(info.Pid, info.Command)
+	}, func(message helpers.PipeMessage) {
+		job.Error(errors.New(message.Output))
+	})
+	if err != nil {
 		return err
 	}
 	return job.Recording.UpdatePreviewPath(database.PreviewCover)
