@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/srad/mediasink/conf"
+	"github.com/srad/mediasink/jobs"
 	"os"
 	"strings"
 	"time"
@@ -22,8 +23,8 @@ var (
 )
 
 type JobMessage[T any] struct {
-	Job  *database.Job `json:"job"`
-	Data T             `json:"data"`
+	Job  *jobs.Job `json:"job"`
+	Data T         `json:"data"`
 }
 
 func processJobs(ctx context.Context) {

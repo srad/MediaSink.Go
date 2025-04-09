@@ -66,11 +66,11 @@ func init() {
 	// job.AttemptCountValidator is a validator for the "attempt_count" field. It is called by the builders before save.
 	job.AttemptCountValidator = jobDescAttemptCount.Validators[0].(func(int) error)
 	// jobDescCreatedAt is the schema descriptor for created_at field.
-	jobDescCreatedAt := jobFields[6].Descriptor()
+	jobDescCreatedAt := jobFields[7].Descriptor()
 	// job.DefaultCreatedAt holds the default value on creation for the created_at field.
 	job.DefaultCreatedAt = jobDescCreatedAt.Default.(func() time.Time)
 	// jobDescUpdatedAt is the schema descriptor for updated_at field.
-	jobDescUpdatedAt := jobFields[7].Descriptor()
+	jobDescUpdatedAt := jobFields[8].Descriptor()
 	// job.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	job.DefaultUpdatedAt = jobDescUpdatedAt.Default.(func() time.Time)
 	// job.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.

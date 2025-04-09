@@ -51,6 +51,7 @@ var (
 		{Name: "status", Type: field.TypeEnum, Enums: []string{"pending", "running", "failed", "done"}, Default: "pending"},
 		{Name: "attempt_count", Type: field.TypeInt, Default: 0},
 		{Name: "last_error", Type: field.TypeString, Nullable: true},
+		{Name: "details", Type: field.TypeString, Nullable: true},
 		{Name: "created_at", Type: field.TypeTime},
 		{Name: "updated_at", Type: field.TypeTime},
 		{Name: "channel_jobs", Type: field.TypeInt, Nullable: true},
@@ -63,7 +64,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "jobs_channels_jobs",
-				Columns:    []*schema.Column{JobsColumns[8]},
+				Columns:    []*schema.Column{JobsColumns[9]},
 				RefColumns: []*schema.Column{ChannelsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
@@ -72,7 +73,7 @@ var (
 			{
 				Name:    "job_status_created_at",
 				Unique:  false,
-				Columns: []*schema.Column{JobsColumns[3], JobsColumns[6]},
+				Columns: []*schema.Column{JobsColumns[3], JobsColumns[7]},
 			},
 		},
 	}

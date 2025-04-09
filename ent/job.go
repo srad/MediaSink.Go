@@ -28,6 +28,8 @@ type Job struct {
 	AttemptCount int `json:"attempt_count,omitempty"`
 	// LastError holds the value of the "last_error" field.
 	LastError *string `json:"last_error,omitempty"`
+	// Details holds the value of the "details" field.
+	Details *string `json:"details,omitempty"`
 	// CreatedAt holds the value of the "created_at" field.
 	CreatedAt time.Time `json:"created_at,omitempty"`
 	// UpdatedAt holds the value of the "updated_at" field.
@@ -45,7 +47,7 @@ func (*Job) scanValues(columns []string) ([]any, error) {
 			values[i] = new([]byte)
 		case job.FieldAttemptCount:
 			values[i] = new(sql.NullInt64)
-		case job.FieldType, job.FieldStatus, job.FieldLastError:
+		case job.FieldType, job.FieldStatus, job.FieldLastError, job.FieldDetails:
 			values[i] = new(sql.NullString)
 		case job.FieldCreatedAt, job.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -104,6 +106,13 @@ func (j *Job) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				j.LastError = new(string)
 				*j.LastError = value.String
+			}
+		case job.FieldDetails:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field details", values[i])
+			} else if value.Valid {
+				j.Details = new(string)
+				*j.Details = value.String
 			}
 		case job.FieldCreatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
@@ -174,6 +183,11 @@ func (j *Job) String() string {
 	builder.WriteString(", ")
 	if v := j.LastError; v != nil {
 		builder.WriteString("last_error=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := j.Details; v != nil {
+		builder.WriteString("details=")
 		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")

@@ -1801,6 +1801,7 @@ type JobMutation struct {
 	attempt_count    *int
 	addattempt_count *int
 	last_error       *string
+	details          *string
 	created_at       *time.Time
 	updated_at       *time.Time
 	clearedFields    map[string]struct{}
@@ -2126,6 +2127,55 @@ func (m *JobMutation) ResetLastError() {
 	delete(m.clearedFields, job.FieldLastError)
 }
 
+// SetDetails sets the "details" field.
+func (m *JobMutation) SetDetails(s string) {
+	m.details = &s
+}
+
+// Details returns the value of the "details" field in the mutation.
+func (m *JobMutation) Details() (r string, exists bool) {
+	v := m.details
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDetails returns the old "details" field's value of the Job entity.
+// If the Job object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *JobMutation) OldDetails(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDetails is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDetails requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDetails: %w", err)
+	}
+	return oldValue.Details, nil
+}
+
+// ClearDetails clears the value of the "details" field.
+func (m *JobMutation) ClearDetails() {
+	m.details = nil
+	m.clearedFields[job.FieldDetails] = struct{}{}
+}
+
+// DetailsCleared returns if the "details" field was cleared in this mutation.
+func (m *JobMutation) DetailsCleared() bool {
+	_, ok := m.clearedFields[job.FieldDetails]
+	return ok
+}
+
+// ResetDetails resets all changes to the "details" field.
+func (m *JobMutation) ResetDetails() {
+	m.details = nil
+	delete(m.clearedFields, job.FieldDetails)
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (m *JobMutation) SetCreatedAt(t time.Time) {
 	m.created_at = &t
@@ -2232,7 +2282,7 @@ func (m *JobMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *JobMutation) Fields() []string {
-	fields := make([]string, 0, 7)
+	fields := make([]string, 0, 8)
 	if m._type != nil {
 		fields = append(fields, job.FieldType)
 	}
@@ -2247,6 +2297,9 @@ func (m *JobMutation) Fields() []string {
 	}
 	if m.last_error != nil {
 		fields = append(fields, job.FieldLastError)
+	}
+	if m.details != nil {
+		fields = append(fields, job.FieldDetails)
 	}
 	if m.created_at != nil {
 		fields = append(fields, job.FieldCreatedAt)
@@ -2272,6 +2325,8 @@ func (m *JobMutation) Field(name string) (ent.Value, bool) {
 		return m.AttemptCount()
 	case job.FieldLastError:
 		return m.LastError()
+	case job.FieldDetails:
+		return m.Details()
 	case job.FieldCreatedAt:
 		return m.CreatedAt()
 	case job.FieldUpdatedAt:
@@ -2295,6 +2350,8 @@ func (m *JobMutation) OldField(ctx context.Context, name string) (ent.Value, err
 		return m.OldAttemptCount(ctx)
 	case job.FieldLastError:
 		return m.OldLastError(ctx)
+	case job.FieldDetails:
+		return m.OldDetails(ctx)
 	case job.FieldCreatedAt:
 		return m.OldCreatedAt(ctx)
 	case job.FieldUpdatedAt:
@@ -2342,6 +2399,13 @@ func (m *JobMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetLastError(v)
+		return nil
+	case job.FieldDetails:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDetails(v)
 		return nil
 	case job.FieldCreatedAt:
 		v, ok := value.(time.Time)
@@ -2405,6 +2469,9 @@ func (m *JobMutation) ClearedFields() []string {
 	if m.FieldCleared(job.FieldLastError) {
 		fields = append(fields, job.FieldLastError)
 	}
+	if m.FieldCleared(job.FieldDetails) {
+		fields = append(fields, job.FieldDetails)
+	}
 	return fields
 }
 
@@ -2421,6 +2488,9 @@ func (m *JobMutation) ClearField(name string) error {
 	switch name {
 	case job.FieldLastError:
 		m.ClearLastError()
+		return nil
+	case job.FieldDetails:
+		m.ClearDetails()
 		return nil
 	}
 	return fmt.Errorf("unknown Job nullable field %s", name)
@@ -2444,6 +2514,9 @@ func (m *JobMutation) ResetField(name string) error {
 		return nil
 	case job.FieldLastError:
 		m.ResetLastError()
+		return nil
+	case job.FieldDetails:
+		m.ResetDetails()
 		return nil
 	case job.FieldCreatedAt:
 		m.ResetCreatedAt()

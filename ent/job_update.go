@@ -103,6 +103,26 @@ func (ju *JobUpdate) ClearLastError() *JobUpdate {
 	return ju
 }
 
+// SetDetails sets the "details" field.
+func (ju *JobUpdate) SetDetails(s string) *JobUpdate {
+	ju.mutation.SetDetails(s)
+	return ju
+}
+
+// SetNillableDetails sets the "details" field if the given value is not nil.
+func (ju *JobUpdate) SetNillableDetails(s *string) *JobUpdate {
+	if s != nil {
+		ju.SetDetails(*s)
+	}
+	return ju
+}
+
+// ClearDetails clears the value of the "details" field.
+func (ju *JobUpdate) ClearDetails() *JobUpdate {
+	ju.mutation.ClearDetails()
+	return ju
+}
+
 // SetUpdatedAt sets the "updated_at" field.
 func (ju *JobUpdate) SetUpdatedAt(t time.Time) *JobUpdate {
 	ju.mutation.SetUpdatedAt(t)
@@ -208,6 +228,12 @@ func (ju *JobUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	if ju.mutation.LastErrorCleared() {
 		_spec.ClearField(job.FieldLastError, field.TypeString)
 	}
+	if value, ok := ju.mutation.Details(); ok {
+		_spec.SetField(job.FieldDetails, field.TypeString, value)
+	}
+	if ju.mutation.DetailsCleared() {
+		_spec.ClearField(job.FieldDetails, field.TypeString)
+	}
 	if value, ok := ju.mutation.UpdatedAt(); ok {
 		_spec.SetField(job.FieldUpdatedAt, field.TypeTime, value)
 	}
@@ -303,6 +329,26 @@ func (juo *JobUpdateOne) SetNillableLastError(s *string) *JobUpdateOne {
 // ClearLastError clears the value of the "last_error" field.
 func (juo *JobUpdateOne) ClearLastError() *JobUpdateOne {
 	juo.mutation.ClearLastError()
+	return juo
+}
+
+// SetDetails sets the "details" field.
+func (juo *JobUpdateOne) SetDetails(s string) *JobUpdateOne {
+	juo.mutation.SetDetails(s)
+	return juo
+}
+
+// SetNillableDetails sets the "details" field if the given value is not nil.
+func (juo *JobUpdateOne) SetNillableDetails(s *string) *JobUpdateOne {
+	if s != nil {
+		juo.SetDetails(*s)
+	}
+	return juo
+}
+
+// ClearDetails clears the value of the "details" field.
+func (juo *JobUpdateOne) ClearDetails() *JobUpdateOne {
+	juo.mutation.ClearDetails()
 	return juo
 }
 
@@ -440,6 +486,12 @@ func (juo *JobUpdateOne) sqlSave(ctx context.Context) (_node *Job, err error) {
 	}
 	if juo.mutation.LastErrorCleared() {
 		_spec.ClearField(job.FieldLastError, field.TypeString)
+	}
+	if value, ok := juo.mutation.Details(); ok {
+		_spec.SetField(job.FieldDetails, field.TypeString, value)
+	}
+	if juo.mutation.DetailsCleared() {
+		_spec.ClearField(job.FieldDetails, field.TypeString)
 	}
 	if value, ok := juo.mutation.UpdatedAt(); ok {
 		_spec.SetField(job.FieldUpdatedAt, field.TypeTime, value)

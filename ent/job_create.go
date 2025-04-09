@@ -75,6 +75,20 @@ func (jc *JobCreate) SetNillableLastError(s *string) *JobCreate {
 	return jc
 }
 
+// SetDetails sets the "details" field.
+func (jc *JobCreate) SetDetails(s string) *JobCreate {
+	jc.mutation.SetDetails(s)
+	return jc
+}
+
+// SetNillableDetails sets the "details" field if the given value is not nil.
+func (jc *JobCreate) SetNillableDetails(s *string) *JobCreate {
+	if s != nil {
+		jc.SetDetails(*s)
+	}
+	return jc
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (jc *JobCreate) SetCreatedAt(t time.Time) *JobCreate {
 	jc.mutation.SetCreatedAt(t)
@@ -268,6 +282,10 @@ func (jc *JobCreate) createSpec() (*Job, *sqlgraph.CreateSpec) {
 	if value, ok := jc.mutation.LastError(); ok {
 		_spec.SetField(job.FieldLastError, field.TypeString, value)
 		_node.LastError = &value
+	}
+	if value, ok := jc.mutation.Details(); ok {
+		_spec.SetField(job.FieldDetails, field.TypeString, value)
+		_node.Details = &value
 	}
 	if value, ok := jc.mutation.CreatedAt(); ok {
 		_spec.SetField(job.FieldCreatedAt, field.TypeTime, value)

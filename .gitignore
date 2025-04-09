@@ -29,3 +29,8 @@ rename.sh
 /docs/swagger.json
 /docs/docs.go
 bin
+
+plugins
+!plugins/.keep
+
+!**/.keep

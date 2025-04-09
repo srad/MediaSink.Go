@@ -34,6 +34,9 @@ func (Job) Fields() []ent.Field {
 		field.String("last_error").
 			Optional().
 			Nillable(),
+		field.String("details").
+			Optional().
+			Nillable(),
 		field.Time("created_at").
 			Default(time.Now).
 			Immutable(),

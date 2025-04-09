@@ -40,7 +40,7 @@ func main() {
 
 	services.StartUpJobs()
 	services.StartRecorder()
-	jobs.LoadPlugins("./plugins")
+	jobs.Start(database.Client)
 	services.StartJobProcessing()
 
 	gin.SetMode("release")

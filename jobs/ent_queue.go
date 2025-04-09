@@ -3,59 +3,29 @@ package jobs
 import (
 	"context"
 	"fmt"
+	"github.com/google/uuid"
 	"github.com/srad/mediasink/ent"
 	"github.com/srad/mediasink/ent/job"
 	"log"
 	"sync"
 	"time"
-
-	// Import SQLite driver (needed by Ent)
-	_ "github.com/mattn/go-sqlite3"
-
-	"github.com/google/uuid" // Import for UUID type if needed outside schema
-)
-
-var (
-	dbPath = "./jobs.db"
-	// Construct DSN - WAL mode and busy timeout are good defaults
-	dsn = fmt.Sprintf("file:%s?_pragma=foreign_keys(1)&_journal_mode=WAL&_busy_timeout=5000", dbPath)
 )
 
 // EntQueue implements a persistent job queue using SQLite via Ent ORM.
 type EntQueue struct {
 	client     *ent.Client // Use Ent Client
-	dbPath     string
 	mu         sync.Mutex
 	notifyChan chan struct{}
 	closeOnce  sync.Once
 	closed     bool
 }
 
-// NewEntQueue creates or opens a SQLite database connection via Ent.
-func NewEntQueue(dbPath string) (*EntQueue, error) {
-	log.Printf("Initializing Ent SQLite job queue at: %s", dbPath)
-
-	// Open Ent client connection
-	client, err := ent.Open("sqlite3", dsn)
-	if err != nil {
-		return nil, fmt.Errorf("failed to open ent client for sqlite %s: %w", dbPath, err)
-	}
-
-	// Run the automatic migration tool to create/update schema.
-	// Use context.Background() or a specific context for migrations.
-	log.Println("Running Ent AutoMigrate...")
-	if err := client.Schema.Create(context.Background()); err != nil {
-		client.Close() // Attempt to close client on migration failure
-		return nil, fmt.Errorf("failed to run ent auto migration: %w", err)
-	}
-
+func NewEntQueue(client *ent.Client) (*EntQueue, error) {
 	q := &EntQueue{
 		client:     client,
-		dbPath:     dbPath,
 		notifyChan: make(chan struct{}, 1), // Buffered channel
 	}
 
-	log.Printf("Ent SQLite job queue initialized successfully.")
 	return q, nil
 }
 

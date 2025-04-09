@@ -25,6 +25,8 @@ const (
 	FieldAttemptCount = "attempt_count"
 	// FieldLastError holds the string denoting the last_error field in the database.
 	FieldLastError = "last_error"
+	// FieldDetails holds the string denoting the details field in the database.
+	FieldDetails = "details"
 	// FieldCreatedAt holds the string denoting the created_at field in the database.
 	FieldCreatedAt = "created_at"
 	// FieldUpdatedAt holds the string denoting the updated_at field in the database.
@@ -41,6 +43,7 @@ var Columns = []string{
 	FieldStatus,
 	FieldAttemptCount,
 	FieldLastError,
+	FieldDetails,
 	FieldCreatedAt,
 	FieldUpdatedAt,
 }
@@ -139,6 +142,11 @@ func ByAttemptCount(opts ...sql.OrderTermOption) OrderOption {
 // ByLastError orders the results by the last_error field.
 func ByLastError(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldLastError, opts...).ToFunc()
+}
+
+// ByDetails orders the results by the details field.
+func ByDetails(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldDetails, opts...).ToFunc()
 }
 
 // ByCreatedAt orders the results by the created_at field.
