@@ -5,7 +5,7 @@
 [![Build Status](https://teamcity.sedrad.com/app/rest/builds/buildType:(id:MediaSinkGo_Build)/statusIcon)](https://teamcity.sedrad.com/viewType.html?buildTypeId=MediaSinkGo_Build&guest=1)
 ![Build](https://img.shields.io/github/actions/workflow/status/srad/MediaSink.Go/build.yml)
 
-MediaSink.Go is a powerful web-based media management and streaming server written in Go. It provides automated stream recording capabilities and a REST API for video editing, making it an ideal solution for media-heavy applications. The project also includes a web-based user interface, available at [MediaSink.Vue](https://github.com/srad/MediaSink.Vue), which offers an intuitive way to manage media files and interact with the server.
+MediaSink.Go is a powerful web-based video management, editing and streaming server written in Go. It provides automated stream recording capabilities and a REST API for video editing, making it an ideal solution for media-heavy applications. The project also includes a web-based user interface, available at [MediaSink.Vue](https://github.com/srad/MediaSink.Vue), which offers an intuitive way to manage media files and interact with the server.
 
 ## Features
 - **Media Management**: Scans all media and generate previews and organizes them. Allows bookmarking folders, channel, media items, and tagging the media.
