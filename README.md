@@ -77,7 +77,7 @@ go test ./...
 ### Storage device file system
 
 You might want to spend some time looking at a reasonable choice for your file system because it might have
-a significant effect on the lifetime of your storage device, especially with write-heavy large files workloads.
+a significant effect on the lifespan of your storage device, especially with write-heavy large files workloads.
 
 These are the most common file systems and their characteristics in this context:
 
@@ -88,8 +88,8 @@ These are the most common file systems and their characteristics in this context
 | ZFS         | ⚖️ Medium    | ✅ Excellent  | 🔧🔧🔧 High      | When data integrity > raw speed         |
 | Btrfs       | ⚡ Okay      | ✅ Good       | 🔧 Medium         | Light snapshots, lower overhead than ZFS|
 
-If you do not require the highest amout of data integritity checking and snapshots, at the cost of your device's lifetime, then
-It is highly recommended to format your storage device with the XFS filesystem, since it is optimized large write file write heavy workloads.
+If you do not require the highest amout of data integritity checking and snapshots, at the cost of your device's lifespan, then
+it is highly recommended to format your storage device with the XFS filesystem, since it is optimized large write file write heavy workloads.
 
 You can do that from the shell:
 
