@@ -14,7 +14,7 @@ MediaSink.Go is a powerful web-based video management, editing and streaming ser
 - **Web-Based User Interface**: Manage media files and interact with the server using [MediaSink.Vue](https://github.com/srad/MediaSink.Vue).
 - **Scalable & Lightweight**: Optimized for performance with a minimal resource footprint.
 - **Easy Integration**: RESTful API for seamless integration with other applications.
-- **Disaster Recovery**: The system has which means that if the system crashes during recordings or job execution, it will try to recover all recordings on the next launch.
+- **Disaster Recovery**: If the system crashes during recordings or while processing background jobs, it will recover on the next restart and check the media files for integrity.
 
 ## Installation
 
