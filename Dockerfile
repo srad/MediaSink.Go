@@ -4,8 +4,8 @@ ARG BUILDPLATFORM
 ARG TARGETPLATFORM
 ARG TARGETOS
 ARG TARGETARCH
-ARG VERSION="1.0.0-alpha-$TARGETARCH"
-ARG COMMIT="0"
+ARG VERSION
+ARG COMMIT
 
 # -----------------------------------------------------------------------------------
 # Image OS environment
