@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"os/exec"
 	"os/signal"
 	"syscall"
 	"time"
@@ -19,6 +20,26 @@ var (
 	Version string
 	Commit  string
 )
+
+func init() {
+	// 1. Check for JWT SECRET
+	if os.Getenv("SECRET") == "" {
+		log.Fatal("FATAL: JWT SECRET environment variable is not set.")
+	}
+	log.Infoln("OK: JWT SECRET environment variable is set.")
+
+	// 2. Check if needed executable exist
+	executables := []string{"ffmpeg", "yt-dlp", "ffprobe"}
+	for _, app := range executables {
+		path, err := exec.LookPath(app)
+		if err != nil {
+			log.Fatalf("FATAL: Required executable '%s' not found in PATH: %v", app, err)
+		}
+		log.Infof("OK: Found executable '%s' at '%s'", app, path)
+	}
+
+	log.Infoln("All init checks passed.")
+}
 
 func main() {
 	log.Infof("Version: %s, Commit: %s", Version, Commit)

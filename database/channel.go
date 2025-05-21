@@ -1,6 +1,7 @@
 package database
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os/exec"
@@ -129,16 +130,59 @@ func (channel *Channel) Update() error {
 }
 
 func (channel *Channel) QueryStreamURL() (string, error) {
-	// We only want to extract the URL, disable all additional text output
-	cmd := exec.Command("youtube-dl", "--force-ipv4", "--ignore-errors", "--no-warnings", "--youtube-skip-dash-manifest", "-f best/bestvideo", "--get-url", channel.URL)
-	stdout, err := cmd.CombinedOutput()
-	output := strings.TrimSpace(string(stdout))
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second) // 30-second timeout
+	defer cancel()
 
-	if err != nil {
-		return "", err
+	cmd := exec.CommandContext(ctx, "yt-dlp",
+		"--force-ipv4",
+		// "--ignore-errors", // Removed for better error handling
+		"--no-warnings",
+		"--youtube-skip-dash-manifest",
+		"-f", "best", // Or "best/bestvideo" if you have a strong reason for that specific fallback
+		"--get-url",
+		channel.URL,
+	)
+
+	outputBytes, err := cmd.CombinedOutput()
+	output := strings.TrimSpace(string(outputBytes))
+
+	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		return "", fmt.Errorf("yt-dlp command timed out for URL %s", channel.URL)
 	}
 
-	return output, nil
+	if err != nil {
+		// err from exec.CommandContext will be non-nil if youtube-dl exits with a non-zero status
+		// output will contain stderr from youtube-dl, which is useful context
+		return "", fmt.Errorf("yt-dlp failed for URL %s: %v\nOutput: %s", channel.URL, err, output)
+	}
+
+	// Basic validation: Does the output look like a URL?
+	// This is especially important if you were to re-add --ignore-errors.
+	// Even without it, youtube-dl might succeed (exit 0) but return multiple lines or an unexpected string.
+	// A more robust check might involve parsing the URL or checking for multiple lines.
+	if output == "" || (!strings.HasPrefix(output, "http://") && !strings.HasPrefix(output, "https://") && !strings.HasPrefix(output, "rtmp://")) {
+		// Consider if output might contain multiple URLs (one per line)
+		// For now, assume a single URL or an error string if it doesn't look like a URL
+		lines := strings.Split(output, "\n")
+		if len(lines) > 0 && (strings.HasPrefix(lines[0], "http://") || strings.HasPrefix(lines[0], "https://") || strings.HasPrefix(lines[0], "rtmp://")) {
+			// If the first line looks like a URL, use it (e.g. some extractors print metadata then the URL)
+			return lines[0], nil
+		}
+		return "", fmt.Errorf("yt-dlp returned empty or invalid output for URL %s: %s", channel.URL, output)
+	}
+
+	// If output contains multiple URLs (e.g. from a playlist if -g is used without --no-playlist),
+	// this will return all of them, separated by newlines.
+	// Your application needs to handle this (e.g., pick the first one).
+	// For a single video, it should be one URL.
+	// If you expect only one URL, you might want to split by newline and take lines[0].
+	lines := strings.Split(output, "\n")
+	if len(lines) > 0 {
+		return lines[0], nil // Return the first URL if multiple are given
+	}
+
+	// This part should ideally not be reached if the previous checks are robust.
+	return "", fmt.Errorf("yt-dlp returned unexpected data for URL %s: %s", channel.URL, output)
 }
 
 func ChannelList() ([]*Channel, error) {

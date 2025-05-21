@@ -43,12 +43,26 @@ func CheckAuthorizationHeader(c *gin.Context) {
 		}
 		return []byte(os.Getenv("SECRET")), nil
 	})
+
+	// What kind of error do we have here
 	if err != nil {
-		appG.Error(http.StatusInternalServerError, errors.New("invalid or expired token"))
-		return
-	}
-	if !token.Valid {
-		appG.Error(http.StatusUnauthorized, errors.New("invalid or expired token"))
+		var ve *jwt.ValidationError
+		if errors.As(err, &ve) {
+			if ve.Errors&jwt.ValidationErrorMalformed != 0 {
+				log.Error("Malformed token")
+				appG.Error(http.StatusUnauthorized, errors.New("malformed token"))
+			} else if ve.Errors&(jwt.ValidationErrorExpired|jwt.ValidationErrorNotValidYet) != 0 {
+				// Token is either expired or not active yet
+				log.Warn("Token expired or not yet valid")
+				appG.Error(http.StatusUnauthorized, errors.New("token expired or not yet valid"))
+			} else {
+				log.Errorf("Couldn't handle this token: %v", err)
+				appG.Error(http.StatusUnauthorized, errors.New("couldn't handle this token"))
+			}
+		} else {
+			log.Errorf("JWT parsing error: %v", err)
+			appG.Error(http.StatusUnauthorized, errors.New("invalid token"))
+		}
 		return
 	}
 
@@ -58,16 +72,22 @@ func CheckAuthorizationHeader(c *gin.Context) {
 		return
 	}
 
-	if float64(time.Now().Unix()) > claims["exp"].(float64) {
-		appG.Error(http.StatusUnauthorized, errors.New("token expired"))
+	exp, ok := claims["exp"].(float64)
+	if !ok || float64(time.Now().Unix()) > exp {
+		appG.Error(http.StatusUnauthorized, errors.New("token expired or invalid"))
 		return
 	}
 
-	// Interface conversion for numbers on map interface seems to be float64, wtf?
-	id := uint(claims["id"].(float64))
+	idFloat, ok := claims["id"].(float64)
+	if !ok {
+		appG.Error(http.StatusUnauthorized, errors.New("invalid token payload"))
+		return
+	}
+
+	id := uint(idFloat)
 	user, err := services.GetUserByID(id)
 	if err != nil {
-		appG.Error(http.StatusUnauthorized, err)
+		appG.Error(http.StatusUnauthorized, errors.New("user not found or invalid"))
 		return
 	}
 

@@ -21,7 +21,7 @@ import (
 // @Router      /recorder [get]
 func IsRecording(c *gin.Context) {
 	appG := app.Gin{C: c}
-	appG.Response(http.StatusOK, &responses.RecordingStatusResponse{IsRecording: services.IsRecording()})
+	appG.Response(http.StatusOK, &responses.RecordingStatusResponse{IsRecording: services.IsRecorderActive()})
 }
 
 // StopRecorder godoc

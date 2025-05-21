@@ -1,0 +1,31 @@
+services:
+  mediasink-server:
+    build:
+      context: .
+      args:
+        - VERSION=${APP_VERSION}
+        - COMMIT=${GIT_COMMIT}
+        # TARGETPLATFORM, TARGETOS, TARGETARCH are often auto-detected by Docker
+        # but can be specified if needed for precise cross-compilation control.
+        # Example for forcing a platform (usually not needed for local builds):
+        # - TARGETPLATFORM=linux/amd64
+    environment:
+      - SECRET=${SECRET}
+      - TZ=${TIMEZONE}
+    volumes:
+      - ${DATA_PATH}:/recordings
+      - ${DISK}:/disk
+    ports:
+      - "3000:3000"
+
+  mediasink-frontend:
+    image: sedrad/mediasink-vue
+    environment:
+      - TZ=${TIMEZONE}
+      - APP_API_URL=${API_URL}
+      - APP_BASE=${BASE_URL}
+      - APP_NAME=${APP_NAME}
+      - APP_SOCKET_URL=${SOCKET_URL}
+      - APP_FILE_URL=${FILE_URL}
+    ports:
+      - "80:80"
