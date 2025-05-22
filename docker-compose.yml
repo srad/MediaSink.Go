@@ -1,5 +1,6 @@
 services:
   mediasink-server:
+    user: "${UID}:${GID}"
     build:
       context: .
       args:
@@ -28,4 +29,4 @@ services:
       - APP_SOCKET_URL=${SOCKET_URL}
       - APP_FILE_URL=${FILE_URL}
     ports:
-      - "80:80"
+      - "8080:80"

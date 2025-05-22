@@ -274,11 +274,6 @@ RUN mkdir -p /disk
 
 ENV SECRET ""
 
-# Optional: Create a non-root user for better security
-# RUN groupadd -r appgroup && useradd --no-log-init -r -g appgroup appuser
-# RUN chown -R appuser:appgroup /app /recordings /disk
-# USER appuser
-
 EXPOSE 3000
 
 ENTRYPOINT ["/app/docker-entrypoint.sh"]
