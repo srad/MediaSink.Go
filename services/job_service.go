@@ -3,10 +3,11 @@ package services
 import (
 	"context"
 	"fmt"
-	"github.com/srad/mediasink/conf"
 	"os"
 	"strings"
 	"time"
+
+	"github.com/srad/mediasink/conf"
 
 	log "github.com/sirupsen/logrus"
 	"github.com/srad/mediasink/database"
@@ -93,10 +94,6 @@ func handleJob(job *database.Job, err error) error {
 }
 
 func processPreviewStrip(job *database.Job, video *helpers.Video) error {
-	if err := job.Recording.DestroyPreview(database.PreviewCover); err != nil {
-		return err
-	}
-
 	previewArgs := &helpers.VideoConversionArgs{
 		OnStart: func(info helpers.TaskInfo) {
 			if err := job.UpdateInfo(info.Pid, info.Command); err != nil {

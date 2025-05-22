@@ -1,6 +1,5 @@
 services:
   mediasink-server:
-    user: "${UID}:${GID}"
     build:
       context: .
       args:
